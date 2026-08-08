@@ -1,0 +1,22 @@
+# Zugangsdaten: gehoeren NIE ins Repository.
+.env
+.env.local
+
+# Echte Daten der Mannschaft (Namen, ELO, Zu-/Absagen, Gruende).
+# Die Datenbank liegt auf dem Homeserver, gesichert wird sie dort.
+elo.db
+elo.db.bak-*
+*.sqlite
+*.sqlite3
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Betriebssystem / Editor
+Thumbs.db
+desktop.ini
+.DS_Store
+*.swp

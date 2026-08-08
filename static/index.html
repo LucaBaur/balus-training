@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#122F5E" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Balu" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="/icon-192.png?v=3" />
+  <link rel="icon" href="/icon-192.png?v=3" />
+  <link rel="stylesheet" href="/style.css?v=30" />
+  <title>Balu's Training</title>
+</head>
+<body>
+  <!-- Die Wappenform: jedes Portrait sitzt darin (Feld, Bank, Profil).
+       Statt Fotos stehen heute Initialen drin - die Form bleibt gleich. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+    <clipPath id="wappen" clipPathUnits="objectBoundingBox">
+      <path d="M0 0 H1 V0.54 C1 0.80 0.79 0.94 0.5 1 C0.21 0.94 0 0.80 0 0.54 Z"/>
+    </clipPath>
+  </defs></svg>
+
+  <!-- Login-Overlay: erscheint, wenn keine gültige Sitzung besteht. -->
+  <div id="login-screen" class="login-screen hidden">
+    <div class="login-box">
+      <img class="login-logo" src="/tvg-logo.png?v=1" alt="TVG Vereinswappen" />
+      <h1>Balu's Training</h1>
+      <p class="login-sub">Bitte anmelden</p>
+      <input id="login-name" type="text" placeholder="Name" autocomplete="username" autocapitalize="words" />
+      <input id="login-pin" type="password" inputmode="numeric" placeholder="PIN" autocomplete="current-password" />
+      <button id="login-btn" class="primaer gross">Anmelden</button>
+      <div id="login-fehler" class="login-fehler"></div>
+    </div>
+  </div>
+
+  <!-- Start-Overlay: zeigt sofort (aus HTML, ohne JS) an, dass geladen wird.
+       app.js aktualisiert den Text je Startphase und entfernt es am Ende.
+       Bleibt es stehen, verrät der Text, wo es hängt. -->
+  <div id="ladebalken" style="position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#EDF3F9;color:#234E9E;font-family:system-ui,sans-serif">
+    <img src="/tvg-logo.png?v=1" alt="" style="width:52px;height:auto" />
+    <div style="font-weight:700;font-size:1.05rem">Balu's Training</div>
+    <div style="width:180px;height:6px;background:#D6E1EF;border-radius:3px;overflow:hidden">
+      <div id="ladebalken-bar" style="width:20%;height:100%;background:#234E9E;border-radius:3px;transition:width .3s"></div>
+    </div>
+    <div id="ladebalken-text" style="font-size:.8rem;opacity:.7">Hülle geladen, warte auf App…</div>
+  </div>
+
+  <!-- Kopf: Wappen, Wortmarke und rechts die Serververbindung.
+       Punkt grün=synchron, ocker=synchronisiert gerade, rot=offline.
+       Antippen erzwingt Prüfen + Synchronisieren; Badge = offene Änderungen. -->
+  <header id="kopf">
+    <img id="kopf-logo" src="/tvg-logo.png?v=1" alt="TVG" />
+    <div class="kopf-wort">BALU<span>TVG FRAUEN</span></div>
+    <button id="server-punkt" title="Serververbindung – tippen zum Synchronisieren">
+      <i></i><span id="sync-text">synchron</span><span id="sync-badge" style="display:none">0</span>
+    </button>
+    <small id="version"></small>
+  </header>
+  <!-- Sub-Navigation des aktiven Überpunkts (per JS gefüllt). -->
+  <nav id="subnav"></nav>
+
+  <main>
+    <!-- Home / Dashboard -->
+    <section id="view-home" class="view">
+      <div id="benutzer-leiste" class="benutzer-leiste">
+        <span id="benutzer-name"></span>
+        <button id="logout-btn">Abmelden</button>
+      </div>
+      <div id="push-box" class="push-box"></div>
+      <div id="home-naechstes" class="home-karte"></div>
+      <div id="home-schnell" class="home-schnell"></div>
+    </section>
+
+    <!-- Termine-Übersicht: kommende Einheiten mit Zusagen, aufklappbar -->
+    <section id="view-trainings" class="view hidden">
+      <h2 id="trainings-titel">Termine</h2>
+      <div id="trainings-warnung"></div>
+      <div id="trainings-neu" class="trainings-neu"></div>
+      <div id="trainings-liste" class="trainings-liste"></div>
+    </section>
+
+    <!-- Training-Detail -->
+    <section id="view-training-detail" class="view hidden">
+      <button id="btn-training-zurueck" class="zurueck-btn">← Termine</button>
+      <h2 id="td-titel"></h2>
+      <div id="td-meta" class="td-meta"></div>
+      <div id="td-rsvp" class="td-rsvp"></div>
+      <div id="td-teilnahme" class="td-teilnahme"></div>
+      <div id="td-erinnern" class="td-erinnern"></div>
+      <div id="td-plan" class="markdown td-plan"></div>
+    </section>
+
+    <!-- Aufstellung: wer steht wo auf dem Feld (Training bzw. Spiel) -->
+    <section id="view-aufstellung" class="view hidden">
+      <h2>Aufstellung</h2>
+      <div id="aufstellung-inhalt"></div>
+    </section>
+
+    <!-- Trainingsplan bearbeiten: Blöcke mit optionaler Dauer. NUR Trainer -
+         der Server weist Schreibversuche von Spielerinnen ohnehin ab. -->
+    <section id="view-plan" class="view hidden">
+      <button id="btn-plan-zurueck" class="zurueck-btn">← Zurück</button>
+      <h2 id="plan-titel">Training aufschreiben</h2>
+      <p id="plan-meta" class="hinweis"></p>
+      <div id="plan-bilanz" class="plan-bilanz"></div>
+      <div id="plan-bloecke" class="bloecke"></div>
+      <div id="plan-werkzeug" class="plan-werkzeug"></div>
+    </section>
+
+    <!-- Generisches Wiki (Playbook / Gegner / Übungen / Statistik / Saison / Notizen) -->
+    <section id="view-wiki" class="view hidden">
+      <h2 id="wiki-titel">Wiki</h2>
+      <div id="wiki-neu" class="wiki-neu"></div>
+      <div id="wiki-liste" class="wiki-liste"></div>
+    </section>
+
+    <!-- Wiki-Seiten-Detail -->
+    <section id="view-wiki-detail" class="view hidden">
+      <button id="btn-wiki-zurueck" class="zurueck-btn">←</button>
+      <h2 id="wd-titel"></h2>
+      <div id="wd-body" class="markdown wd-body"></div>
+      <div id="wd-aktionen" class="wd-aktionen"></div>
+    </section>
+
+    <!-- Anwesenheit -->
+    <section id="view-anwesenheit" class="view hidden">
+      <h2>Wer ist da?</h2>
+      <label class="training-wahl">
+        <span>Training übernehmen</span>
+        <select id="training-auswahl"><option value="">— manuell auswählen —</option></select>
+      </label>
+      <div id="anwesenheit-liste" class="liste"></div>
+      <button id="btn-generieren" class="gross primaer">Teams generieren</button>
+    </section>
+
+    <!-- Teams -->
+    <section id="view-teams" class="view hidden">
+      <div id="team-anzahl" class="team-anzahl"></div>
+      <p class="hinweis">Tippe eine Spielerin an, um sie ins nächste Team zu schieben.</p>
+      <div id="teams-wrap" class="teams"></div>
+      <div id="siegchance" class="siegchance"></div>
+      <h3>Wer hat gewonnen?</h3>
+      <div id="ergebnis-knoepfe" class="ergebnis-knoepfe"></div>
+      <div class="sekundaer-knoepfe">
+        <button id="btn-neu-mischen">Neu mischen</button>
+        <button id="btn-zurueck">Zurück zur Anwesenheit</button>
+      </div>
+      <div id="toast" class="toast hidden"></div>
+    </section>
+
+    <!-- Rangliste -->
+    <section id="view-rangliste" class="view hidden">
+      <h2>Rangliste</h2>
+      <p class="hinweis">Tippe eine Spielerin an, um ihren ELO-Verlauf zu sehen.</p>
+      <div id="rangliste-liste" class="rangliste"></div>
+    </section>
+
+    <!-- Spieler-Detail: Profil + ELO-Verlauf -->
+    <section id="view-spieler-detail" class="view hidden">
+      <button id="btn-detail-zurueck" class="zurueck-btn">← Zurück</button>
+      <h2 id="detail-name"></h2>
+      <div id="detail-profil" class="detail-profil"></div>
+      <div id="detail-stats" class="detail-stats"></div>
+      <p class="hinweis">Tippe auf eine ELO-Änderung, um das Spiel zu sehen.</p>
+      <div id="detail-spiele" class="detail-spiele"></div>
+    </section>
+
+    <!-- Spiel-Detail: beide Teams -->
+    <section id="view-spiel-detail" class="view hidden">
+      <button id="btn-spiel-zurueck" class="zurueck-btn">←</button>
+      <h2 id="spiel-titel"></h2>
+      <div id="spiel-teams" class="spiel-teams"></div>
+      <div class="spiel-aktionen">
+        <p class="hinweis">Ergebnis korrigieren (rechnet die ELOs neu):</p>
+        <div id="korrektur-knoepfe" class="korrektur-knoepfe"></div>
+        <button id="btn-spiel-loeschen" class="loeschen">Spiel löschen</button>
+      </div>
+    </section>
+
+    <!-- Kader -->
+    <section id="view-kader" class="view hidden">
+      <h2>Kader</h2>
+      <div class="anytype-knoepfe">
+        <button id="btn-import">Aus Anytype importieren</button>
+        <button id="btn-sync" class="primaer">ELOs → Anytype</button>
+      </div>
+      <div id="anytype-status" class="anytype-status">Anytype: noch nicht synchronisiert.</div>
+      <form id="form-spieler" class="form-spieler">
+        <input id="neu-name" type="text" placeholder="Name" required />
+        <select id="neu-stufe">
+          <option value="stark">stark (1150)</option>
+          <option value="mittel" selected>mittel (1000)</option>
+          <option value="schwach">schwach (850)</option>
+        </select>
+        <select id="neu-position">
+          <option value="Feld" selected>Feld</option>
+          <option value="Tor">Tor</option>
+        </select>
+        <button type="submit" class="primaer">Hinzufügen</button>
+      </form>
+      <div id="kader-liste" class="liste"></div>
+    </section>
+    <!-- Coach (Trainings-Bot) -->
+    <section id="view-coach" class="view hidden">
+      <div class="coach-kopf">
+        <button id="btn-chat-loeschen" class="chat-loeschen">🗑 Verlauf löschen</button>
+      </div>
+      <div id="chat-verlauf" class="chat"></div>
+      <div class="chat-eingabe">
+        <button id="btn-mic" title="Sprachnachricht aufnehmen">🎤</button>
+        <input id="chat-text" type="text" placeholder="Training beschreiben oder 🎤…" />
+        <button id="btn-senden" class="primaer" title="Senden">➤</button>
+      </div>
+    </section>
+  </main>
+
+  <nav id="tableiste">
+    <button data-ober="home" class="aktiv"><span class="t-icon">🏠</span><span class="t-text">Home</span></button>
+    <button data-ober="training"><span class="t-icon">📋</span><span class="t-text">Training</span></button>
+    <button data-ober="team"><span class="t-icon">👥</span><span class="t-text">Team</span></button>
+    <button data-ober="taktik"><span class="t-icon">🎯</span><span class="t-text">Taktik</span></button>
+    <button data-ober="saison"><span class="t-icon">📅</span><span class="t-text">Saison</span></button>
+  </nav>
+
+  <script src="/local-db.js?v=2"></script>
+  <script src="/sync.js?v=9"></script>
+  <script src="/teams-local.js?v=2"></script>
+  <script src="/app.js?v=41"></script>
+</body>
+</html>
