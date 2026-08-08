@@ -1,0 +1,935 @@
+/* ==========================================================================
+   Farben kommen aus dem Verein: das Wappen gibt das Blau, der Hallenboden die
+   zweite Ebene (Court-Blau fuer Team A, Torraum-Ocker fuer Team B).
+   ROT bedeutet AUSSCHLIESSLICH Absage, Fehler oder Loeschen - nie ein Team.
+   ========================================================================== */
+:root {
+  --tvg: #234E9E;          /* Vereinsblau, direkt aus dem Wappen */
+  --tvg-900: #122F5E;      /* tiefes Blau: Kopf, Sub-Navigation */
+  --court: #3C8FB8;        /* Hallenboden -> Team A */
+  --ocker: #C68B4F;        /* Torraum     -> Team B, Torhueterin */
+  --warn: #C4362E;         /* nur Absage / Fehler / Loeschen */
+
+  --bg: #EDF3F9;           /* kuehles Hallenlicht */
+  --karte: #FFFFFF;
+  --text: #0E1C33;
+  --grau: #6D7E96;
+  --linie: #D6E1EF;
+  --flaeche: #E3EAF3;      /* ruhige Knopf-/Fuellflaeche */
+
+  /* Altnamen der ersten Fassung - zeigen auf die neue Palette, damit die
+     bestehenden Regeln weiterlaufen. Neue Regeln nehmen die Namen oben. */
+  --gruen: var(--tvg);
+  --gruen-dunkel: var(--tvg-900);
+  --a: var(--court);
+  --b: var(--warn);
+  --unent: #7A879B;
+
+  /* Schriftrollen. Heute Systemschriften; sobald die woff2-Dateien im
+     static/ liegen, hier auf "Archivo Expanded" bzw. "IBM Plex Sans/Mono"
+     umstellen - der Rest der Datei zieht ueber die Variablen mit. */
+  --f-body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --f-disp: var(--f-body);
+  --f-num: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--f-body);
+  background: var(--bg);
+  color: var(--text);
+  padding-bottom: 72px;            /* Platz fuer die Tableiste */
+}
+
+/* Kopf: tiefes Vereinsblau, unten die gestrichelte 9-m-Linie als Signatur. */
+#kopf {
+  background: var(--tvg-900);
+  color: #fff;
+  padding: max(env(safe-area-inset-top), 10px) 14px 11px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  position: relative;
+}
+#kopf::after {
+  content: "";
+  position: absolute; left: 0; right: 0; bottom: 0; height: 2px;
+  background: repeating-linear-gradient(90deg, rgba(255,255,255,.85) 0 9px, transparent 9px 17px);
+}
+#kopf-logo { width: 26px; height: auto; display: block; flex: none; }
+.kopf-wort {
+  font-family: var(--f-disp); font-weight: 800; font-size: 1rem;
+  letter-spacing: .02em; line-height: 1.05;
+}
+.kopf-wort span {
+  display: block; font-size: .58rem; letter-spacing: .18em;
+  opacity: .6; font-weight: 600; margin-top: 2px;
+}
+
+/* Serververbindung im Kopf statt als freischwebender Punkt.
+   gruen = synchron, ocker = arbeitet, rot = offline. */
+#server-punkt {
+  margin-left: auto; display: flex; align-items: center; gap: 6px;
+  background: rgba(255,255,255,.12); color: #fff; border-radius: 999px;
+  padding: 6px 11px; font-size: .66rem; font-weight: 700;
+  letter-spacing: .05em; text-transform: uppercase;
+}
+#server-punkt i {
+  width: 8px; height: 8px; border-radius: 50%; display: block;
+  background: #7CD6A8; box-shadow: 0 0 0 3px rgba(124,214,168,.22);
+}
+#server-punkt.arbeitet i { background: var(--ocker); box-shadow: 0 0 0 3px rgba(198,139,79,.28); }
+#server-punkt.offline i { background: var(--warn); box-shadow: 0 0 0 3px rgba(196,54,46,.3); }
+#sync-badge {
+  background: var(--ocker); color: #231204; border-radius: 999px;
+  padding: 1px 6px; font-size: .62rem; font-family: var(--f-num);
+}
+#version { font-size: .62rem; opacity: .45; font-family: var(--f-num); flex: none; }
+
+main { padding: 16px; max-width: 720px; margin: 0 auto; }
+.view h2 { margin-top: 0; }
+.hidden { display: none !important; }
+.hinweis { color: var(--grau); font-size: 0.9rem; margin-top: 0; }
+
+/* Trainings-Auswahl */
+.training-wahl { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
+.training-wahl span { font-size: 0.8rem; color: var(--grau); }
+.training-wahl select {
+  font: inherit; padding: 12px; border-radius: 10px;
+  border: 1px solid var(--linie); background: #fff;
+}
+
+/* Anwesenheits- und Kaderliste */
+.liste { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.spieler-zeile {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--karte); border-radius: 12px; padding: 12px 14px;
+  box-shadow: 0 1px 2px rgba(0,0,0,.06);
+}
+.spieler-zeile.gewaehlt { outline: 2px solid var(--gruen); }
+.spieler-zeile .name { font-weight: 600; flex: 1; }
+.spieler-zeile .meta { color: var(--grau); font-size: 0.85rem; }
+.spieler-zeile input[type=checkbox] { width: 24px; height: 24px; }
+
+/* Buttons */
+button {
+  font: inherit; border: none; border-radius: 12px;
+  padding: 12px 16px; cursor: pointer; background: var(--flaeche); color: var(--text);
+}
+button.gross { width: 100%; padding: 18px; font-size: 1.1rem; font-weight: 600; margin-top: 12px; }
+button.primaer { background: var(--gruen); color: #fff; }
+/* Team A = Hallenboden, Team B = Torraum. Bewusst NICHT rot: Rot ist in dieser
+   App fuer Absage/Fehler/Loeschen reserviert. */
+button:active { transform: scale(.98); }
+
+/* Teams: zwei bis vier. Die Namen kommen von den Leibchen. */
+.team-anzahl { display: flex; align-items: center; gap: 9px; margin-bottom: 10px; }
+.team-anzahl .ta-lab {
+  font-size: 0.66rem; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--grau); font-weight: 800;
+}
+.team-anzahl .ta-gruppe {
+  display: flex; gap: 4px; background: var(--karte);
+  border: 1px solid var(--linie); border-radius: 999px; padding: 3px;
+}
+.team-anzahl button {
+  width: 38px; padding: 7px 0; border-radius: 999px;
+  font-size: 0.85rem; font-weight: 800; color: var(--grau); background: none;
+}
+.team-anzahl button[aria-pressed="true"] { background: var(--tvg-900); color: #fff; }
+.team-anzahl button[disabled] { opacity: .3; }
+
+.teams { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.team h2 { font-size: 1rem; display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.team-leibchen { font-size: 0.68rem; font-weight: 700; color: var(--grau); letter-spacing: .04em; }
+.schnitt { color: var(--grau); font-weight: 400; font-size: 0.85rem; margin-left: auto; }
+.chips { display: flex; flex-direction: column; gap: 8px; min-height: 40px; }
+.chip {
+  background: var(--karte); border-radius: 10px; padding: 10px 12px;
+  text-align: left; box-shadow: 0 1px 2px rgba(0,0,0,.06); width: 100%;
+}
+.chip .tor { color: var(--ocker); font-weight: 800; margin-left: 6px; font-size: 0.75rem; }
+.chip .elo { color: var(--grau); font-size: 0.8rem; float: right; font-family: var(--f-num); }
+
+/* Staerkevergleich bei drei/vier Teams (eine Siegchance waere Zahlenspielerei) */
+.staerke { display: flex; flex-direction: column; gap: 7px; width: 100%; }
+.st-zeile { display: flex; align-items: center; gap: 9px; font-size: 0.75rem; color: var(--grau); }
+.st-k { width: 62px; font-weight: 800; flex: none; }
+.st-bar { flex: 1; height: 8px; border-radius: 999px; background: var(--linie); overflow: hidden; }
+.st-bar i { display: block; height: 100%; transition: width .4s cubic-bezier(.2,.8,.2,1); }
+.st-w { font-family: var(--f-num); font-weight: 700; }
+
+/* Ergebnis: je Team ein Knopf, mit den Namen darunter */
+.ergebnis-knoepfe { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.erg {
+  padding: 15px 17px; border-radius: 16px; text-align: left;
+  display: flex; align-items: flex-start; gap: 12px;
+}
+.erg .erg-txt { flex: 1; min-width: 0; }
+.erg .erg-titel { font-size: 1.02rem; font-weight: 800; display: flex; align-items: baseline; gap: 8px; }
+.erg .erg-oe { font-size: 0.7rem; font-weight: 700; opacity: .65; font-family: var(--f-num); }
+.erg .erg-namen { display: block; font-size: 0.76rem; font-weight: 600; line-height: 1.35; opacity: .85; margin-top: 4px; }
+.erg .erg-pfeil { font-size: 1.4rem; line-height: 1; opacity: .5; }
+.erg.unent { background: var(--flaeche); color: var(--text); }
+.sekundaer-knoepfe { display: flex; gap: 8px; margin-top: 16px; }
+.sekundaer-knoepfe button { flex: 1; }
+
+/* Rangliste */
+.rangliste { display: flex; flex-direction: column; gap: 6px; }
+.rang-zeile {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  background: var(--karte); border-radius: 10px; padding: 12px 14px;
+}
+.rang-zeile .platz { width: 28px; color: var(--grau); font-weight: 700; }
+.rang-zeile .name { flex: 1; font-weight: 600; }
+.rang-zeile .elo { font-variant-numeric: tabular-nums; font-weight: 700; }
+.rang-zeile .sp { color: var(--grau); font-size: 0.8rem; width: 60px; text-align: right; }
+
+/* Spieler-Detail (ELO-Verlauf) */
+.zurueck-btn {
+  background: none; color: var(--gruen); font-weight: 600;
+  padding: 6px 0; margin-bottom: 4px;
+}
+.detail-spiele { display: flex; flex-direction: column; gap: 6px; }
+.detail-zeile {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  background: var(--karte); border-radius: 10px; padding: 14px;
+}
+.detail-zeile .d-datum { color: var(--grau); font-size: 0.85rem; width: 66px; }
+.detail-zeile .d-erg { flex: 1; font-weight: 600; }
+.detail-zeile .d-delta { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 1.1rem; }
+.detail-zeile .d-delta.plus { color: var(--gruen); }
+.detail-zeile .d-delta.minus { color: var(--b); }
+.detail-zeile .d-delta.null { color: var(--grau); }
+
+/* Spiel-Detail (beide Teams farbig) */
+.spiel-teams { display: flex; flex-direction: column; gap: 12px; }
+.spiel-team { border-radius: 12px; padding: 14px 16px; border: 2px solid transparent; }
+.spiel-team .team-kopf { font-weight: 700; margin-bottom: 8px; }
+.spiel-team ul { margin: 0; padding-left: 20px; }
+.spiel-team li { padding: 3px 0; }
+.spiel-team li.hervor { font-weight: 800; }
+.spiel-team .tw { font-size: 0.72rem; opacity: .75; }
+/* Sieger hervorheben, Verlierer ruhig lassen - ein verlorenes Trainingsspiel
+   ist kein Fehler und bekommt deshalb kein Rot. */
+.spiel-team.sieger { background: #E4EFF8; border-color: var(--tvg); }
+.spiel-team.verlierer { background: #F1F5FA; border-color: var(--linie); }
+.spiel-team.unent { background: #EAF0F7; border-color: var(--unent); }
+
+/* Siegchance (Team-Ansicht) */
+.siegchance {
+  display: flex; align-items: center; gap: 8px; margin: 14px 0 4px;
+  font-size: 0.85rem; font-weight: 600;
+}
+.siegchance:empty { display: none; }
+.siegchance .ch-a { color: #1F6E92; white-space: nowrap; }
+.siegchance .ch-b { color: #8A5A25; white-space: nowrap; }
+.siegchance .ch-bar {
+  flex: 1; height: 8px; border-radius: 999px; overflow: hidden; background: var(--ocker);
+}
+.siegchance .ch-bar > span { display: block; height: 100%; background: var(--court); }
+
+/* Spieler-Profil (Position, Anwesenheit, ELO-Verlauf) */
+.detail-profil { margin: 4px 0 14px; }
+.detail-profil:empty { display: none; }
+.profil-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.profil-badges .pb {
+  background: var(--karte); border-radius: 999px; padding: 5px 12px; font-size: 0.82rem;
+  box-shadow: 0 1px 2px rgba(0,0,0,.05);
+}
+.profil-training {
+  display: flex; align-items: baseline; gap: 8px;
+  background: var(--karte); border-radius: 10px; padding: 10px 14px; margin-bottom: 10px;
+}
+.profil-training .pt-wert { font-size: 1.3rem; font-weight: 800; color: var(--gruen); font-variant-numeric: tabular-nums; }
+.profil-training .pt-wert small { font-size: 0.8rem; font-weight: 600; color: var(--grau); }
+.profil-training .pt-label { color: var(--grau); font-size: 0.85rem; }
+.profil-lauf { background: var(--karte); border-radius: 10px; padding: 10px 14px; margin-bottom: 10px; }
+.profil-lauf .pl-kopf { font-size: 0.75rem; color: var(--grau); margin-bottom: 4px; }
+.profil-lauf .pl-zahlen { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; }
+.profil-lauf .pl-km { font-size: 1.3rem; font-weight: 800; color: var(--a); font-variant-numeric: tabular-nums; }
+.profil-lauf .pl-km small { font-size: 0.7rem; font-weight: 600; color: var(--grau); margin-left: 2px; }
+.profil-lauf .pl-meta { color: var(--grau); font-size: 0.85rem; }
+.profil-lauf .pl-rang { margin-left: auto; font-weight: 700; font-size: 0.9rem; background: #eef3f9; color: var(--a); padding: 3px 10px; border-radius: 999px; }
+.profil-elo { background: var(--karte); border-radius: 10px; padding: 10px 14px; }
+.profil-elo .pe-kopf { font-size: 0.75rem; color: var(--grau); margin-bottom: 4px; }
+.elo-spark { width: 100%; height: 56px; display: block; }
+
+/* Kader: Kopf öffnet das Profil */
+.kader-zeile .kopf.klickbar { cursor: pointer; }
+.kader-zeile .kopf-pfeil { color: var(--gruen); font-weight: 700; margin-left: 4px; }
+
+/* Statistik-Kacheln (Spieler-Detail) */
+.detail-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }
+.detail-stats:empty { display: none; }
+.detail-stats .stat {
+  background: var(--karte); border-radius: 10px; padding: 10px 6px; text-align: center;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.detail-stats .s-wert { font-weight: 800; font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.detail-stats .s-titel { font-size: 0.72rem; color: var(--grau); }
+.detail-stats .s-unter { font-size: 0.62rem; color: var(--grau); }
+
+/* Spiel-Aktionen (korrigieren / loeschen) */
+.spiel-aktionen { margin-top: 20px; border-top: 1px solid var(--linie); padding-top: 14px; }
+.korrektur-knoepfe { display: flex; gap: 8px; }
+.korrektur-knoepfe button { flex: 1; background: var(--flaeche); }
+.korrektur-knoepfe button.aktiv { background: var(--gruen); color: #fff; }
+.loeschen { width: 100%; margin-top: 10px; background: #FBEBE8; color: var(--b); font-weight: 600; }
+
+/* Kader-Formular */
+.form-spieler { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-bottom: 16px; }
+.form-spieler input, .form-spieler select {
+  font: inherit; padding: 12px; border-radius: 10px; border: 1px solid var(--linie); background: #fff;
+}
+.form-spieler input#neu-name { grid-column: 1 / -1; }
+.form-spieler button { grid-column: 1 / -1; }
+
+/* Anytype-Buttons + Kader-Bearbeitung */
+.anytype-knoepfe { display: flex; gap: 8px; margin-bottom: 8px; }
+.anytype-knoepfe button { flex: 1; }
+.anytype-status {
+  font-size: 0.85rem; color: var(--grau); margin-bottom: 16px;
+  padding: 10px 12px; background: var(--karte); border-radius: 8px;
+  border-left: 4px solid var(--grau);
+}
+.anytype-status.ok { color: var(--gruen-dunkel); border-left-color: var(--gruen); }
+.anytype-status.fehler { color: var(--b); border-left-color: var(--b); }
+.kader-zeile {
+  background: var(--karte); border-radius: 12px; padding: 12px 14px;
+  margin-bottom: 8px; box-shadow: 0 1px 2px rgba(0,0,0,.06);
+}
+.kader-zeile .kopf { display: flex; justify-content: space-between; align-items: baseline; }
+.kader-zeile .name { font-weight: 600; }
+.kader-zeile .meta { color: var(--grau); font-size: 0.85rem; }
+.kader-zeile .steuer { display: flex; gap: 10px; align-items: end; margin-top: 8px; flex-wrap: wrap; }
+.kader-zeile .steuer label { font-size: 0.75rem; color: var(--grau); display: flex; flex-direction: column; gap: 2px; }
+.kader-zeile .steuer select { font: inherit; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--linie); background: #fff; }
+.kader-zeile .aktiv-label { flex-direction: row; align-items: center; gap: 6px; }
+.kader-zeile .aktiv-label input { width: 20px; height: 20px; }
+
+/* Coach-Chat */
+.coach-kopf { display: flex; justify-content: flex-end; margin-bottom: 6px; }
+.chat-loeschen { background: none; color: var(--grau); font-size: 0.8rem; padding: 4px 8px; }
+.chat { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding-bottom: 140px; }
+.bubble { max-width: 88%; padding: 8px 12px 6px; border-radius: 14px;
+  line-height: 1.35; box-shadow: 0 1px 2px rgba(0,0,0,.06); }
+.bubble .b-text { white-space: pre-wrap; }
+.bubble .b-zeit { display: block; font-size: 0.62rem; opacity: 0.6; text-align: right; margin-top: 2px; }
+.bubble.user { align-self: flex-end; background: var(--gruen); color: #fff; }
+.bubble.bot { align-self: flex-start; background: var(--karte); }
+.bubble.info { align-self: center; background: #E9F0F8; color: var(--grau); font-size: 0.85rem;
+  text-align: center; white-space: pre-wrap; }
+/* WhatsApp-artiger Datums-Trenner */
+.chat-tag { align-self: center; margin: 8px 0 2px; }
+.chat-tag span {
+  background: #DCE6F1; color: var(--grau); font-size: 0.72rem; font-weight: 600;
+  padding: 3px 12px; border-radius: 999px;
+}
+.bubble .plan { white-space: pre-wrap; font-size: 0.9rem; }
+.plan-btn { margin-top: 10px; width: 100%; }
+.anlage-optionen { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.anlage-frage { font-size: 0.85rem; color: var(--grau); }
+.opt-btn { width: 100%; text-align: left; background: var(--flaeche); }
+.chat-eingabe {
+  position: fixed; left: 0; right: 0; z-index: 20;
+  bottom: calc(52px + env(safe-area-inset-bottom));
+  display: flex; gap: 8px; padding: 8px 12px;
+  background: var(--bg); border-top: 1px solid var(--linie);
+}
+.chat-eingabe input {
+  flex: 1; padding: 12px 14px; border-radius: 22px;
+  border: 1px solid var(--linie); background: #fff; font: inherit;
+}
+.chat-eingabe button {
+  width: 46px; height: 46px; padding: 0; border-radius: 50%; font-size: 1.2rem; flex: none;
+}
+#btn-mic { background: var(--flaeche); }
+#btn-mic.aufnahme { background: var(--b); color: #fff; }
+
+/* Tableiste unten */
+#tableiste {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  display: flex; background: var(--karte);
+  border-top: 1px solid var(--linie);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+#tableiste button {
+  flex: 1; background: none; border-radius: 0; padding: 14px 0;
+  color: var(--grau); font-size: 0.9rem;
+  border-top: 2px solid transparent; margin-top: -1px;
+}
+#tableiste button.aktiv { color: var(--tvg); font-weight: 700; border-top-color: var(--tvg); }
+
+/* Toast */
+.toast {
+  position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%);
+  background: var(--text); color: #fff; padding: 12px 18px; border-radius: 999px;
+  box-shadow: 0 4px 12px rgba(0,0,0,.25); font-size: 0.9rem; max-width: 90%;
+}
+
+/* ==========================================================================
+   Phase-3-Shell: Überpunkt-Icons, Sub-Navigation, Home, Trainings, Wiki.
+   ========================================================================== */
+
+/* Bottom-Nav: Icon über Label, ausblendbar je Rolle (.weg) */
+#tableiste button { padding: 8px 0 6px; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+#tableiste button.weg { display: none; }
+#tableiste .t-icon { font-size: 1.25rem; line-height: 1; }
+#tableiste .t-text { font-size: 0.68rem; }
+
+/* Sub-Navigation (Unterpunkte des aktiven Überpunkts) */
+#subnav {
+  display: flex; gap: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch;
+  background: var(--gruen-dunkel); padding: 8px 12px;
+  scrollbar-width: none;
+}
+#subnav::-webkit-scrollbar { display: none; }
+#subnav.leer { display: none; }
+#subnav button {
+  background: rgba(255,255,255,.14); color: #eef; white-space: nowrap;
+  padding: 7px 14px; border-radius: 999px; font-size: 0.85rem; flex: none;
+}
+#subnav button.aktiv { background: #fff; color: var(--gruen-dunkel); font-weight: 700; }
+
+/* Login-Overlay */
+.login-screen {
+  position: fixed; inset: 0; z-index: 5000; padding: 24px;
+  display: flex; align-items: center; justify-content: center; background: var(--bg);
+}
+.login-box {
+  background: var(--karte); border-radius: 16px; padding: 28px 24px;
+  width: 100%; max-width: 340px; text-align: center;
+  box-shadow: 0 6px 24px rgba(0,0,0,.12);
+}
+.login-logo { width: 62px; height: auto; display: block; margin: 0 auto 4px; }
+.login-box h1 { color: var(--tvg); font-size: 1.4rem; margin: 6px 0 2px; }
+.login-sub { color: var(--grau); margin: 0 0 18px; font-size: 0.9rem; }
+.login-box input {
+  width: 100%; font: inherit; padding: 13px 14px; margin-bottom: 10px;
+  border-radius: 10px; border: 1px solid var(--linie); background: #fff;
+}
+.login-box .gross { margin-top: 4px; }
+.login-fehler { color: var(--b); font-size: 0.85rem; margin-top: 10px; min-height: 1em; }
+
+/* Benutzer-Leiste (Home) */
+.benutzer-leiste {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin-bottom: 16px;
+}
+#benutzer-name { font-weight: 600; color: var(--grau); font-size: 0.9rem; }
+#logout-btn { background: var(--flaeche); font-size: 0.82rem; padding: 8px 14px; }
+
+/* Push-Schalter (Home) + Erinnern (Training) */
+.push-box { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+.push-box:empty { display: none; }
+.push-box .push-hint { font-size: 0.85rem; color: var(--grau); }
+.push-box button { font-size: 0.85rem; padding: 9px 14px; }
+.push-box #push-aus { background: var(--flaeche); }
+.td-erinnern { margin: 6px 0 4px; }
+.td-erinnern:empty { display: none; }
+#btn-erinnern { background: var(--flaeche); font-size: 0.9rem; }
+
+/* Home-Karte: nächstes Training */
+.home-karte {
+  background: var(--karte); border-radius: 14px; padding: 16px 18px; margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.08); border-left: 5px solid var(--gruen);
+}
+.home-karte.klickbar { cursor: pointer; }
+.home-karte .hk-titel { font-size: 0.75rem; color: var(--grau); text-transform: uppercase; letter-spacing: .04em; }
+.home-karte .hk-name { font-size: 1.2rem; font-weight: 700; margin-top: 2px; }
+.home-karte .hk-datum { color: var(--grau); margin-top: 2px; }
+.home-karte .hk-zahlen { display: flex; gap: 14px; margin-top: 10px; font-weight: 600; font-size: 0.9rem; }
+.home-karte .hk-zahlen .zu { color: var(--gruen); }
+.home-karte .hk-zahlen .ab { color: var(--b); }
+
+/* Home-Schnellzugriff */
+.home-schnell { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.schnell-kachel {
+  background: var(--karte); border-radius: 12px; padding: 18px 10px; text-align: center;
+  display: flex; flex-direction: column; gap: 6px; box-shadow: 0 1px 2px rgba(0,0,0,.06);
+  font-weight: 600;
+}
+.schnell-kachel .sk-icon { font-size: 1.6rem; }
+.spieler-hinweis { grid-column: 1 / -1; }
+
+/* ==========================================================================
+   Termine-Uebersicht. Eine Zeile zeigt auf einen Blick, wie viele zugesagt
+   haben; der farbige Streifen links kodiert, ob die Einheit traegt.
+   Antippen klappt die Namen auf.
+   ========================================================================== */
+.trainings-liste { display: flex; flex-direction: column; gap: 8px; }
+.termin-gruppe {
+  font-size: 0.68rem; letter-spacing: .14em; text-transform: uppercase;
+  font-weight: 800; color: var(--grau); margin: 10px 0 -2px;
+}
+.termin-gruppe:first-child { margin-top: 0; }
+
+.termin {
+  background: var(--karte); border: 1px solid var(--linie);
+  border-left: 5px solid var(--tvg); border-radius: 14px; overflow: hidden;
+}
+.termin.knapp { border-left-color: var(--ocker); }
+.termin.kritisch { border-left-color: var(--warn); }
+.termin.vergangen { opacity: .62; border-left-color: var(--linie); }
+.t-kopf {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  text-align: left; padding: 12px 13px; background: none;
+}
+.t-datum { width: 48px; flex: none; text-align: center; }
+.t-datum b { display: block; font-size: 0.64rem; letter-spacing: .12em; color: var(--grau); font-weight: 800; }
+.t-datum span { display: block; font-weight: 800; font-size: 0.85rem; line-height: 1.2; font-family: var(--f-num); }
+.t-mitte { flex: 1; min-width: 0; }
+.t-mitte b { display: block; font-size: 0.92rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.t-mitte small { color: var(--grau); font-size: 0.74rem; }
+.t-bar { height: 5px; border-radius: 999px; background: #E9EFF6; overflow: hidden; margin-top: 7px; display: flex; }
+.t-bar i { display: block; height: 100%; }
+.t-bar .zu { background: var(--tvg); }
+.t-bar .ab { background: #EBC6C1; }
+.termin.knapp .t-bar .zu { background: var(--ocker); }
+.termin.kritisch .t-bar .zu { background: var(--warn); }
+.t-zahl { flex: none; text-align: right; min-width: 46px; }
+.t-zahl b { display: block; font-size: 1.35rem; font-weight: 800; line-height: 1; font-family: var(--f-num); }
+.t-zahl small { font-size: 0.58rem; color: var(--grau); letter-spacing: .08em; text-transform: uppercase; font-weight: 700; }
+.termin.knapp .t-zahl b { color: var(--ocker); }
+.termin.kritisch .t-zahl b { color: var(--warn); }
+.t-planchip {
+  font-size: 0.6rem; font-weight: 800; letter-spacing: .06em; color: var(--tvg);
+  background: #E9F0FA; border: 1px solid #CFDFF3; border-radius: 999px;
+  padding: 1px 7px; margin-left: 6px; white-space: nowrap;
+}
+.t-meine {
+  font-size: 0.6rem; font-weight: 800; letter-spacing: .06em; border-radius: 999px;
+  padding: 1px 7px; margin-left: 6px; white-space: nowrap;
+}
+.t-meine.ja { color: #fff; background: var(--tvg); }
+.t-meine.nein { color: #fff; background: var(--warn); }
+.t-meine.un { color: #fff; background: var(--unent); }
+
+.t-detail {
+  display: none; flex-direction: column; gap: 13px;
+  padding: 13px; border-top: 1px solid var(--linie); background: #F8FBFD;
+}
+.termin.auf .t-detail { display: flex; }
+.t-gruppe .gk { font-size: 0.66rem; letter-spacing: .13em; text-transform: uppercase; font-weight: 800; margin-bottom: 7px; }
+.t-gruppe.zu .gk { color: var(--tvg); }
+.t-gruppe.ab .gk { color: var(--warn); }
+.t-gruppe.un .gk, .t-gruppe.offen .gk { color: var(--grau); }
+.t-namen { display: flex; flex-wrap: wrap; gap: 6px; }
+.t-name {
+  background: var(--karte); border: 1px solid var(--linie); border-radius: 8px;
+  padding: 5px 10px; font-size: 0.86rem;
+}
+.t-name .tw { font-size: 0.68rem; color: var(--ocker); font-weight: 800; }
+.ab-liste { display: flex; flex-direction: column; gap: 6px; }
+.ab-zeile {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--karte); border: 1px solid var(--linie); border-radius: 10px; padding: 7px 11px;
+}
+.ab-zeile .az-n { font-size: 0.86rem; font-weight: 600; }
+.ab-zeile .az-g {
+  margin-left: auto; font-size: 0.73rem; font-weight: 700; color: var(--warn);
+  background: #FBEBE8; border: 1px solid #EFCFC9; border-radius: 999px; padding: 3px 10px;
+  max-width: 58%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ab-zeile .az-g.fehlt { color: var(--grau); background: var(--flaeche); border-color: var(--linie); }
+.t-aktionen { display: flex; gap: 8px; flex-wrap: wrap; }
+.t-aktionen button { flex: 1; min-width: 128px; font-size: 0.86rem; }
+.t-aktionen .loeschen { width: auto; margin-top: 0; }
+.t-aktionen .loeschen.scharf { background: var(--warn); color: #fff; }
+.t-laedt { color: var(--grau); font-size: 0.85rem; }
+
+/* Frühwarnung über der Liste */
+.termin-warnung {
+  display: flex; gap: 12px; align-items: flex-start; margin-bottom: 14px;
+  background: #FBEBE8; border: 1px solid #EFC9C2; border-left: 5px solid var(--warn);
+  border-radius: 14px; padding: 13px 15px;
+}
+.termin-warnung .wz { font-size: 1.1rem; line-height: 1.2; }
+.termin-warnung b { display: block; font-size: 0.9rem; margin-bottom: 3px; }
+.termin-warnung p { margin: 0; font-size: 0.83rem; color: #7B3229; line-height: 1.45; }
+
+/* Absagegrund: Vorschläge zum Antippen statt leerem Textfeld */
+.grund-chips { display: flex; flex-wrap: wrap; gap: 7px; margin: 10px 0 8px; }
+.gchip {
+  padding: 8px 13px; border-radius: 999px; border: 1.5px solid var(--linie);
+  background: var(--karte); font-size: 0.84rem; font-weight: 600; color: var(--grau);
+}
+.gchip.aktiv { background: var(--warn); border-color: var(--warn); color: #fff; }
+
+/* Neues Training (Trainer/Admin) */
+.trainings-neu { margin-bottom: 12px; }
+.tn-toggle { background: var(--flaeche); font-size: 0.9rem; }
+.tn-form { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.tn-form input { font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--linie); background: #fff; }
+.tn-form input[type=text] { flex: 1; min-width: 140px; }
+.tn-form button { flex: none; }
+
+/* Training-Detail */
+.td-meta { color: var(--grau); margin-bottom: 14px; }
+.td-grp { margin-bottom: 12px; }
+.td-grp-kopf { font-size: 0.8rem; font-weight: 700; margin-bottom: 6px; }
+.td-grp.an .td-grp-kopf { color: var(--gruen); }
+.td-grp.ab .td-grp-kopf { color: var(--b); }
+.td-grp.un .td-grp-kopf { color: var(--grau); }
+.td-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.td-chip { background: var(--karte); border-radius: 8px; padding: 6px 10px; font-size: 0.9rem; box-shadow: 0 1px 2px rgba(0,0,0,.05); }
+.td-chip .tw { font-size: 0.7rem; color: var(--gruen); }
+.td-chip .td-grund { color: var(--grau); font-size: 0.82rem; }
+
+/* Eigene Zu-/Absage (Spielerin) */
+.td-rsvp { background: var(--karte); border-radius: 12px; padding: 12px 14px; margin-bottom: 14px; }
+.td-rsvp:empty { display: none; }
+.rsvp-kopf { font-size: 0.9rem; margin-bottom: 8px; }
+.rsvp-knoepfe { display: flex; gap: 8px; }
+.rsvp-knoepfe button { flex: 1; background: var(--flaeche); font-size: 0.92rem; }
+.rsvp-knoepfe .rsvp-ja.aktiv { background: var(--gruen); color: #fff; }
+.rsvp-knoepfe .rsvp-nein.aktiv { background: var(--b); color: #fff; }
+.rsvp-knoepfe .rsvp-un.aktiv { background: var(--unent); color: #fff; }
+.rsvp-grund-box { margin-top: 6px; }
+.rsvp-grund-eingabe { display: flex; gap: 8px; }
+.rsvp-grund-eingabe input {
+  flex: 1; min-width: 0; font: inherit; padding: 10px 12px;
+  border-radius: 10px; border: 1px solid var(--linie); background: #fff; color: var(--text);
+}
+.rsvp-grund-eingabe button { flex: none; }
+.td-plan { margin-top: 6px; }
+.td-plan-kopf, .td-plan .td-plan-kopf { font-weight: 700; margin: 10px 0 6px; }
+.plan-edit-btn { margin-top: 12px; background: var(--flaeche); font-size: 0.9rem; }
+.plan-editor {
+  width: 100%; font: inherit; font-size: 0.92rem; line-height: 1.4;
+  padding: 12px; border-radius: 10px; border: 1px solid var(--linie); background: #fff;
+  resize: vertical; min-height: 180px;
+}
+.plan-edit-leiste { display: flex; gap: 8px; margin-top: 10px; }
+.plan-edit-leiste button { flex: 1; }
+
+/* Wiki-Liste + Seite */
+.wiki-liste { display: flex; flex-direction: column; gap: 6px; }
+.wiki-zeile {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  width: 100%; text-align: left; background: var(--karte); border-radius: 10px; padding: 14px;
+}
+.wiki-zeile.leer { opacity: .55; }
+.wiki-zeile .wz-titel { font-weight: 600; }
+.wiki-zeile .wz-pfeil { color: var(--grau); font-size: 1.2rem; }
+.wiki-zeile .wz-leer { color: var(--grau); font-size: 0.75rem; }
+
+/* Gruppe (z. B. Playbook -> Spielzüge) mit eingerückten Unterseiten */
+.wiki-gruppe { display: flex; flex-direction: column; gap: 6px; }
+.wiki-zeile.gruppe { padding: 0; background: #E4ECF5; }
+.wiki-zeile.gruppe .wz-toggle {
+  flex: 1; display: flex; align-items: center; gap: 10px;
+  background: none; text-align: left; padding: 14px;
+}
+.wiki-zeile.gruppe .wz-caret { color: var(--grau); font-size: 0.85rem; width: 12px; }
+.wiki-zeile.gruppe .wz-anzahl {
+  margin-left: auto; color: var(--grau); font-size: 0.75rem;
+  background: var(--karte); border-radius: 9px; padding: 2px 8px;
+}
+.wiki-zeile.gruppe .wz-open {
+  background: none; color: var(--grau); font-size: 1.2rem; padding: 14px 16px;
+}
+.wiki-kinder { display: flex; flex-direction: column; gap: 6px; padding-left: 18px; }
+/* Verschachtelte Zeilen etwas kompakter; Gruppen behalten padding:0, deren
+   Innenabstand sitzt am Toggle-Button. */
+.wiki-kinder .wiki-zeile.kind:not(.gruppe) { padding: 12px 14px; }
+.wiki-zeile.gruppe.kind .wz-toggle { padding: 12px 14px; }
+.wiki-zeile.gruppe.kind .wz-open { padding: 12px 14px; }
+/* Nur mit echter Maus (am Tablet wuerde der Hover-Zustand kleben bleiben). */
+@media (hover: hover) {
+  .wiki-zeile:not(.gruppe):hover { background: #F7FAFD; }
+  .wiki-zeile.gruppe .wz-toggle:hover,
+  .wiki-zeile.gruppe .wz-open:hover { background: rgba(0, 0, 0, .04); }
+  .wiki-zeile, .wz-toggle, .wz-open { transition: background .12s ease; }
+}
+
+/* Seiten anlegen / bearbeiten (nur Trainer) */
+.wiki-neu { margin-bottom: 10px; }
+.wiki-neu-btn { background: var(--flaeche); font-size: 0.9rem; }
+.wiki-neu-form { display: flex; flex-direction: column; gap: 8px; }
+.wiki-neu-form input, .wiki-neu-form select, .wd-titel-editor {
+  width: 100%; font: inherit; padding: 10px 12px;
+  border-radius: 10px; border: 1px solid var(--linie); background: #fff;
+}
+.wd-aktionen { display: flex; flex-wrap: wrap; gap: 8px; }
+.wd-aktionen .plan-edit-btn { flex: 1; }
+.wd-aktionen .wd-titel-editor,
+.wd-aktionen .plan-editor,
+.wd-aktionen .plan-edit-leiste { flex: 1 0 100%; }
+.plan-edit-btn.gefahr { background: #FBEBE8; color: var(--warn); }
+
+/* ==========================================================================
+   Aufstellung auf dem Halbfeld. Das Wappen ist die Form, in der jedes
+   Portrait sitzt - heute mit Initialen, spaeter mit Foto.
+   ========================================================================== */
+.wappen {
+  position: relative; width: var(--w, 46px); aspect-ratio: 5/6; flex: none;
+  clip-path: url(#wappen); display: grid; place-items: center; color: #fff;
+  background: linear-gradient(160deg, var(--c1, #2F62BD), var(--c2, #16376F));
+}
+.wappen .ini { font-weight: 800; font-size: calc(var(--w, 46px) * .34); margin-top: -6%; }
+.wappen.leer { background: repeating-linear-gradient(45deg, #CBD8E7 0 6px, #DDE6F1 6px 12px); }
+
+.feld-box {
+  position: relative; border-radius: 16px; overflow: hidden;
+  border: 1px solid var(--linie); background: var(--court); margin: 12px 0;
+}
+.feld-box svg.feld { display: block; width: 100%; height: auto; }
+
+/* Spielansicht: ein Platz, eine Spielerin */
+.platz {
+  position: absolute; transform: translate(-50%, -50%); padding: 0; background: none;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+}
+.platz .name {
+  font-size: 0.62rem; font-weight: 700; color: #fff; background: rgba(10,25,48,.62);
+  padding: 2px 6px; border-radius: 999px; white-space: nowrap;
+  max-width: 82px; overflow: hidden; text-overflow: ellipsis;
+}
+.platz .rolle { font-size: 0.55rem; font-weight: 800; letter-spacing: .1em; color: rgba(255,255,255,.85); }
+.platz.frei .name { background: rgba(10,25,48,.35); color: rgba(255,255,255,.7); }
+.platz.ziel { animation: platz-puls 1s ease-in-out infinite; }
+@keyframes platz-puls {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  50% { transform: translate(-50%, -50%) scale(1.09); }
+}
+
+/* Trainingsansicht: eine ganze Gruppe steht auf ihrer Position */
+.gruppe-platz {
+  position: absolute; transform: translate(-50%, -50%); width: 100px;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+}
+.gruppe-platz .kopfzeile {
+  font-size: 0.55rem; font-weight: 800; letter-spacing: .11em; color: #fff;
+  background: rgba(10,25,48,.55); border-radius: 999px; padding: 2px 8px; white-space: nowrap;
+}
+.gruppe-platz.leer .kopfzeile { background: rgba(10,25,48,.28); color: rgba(255,255,255,.65); }
+.stapel { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; }
+.stapel.namen { flex-direction: column; flex-wrap: nowrap; gap: 3px; width: 100%; }
+.mini { position: relative; display: inline-flex; padding: 0; background: none; border-radius: 4px; }
+.namechip {
+  display: block; width: 100%; text-align: center; font-size: 0.6rem; font-weight: 700;
+  color: #fff; background: rgba(10,25,48,.72); border-radius: 6px; padding: 3px 5px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.namechip.tw { background: var(--ocker); color: #231204; }
+
+.feld-legende { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.78rem; color: var(--grau); }
+.feld-legende b { color: var(--text); }
+.eyebrow-feld {
+  font-size: 0.68rem; letter-spacing: .14em; text-transform: uppercase;
+  font-weight: 800; color: var(--grau); margin: 14px 0 6px;
+}
+.reihe { display: flex; gap: 11px; overflow-x: auto; padding: 2px 0 6px; scrollbar-width: none; }
+.reihe::-webkit-scrollbar { display: none; }
+.bank-p {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  width: 58px; flex: none; padding: 0; background: none;
+}
+.bank-p .bn { font-size: 0.62rem; font-weight: 600; text-align: center; color: var(--grau); }
+.bank-p.gewaehlt .wappen { box-shadow: 0 0 0 3px var(--ocker); }
+
+/* Umschalter Training / Spiel */
+.modus-leiste { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; }
+.modus { display: flex; background: var(--karte); border: 1px solid var(--linie); border-radius: 999px; padding: 3px; }
+.modus button { padding: 7px 14px; border-radius: 999px; font-size: 0.8rem; font-weight: 700; color: var(--grau); background: none; }
+.modus button[aria-pressed="true"] { background: var(--tvg-900); color: #fff; }
+.modus.leise button[aria-pressed="true"] { background: var(--linie); color: var(--text); }
+
+/* Positionsauswahl im Kader */
+.pos-wahl { margin-top: 10px; border-top: 1px solid var(--linie); padding-top: 9px; }
+.pos-kopf { font-size: 0.75rem; color: var(--grau); margin-bottom: 7px; }
+.pos-kopf span { font-size: 0.68rem; opacity: .8; }
+.pos-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.pchip {
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 6px 10px; border-radius: 10px; border: 1.5px solid var(--linie);
+  background: var(--karte); color: var(--grau); line-height: 1.1;
+}
+.pchip b { font-size: 0.78rem; font-weight: 800; font-family: var(--f-num); }
+.pchip span { font-size: 0.58rem; }
+.pchip.aktiv { background: var(--tvg); border-color: var(--tvg); color: #fff; }
+
+/* ==========================================================================
+   Trainingsplan in Bloecken. Die Dauer ist optional - steht keine da, bleibt
+   die Uhrzeitspalte leer statt etwas zu erfinden.
+   ========================================================================== */
+.nur-trainer {
+  display: inline-block; font-size: 0.6rem; letter-spacing: .1em;
+  text-transform: uppercase; font-weight: 800; color: var(--tvg);
+  background: #E9F0FA; border: 1px solid #CFDFF3; border-radius: 999px;
+  padding: 2px 8px; margin-left: 8px; vertical-align: middle;
+}
+
+.plan-bilanz {
+  background: var(--karte); border: 1px solid var(--linie);
+  border-radius: 14px; padding: 12px 14px; margin-bottom: 14px;
+}
+.plan-bilanz .pz { display: flex; align-items: baseline; gap: 8px; }
+.plan-bilanz .pz b { font-size: 1.5rem; font-weight: 800; line-height: 1; font-family: var(--f-num); }
+.plan-bilanz .pz span { font-size: 0.82rem; color: var(--grau); }
+.plan-bilanz .prest { font-size: 0.78rem; color: var(--grau); margin-top: 6px; }
+.plan-status { font-size: 0.75rem; color: var(--tvg); margin-top: 6px; min-height: 1em; font-weight: 600; }
+
+.bloecke { display: flex; flex-direction: column; gap: 9px; }
+.block {
+  background: var(--karte); border: 1px solid var(--linie); border-radius: 14px;
+  padding: 10px 11px; display: flex; flex-direction: column; gap: 8px;
+}
+.block-oben { display: flex; align-items: center; gap: 8px; }
+.b-uhr { font-weight: 800; font-size: 0.86rem; color: var(--tvg); min-width: 44px; font-family: var(--f-num); }
+.b-dauer {
+  width: 58px; font: inherit; font-size: 0.86rem; padding: 8px 6px; text-align: center;
+  border-radius: 9px; border: 1px solid var(--linie); background: #fff; color: var(--text);
+}
+.b-min { font-size: 0.74rem; color: var(--grau); }
+.b-werkzeug { display: flex; gap: 4px; margin-left: auto; }
+.b-werkzeug button {
+  width: 31px; height: 31px; padding: 0; border-radius: 9px;
+  background: var(--flaeche); color: var(--grau); font-weight: 800; font-size: 0.85rem;
+}
+.b-werkzeug button[disabled] { opacity: .3; }
+.b-werkzeug button.weg { background: #FBEBE8; color: var(--warn); }
+.block input.b-titel, .block input.b-notiz {
+  width: 100%; font: inherit; padding: 9px 11px; border-radius: 10px;
+  border: 1px solid var(--linie); background: #fff; color: var(--text);
+}
+.block input.b-titel { font-weight: 700; font-size: 0.92rem; }
+.block input.b-notiz { font-size: 0.82rem; }
+
+.plan-werkzeug { display: flex; flex-direction: column; gap: 9px; margin-top: 14px; }
+.knopf-plan { width: 100%; font-size: 0.92rem; }
+.uebung-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.uchip {
+  padding: 8px 13px; border-radius: 999px; border: 1px dashed #B9CBE2;
+  background: #F4F8FC; font-size: 0.8rem; font-weight: 600; color: var(--tvg);
+}
+.plan-leer {
+  border: 1px dashed #C3D3E6; border-radius: 14px; padding: 18px;
+  text-align: center; background: #F7FAFD;
+}
+.plan-leer p { margin: 0; font-size: 0.86rem; color: var(--grau); }
+
+/* Nur-Lesen: Uhrzeit, was, wie lange */
+.zeitstrahl { display: flex; flex-direction: column; margin: 8px 0 4px 5px; }
+.zs-zeile {
+  display: flex; gap: 11px; padding: 8px 0 8px 15px;
+  border-left: 2px solid var(--linie); position: relative;
+}
+.zs-zeile::before {
+  content: ""; position: absolute; left: -5px; top: 13px; width: 8px; height: 8px;
+  border-radius: 50%; background: var(--tvg); box-shadow: 0 0 0 3px var(--bg);
+}
+.zs-zeile:last-child { border-left-color: transparent; }
+.zs-uhr { font-weight: 800; font-size: 0.79rem; min-width: 42px; color: var(--tvg); font-family: var(--f-num); }
+.zs-txt { flex: 1; min-width: 0; }
+.zs-txt b { font-size: 0.88rem; display: block; }
+.zs-txt small { display: block; color: var(--grau); font-size: 0.77rem; margin-top: 1px; }
+.zs-dauer { font-size: 0.73rem; color: var(--grau); font-weight: 700; white-space: nowrap; }
+
+/* Markdown-Darstellung (Plan, Wiki-Seiten) */
+.markdown { line-height: 1.5; word-wrap: break-word; }
+.markdown h3 { font-size: 1.1rem; margin: 14px 0 6px; }
+.markdown h4, .markdown h5, .markdown h6 { font-size: 0.95rem; margin: 12px 0 4px; }
+.markdown p { margin: 6px 0; }
+.markdown ul, .markdown ol { margin: 6px 0; padding-left: 22px; }
+.markdown li { margin: 2px 0; }
+.markdown code { background: #E4ECF5; border-radius: 4px; padding: 1px 5px; font-size: 0.9em; }
+.markdown table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 0.9rem; display: block; overflow-x: auto; }
+.markdown th, .markdown td { border: 1px solid var(--linie); padding: 6px 10px; text-align: left; vertical-align: top; }
+.markdown th { background: #E9F0F8; font-weight: 700; }
+.markdown tbody tr:nth-child(even) { background: #F7FAFD; }
+.wd-body { background: var(--karte); border-radius: 12px; padding: 14px 16px; }
+
+/* ==========================================================================
+   Breitbild: aufgeklappter Z Fold (Innenschirm) und PC-Monitor.
+   Rein additiv – greift ab 600px. Der aufgeklappte Fold meldet wegen hoher
+   Pixeldichte nur ~700px CSS-Breite, deshalb 600 (nicht 760). Normale Handys
+   und der ZUGEKLAPPTE Fold (~360px) bleiben einspaltig.
+   ========================================================================== */
+@media (min-width: 600px) {
+  main { max-width: 960px; }
+
+  /* Anwesenheits- und Kaderliste zweispaltig */
+  .liste { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; align-content: start; }
+  .liste .kader-zeile { margin-bottom: 0; }
+
+  /* Rangliste zweispaltig */
+  .rangliste { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+
+  /* Termine bleiben EINSPALTIG: eine aufgeklappte Karte wuerde den Nachbarn
+     sonst nach oben schieben (gleiches Problem wie beim Wiki-Baum). */
+  .trainings-liste, .trainings-neu, .termin-warnung { max-width: 720px; }
+  .home-schnell { grid-template-columns: repeat(4, 1fr); }
+
+  /* Wiki bleibt EINSPALTIG: in zwei Spalten rutscht beim Aufklappen einer
+     Gruppe die Nachbarseite nach oben — der Baum soll von oben nach unten
+     lesbar bleiben. Stattdessen etwas Luft und eine ruhige Lesebreite. */
+  .wiki-liste { max-width: 720px; gap: 8px; }
+  .wiki-neu, .wiki-neu-form { max-width: 720px; }
+
+  /* Gruppe wird zur Karte: Kopf und Unterseiten gehoeren sichtbar zusammen. */
+  .wiki-gruppe {
+    gap: 0; background: #F4F8FC; border: 1px solid var(--linie);
+    border-radius: 12px; overflow: hidden;
+  }
+  .wiki-gruppe .wiki-zeile.gruppe { background: #E4ECF5; border-radius: 0; }
+  /* Fuehrungslinie an der Einrueckung — zeigt, wie tief man im Baum haengt. */
+  .wiki-kinder {
+    gap: 6px; padding: 8px 10px 10px 14px;
+    margin-left: 16px; border-left: 2px solid var(--linie);
+  }
+  .wiki-gruppe .wiki-gruppe { border: 0; border-radius: 8px; background: #EFF4FA; }
+
+  /* Team-Generator: Ergebnis-Knoepfe nebeneinander statt gestapelt */
+  .ergebnis-knoepfe { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+  .teams { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+
+  /* Kader-Formular: Eingabe + Auswahlen in einer Reihe */
+  .form-spieler { grid-template-columns: 2fr 1fr 1fr auto; }
+  .form-spieler input#neu-name { grid-column: auto; }
+  .form-spieler button { grid-column: auto; }
+}
+
+/* Sehr breit (PC gross / Fold quer): drei Spalten */
+@media (min-width: 1100px) {
+  main { max-width: 1180px; }
+  .liste { grid-template-columns: repeat(3, 1fr); }
+  .rangliste { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* ==========================================================================
+   QUERFORMAT - Trainings-Tablet und PC. Quer ist Breite da, Hoehe nicht:
+   die Tableiste wandert an die linke Kante, damit der Inhalt die volle
+   Hoehe bekommt. Greift ab 760px Breite im Querformat; Handys hochkant
+   und der zugeklappte Fold bleiben unberuehrt.
+   ========================================================================== */
+@media (orientation: landscape) and (min-width: 760px) {
+  body { padding-bottom: 0; padding-left: calc(96px + env(safe-area-inset-left)); }
+
+  #tableiste {
+    top: 0; bottom: 0; right: auto;
+    width: calc(96px + env(safe-area-inset-left));
+    flex-direction: column; justify-content: flex-start;
+    border-top: none; border-right: 1px solid var(--linie);
+    padding: max(env(safe-area-inset-top), 10px) 0 0 env(safe-area-inset-left);
+  }
+  #tableiste button {
+    flex: none; padding: 13px 4px; margin-top: 0;
+    border-top: none; border-left: 3px solid transparent;
+  }
+  #tableiste button.aktiv {
+    border-top-color: transparent; border-left-color: var(--tvg); background: #F1F6FC;
+  }
+  #tableiste .t-text { font-size: 0.66rem; }
+
+  /* Chat-Eingabe und Toast sitzen nicht mehr ueber einer unteren Leiste. */
+  .chat-eingabe { left: calc(96px + env(safe-area-inset-left)); bottom: 0; }
+  .chat { padding-bottom: 96px; }
+  .toast { bottom: 24px; left: calc(50% + 48px); }
+
+  main { max-width: 1100px; }
+}
