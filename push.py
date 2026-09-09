@@ -27,7 +27,7 @@ def verfuegbar() -> bool:
 
 
 def _subject() -> str:
-    return os.getenv("VAPID_SUBJECT", "mailto:lucamaxbaur98@gmail.com")
+    return os.getenv("VAPID_SUBJECT", "mailto:admin@example.com")
 
 
 def sende(conn, benutzer_ids: list[int], titel: str, text: str,

@@ -147,7 +147,7 @@ def baue() -> dict[str, str]:
 
 def pruefe(index: dict[str, str]) -> None:
     """Gleicht die Zuordnung mit den Spielerinnen am Homeserver ab."""
-    cmd = ("python3 -c \"import sqlite3;c=sqlite3.connect('/home/luca/elo/elo.db');"
+    cmd = ("python3 -c \"import sqlite3;c=sqlite3.connect('/home/you/elo/elo.db');"
            "print('\\n'.join(r[0] for r in c.execute('select name from spieler where aktiv=1')))\"")
     try:
         roh = subprocess.run(["ssh", "-o", "ConnectTimeout=8", "you@homeserver", cmd],

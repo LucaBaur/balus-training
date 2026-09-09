@@ -3,8 +3,8 @@ Description=Spieler-ELO Web-App
 After=network.target
 
 [Service]
-WorkingDirectory=/home/luca/elo
-ExecStart=/home/luca/anytype-sync/.venv/bin/python -m uvicorn app:app --host 0.0.0.0 --port 8200
+WorkingDirectory=/home/you/elo
+ExecStart=/home/you/anytype-sync/.venv/bin/python -m uvicorn app:app --host 0.0.0.0 --port 8200
 Restart=on-failure
 RestartSec=5
 
