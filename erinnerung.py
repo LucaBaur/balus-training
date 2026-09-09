@@ -18,7 +18,7 @@ import requests
 import anytype_sync as A
 
 PUSH_ZIEL = "mobile_app_handy_luca"
-APP_URL = "https://homeserver.tail112520.ts.net/"
+APP_URL = "https://homeserver.tailnet.ts.net/"
 
 
 def hat_plan(body: str) -> bool:

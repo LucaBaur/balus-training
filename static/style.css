@@ -231,9 +231,49 @@ button:active { transform: scale(.98); }
 }
 .siegchance .ch-bar > span { display: block; height: 100%; background: var(--court); }
 
-/* Spieler-Profil (Position, Anwesenheit, ELO-Verlauf) */
+/* ==========================================================================
+   "Ich" - die eigene Seite: Portrait, Positionen, Beteiligung, Laufchallenge.
+   ========================================================================== */
+.ich-kopf { display: flex; align-items: center; gap: 16px; margin: 6px 0 16px; }
+.ich-kopf .ich-kopf-text { flex: 1; min-width: 0; }
+.ich-kopf h2 { margin: 0 0 8px; font-size: 1.35rem; }
+.ich-kopf .profil-badges { margin-bottom: 0; }
+.ich-kopf .pk-leer { color: var(--grau); font-size: 0.85rem; }
+
+.ich-karte {
+  background: var(--karte); border-radius: 14px; padding: 14px 16px; margin-bottom: 12px;
+  box-shadow: 0 1px 2px rgba(0,0,0,.05);
+}
+.ich-karte .hinweis { margin: 6px 0 0; }
+.ik-kopf {
+  font-size: 0.68rem; letter-spacing: .12em; text-transform: uppercase;
+  font-weight: 800; color: var(--grau); margin-bottom: 10px;
+}
+.ik-quote { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.ik-quote .iq-zahl { font-size: 2rem; font-weight: 800; color: var(--tvg); line-height: 1; }
+.ik-quote .iq-sub { color: var(--grau); font-size: 0.85rem; }
+.ik-balken {
+  height: 8px; border-radius: 999px; background: var(--flaeche); overflow: hidden; margin: 10px 0 8px;
+}
+.ik-balken > span { display: block; height: 100%; background: var(--tvg); border-radius: 999px; }
+.ik-zahlen { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 0.85rem; color: var(--grau); }
+.ik-zahlen b { color: var(--text); }
+
+.ik-kacheln { display: flex; gap: 10px; }
+.ik-kachel {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  background: var(--flaeche); border-radius: 10px; padding: 10px 6px; text-align: center;
+}
+.ik-kachel .ikw { font-size: 1.3rem; font-weight: 800; color: var(--tvg); }
+.ik-kachel .ikt { font-size: 0.7rem; color: var(--grau); }
+
+/* Spieler-Profil (Portrait, Position, Anwesenheit, ELO-Verlauf) */
 .detail-profil { margin: 4px 0 14px; }
 .detail-profil:empty { display: none; }
+.profil-kopf { display: flex; align-items: center; gap: 14px; margin-bottom: 10px; }
+.profil-kopf .pk-text { flex: 1; min-width: 0; }
+.profil-kopf .profil-badges { margin-bottom: 0; }
+.profil-kopf .pk-leer { color: var(--grau); font-size: 0.85rem; }
 .profil-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
 .profil-badges .pb {
   background: var(--karte); border-radius: 999px; padding: 5px 12px; font-size: 0.82rem;
@@ -422,6 +462,29 @@ button:active { transform: scale(.98); }
 #benutzer-name { font-weight: 600; color: var(--grau); font-size: 0.9rem; }
 #logout-btn { background: var(--flaeche); font-size: 0.82rem; padding: 8px 14px; }
 
+#ansicht-select {
+  margin-left: auto; font-size: 0.82rem; padding: 7px 8px; max-width: 55%;
+  border: 1px solid var(--linie); border-radius: 8px; background: var(--karte);
+  color: var(--text);
+}
+#ansicht-select.hidden { display: none; }
+
+/* Streifen unter dem Kopf, solange der Trainer die App als eine Spielerin sieht. */
+.ansicht-banner {
+  position: sticky; top: 0; z-index: 40;
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  flex-wrap: wrap;
+  background: var(--ocker); color: #fff;
+  padding: 7px 14px; font-size: 0.85rem;
+}
+.ansicht-banner.hidden { display: none; }
+.ansicht-banner b { font-weight: 700; }
+.ansicht-banner button {
+  background: rgba(255, 255, 255, 0.22); color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.5); border-radius: 7px;
+  padding: 4px 10px; font-size: 0.8rem;
+}
+
 /* Push-Schalter (Home) + Erinnern (Training) */
 .push-box { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
 .push-box:empty { display: none; }
@@ -445,6 +508,29 @@ button:active { transform: scale(.98); }
 .home-karte .hk-zahlen .zu { color: var(--gruen); }
 .home-karte .hk-zahlen .ab { color: var(--b); }
 
+/* Home: „Deine Antwort fehlt noch". Ocker statt Rot — das ist eine Erinnerung,
+   kein Fehler. Jeder Termin ist direkt hier beantwortbar. */
+.home-offen { margin-bottom: 16px; }
+.ho-kopf {
+  font-size: 0.66rem; letter-spacing: .13em; text-transform: uppercase;
+  font-weight: 800; color: var(--ocker); margin-bottom: 8px;
+}
+.ho-termin {
+  background: var(--karte); border-radius: 14px; padding: 12px 14px; margin-bottom: 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.08); border-left: 5px solid var(--ocker);
+}
+.ho-zeile { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.ho-datum { font-size: 0.8rem; color: var(--grau); white-space: nowrap; }
+.ho-datum b { color: var(--tvg); letter-spacing: .04em; }
+.ho-titel { font-weight: 700; }
+.ho-titel small { color: var(--grau); font-weight: 500; }
+.ho-termin .td-rsvp { background: none; padding: 8px 0 0; margin: 0; }
+.ho-termin .rsvp-kopf { display: none; }
+.ho-fertig {
+  font-size: 0.85rem; color: var(--gruen-dunkel); background: #EAF4EC;
+  border: 1px solid #CFE4D6; border-radius: 12px; padding: 10px 14px;
+}
+
 /* Home-Schnellzugriff */
 .home-schnell { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
 .schnell-kachel {
@@ -453,7 +539,6 @@ button:active { transform: scale(.98); }
   font-weight: 600;
 }
 .schnell-kachel .sk-icon { font-size: 1.6rem; }
-.spieler-hinweis { grid-column: 1 / -1; }
 
 /* ==========================================================================
    Termine-Uebersicht. Eine Zeile zeigt auf einen Blick, wie viele zugesagt
@@ -471,6 +556,19 @@ button:active { transform: scale(.98); }
   background: var(--karte); border: 1px solid var(--linie);
   border-left: 5px solid var(--tvg); border-radius: 14px; overflow: hidden;
 }
+/* Termin-Arten am Hintergrund erkennbar: Training bleibt die weisse Karte,
+   Spiele heben sich ab - Testspiel im Torraum-Ocker, Ligaspiel im Court-Blau.
+   Der farbige Balken links bleibt dem Zusagen-Zustand (knapp/kritisch). */
+.termin.testspiel { background: #FBF3E9; border-color: #EBD9C2; }
+.termin.ligaspiel { background: #E9F2F8; border-color: #C6DFEC; }
+.termin.testspiel .t-bar, .termin.ligaspiel .t-bar { background: rgba(255,255,255,.75); }
+.t-art {
+  display: inline-block; font-size: 0.6rem; font-weight: 800; letter-spacing: .1em;
+  text-transform: uppercase; padding: 2px 7px; border-radius: 999px; margin-bottom: 3px;
+}
+.t-art.testspiel { background: var(--ocker); color: #fff; }
+.t-art.ligaspiel { background: var(--court); color: #fff; }
+
 .termin.knapp { border-left-color: var(--ocker); }
 .termin.kritisch { border-left-color: var(--warn); }
 .termin.vergangen { opacity: .62; border-left-color: var(--linie); }
@@ -484,6 +582,7 @@ button:active { transform: scale(.98); }
 .t-mitte { flex: 1; min-width: 0; }
 .t-mitte b { display: block; font-size: 0.92rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .t-mitte small { color: var(--grau); font-size: 0.74rem; }
+.t-mitte small .nw { white-space: nowrap; }
 .t-bar { height: 5px; border-radius: 999px; background: #E9EFF6; overflow: hidden; margin-top: 7px; display: flex; }
 .t-bar i { display: block; height: 100%; }
 .t-bar .zu { background: var(--tvg); }
@@ -535,6 +634,32 @@ button:active { transform: scale(.98); }
   max-width: 58%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .ab-zeile .az-g.fehlt { color: var(--grau); background: var(--flaeche); border-color: var(--linie); }
+/* Trainer-Zeilen: Name links, drei Mini-Knöpfe rechts. Der aktive Knopf ist
+   eingefärbt — damit sieht man den Ist-Zustand, ohne die Gruppe zu lesen. */
+.tr-zeilen { display: flex; flex-direction: column; gap: 6px; }
+.tr-zeile {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--karte); border: 1px solid var(--linie);
+  border-radius: 10px; padding: 5px 6px 5px 11px;
+}
+.tz-name { font-size: 0.86rem; font-weight: 600; }
+.tz-name .tw { font-size: 0.68rem; color: var(--ocker); font-weight: 800; }
+.tz-quelle { font-size: 0.7rem; color: var(--grau); margin-left: 5px; }
+.tz-grund {
+  font-size: 0.73rem; color: var(--warn);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40%;
+}
+.tz-knoepfe { display: flex; gap: 4px; margin-left: auto; flex: none; }
+.tzb {
+  width: 34px; min-width: 34px; padding: 6px 0; margin: 0;
+  font-size: 0.85rem; font-weight: 800; line-height: 1;
+  background: var(--flaeche); border: 1px solid var(--linie); border-radius: 8px;
+  color: var(--grau);
+}
+.tzb.ja.aktiv { background: var(--gruen); border-color: var(--gruen); color: #fff; }
+.tzb.un.aktiv { background: var(--unent); border-color: var(--unent); color: #fff; }
+.tzb.nein.aktiv { background: var(--warn); border-color: var(--warn); color: #fff; }
+
 .t-aktionen { display: flex; gap: 8px; flex-wrap: wrap; }
 .t-aktionen button { flex: 1; min-width: 128px; font-size: 0.86rem; }
 .t-aktionen .loeschen { width: auto; margin-top: 0; }
@@ -559,25 +684,61 @@ button:active { transform: scale(.98); }
 }
 .gchip.aktiv { background: var(--warn); border-color: var(--warn); color: #fff; }
 
-/* Neues Training (Trainer/Admin) */
+/* Neuer Termin (Trainer/Admin): Training, Testspiel oder Ligaspiel */
 .trainings-neu { margin-bottom: 12px; }
 .tn-toggle { background: var(--flaeche); font-size: 0.9rem; }
-.tn-form { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.tn-form { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
 .tn-form input { font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--linie); background: #fff; }
-.tn-form input[type=text] { flex: 1; min-width: 140px; }
-.tn-form button { flex: none; }
+.tn-form > button { align-self: flex-start; }
+.tn-zeile { display: flex; gap: 8px; }
+.tn-zeile input { flex: 1; min-width: 0; }
+.tn-art, .tn-heim { display: flex; gap: 6px; }
+.tn-art button, .tn-heim button {
+  flex: 1; background: var(--flaeche); color: var(--grau);
+  font-size: 0.85rem; font-weight: 700; padding: 9px 6px;
+}
+.tn-art button.aktiv, .tn-heim button.aktiv { background: var(--tvg); color: #fff; }
+.tn-spiel { display: flex; flex-direction: column; gap: 8px; }
+.tn-spiel.hidden, .tn-abfahrt.hidden { display: none; }
+.tn-abfahrt { display: flex; align-items: center; gap: 10px; font-size: 0.9rem; color: var(--grau); }
+.tn-abfahrt input { flex: 1; }
+
+/* Startseite: die nächsten drei Test-/Ligaspiele */
+.home-spiele { margin-bottom: 16px; }
+.home-spiele:empty { display: none; }
+.hs-kopf {
+  font-size: 0.68rem; letter-spacing: .12em; text-transform: uppercase;
+  font-weight: 800; color: var(--grau); margin: 0 0 8px 2px;
+}
+.hs-spiel {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  background: var(--karte); border: 1px solid var(--linie);
+  border-left: 5px solid var(--court); border-radius: 12px;
+  padding: 10px 12px; margin-bottom: 8px;
+}
+.hs-spiel.testspiel { background: #FBF3E9; border-color: #EBD9C2; border-left-color: var(--ocker); }
+.hs-spiel.ligaspiel { background: #E9F2F8; border-color: #C6DFEC; border-left-color: var(--court); }
+.hs-datum { width: 48px; flex: none; text-align: center; }
+.hs-datum b { display: block; font-size: 0.64rem; letter-spacing: .12em; color: var(--grau); font-weight: 800; }
+.hs-datum span { display: block; font-weight: 800; font-size: 0.85rem; font-family: var(--f-num); }
+.hs-mitte { flex: 1; min-width: 0; }
+.hs-titel {
+  display: block; font-size: 0.92rem; font-weight: 700;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.hs-meta { display: block; font-size: 0.74rem; color: var(--grau); margin-top: 2px; }
+.hs-zeit { flex: none; text-align: right; min-width: 54px; }
+.hs-zeit b { display: block; font-weight: 800; font-family: var(--f-num); font-size: 0.95rem; }
+.hs-zeit small { display: block; font-size: 0.62rem; color: var(--grau); }
+/* Auswärts ist die Abfahrt die Zahl, auf die es ankommt - Vereinsblau, kein
+   Rot: Rot bleibt in dieser App Absage/Fehler vorbehalten. */
+.hs-spiel.auswaerts .hs-zeit b { color: var(--tvg); }
 
 /* Training-Detail */
 .td-meta { color: var(--grau); margin-bottom: 14px; }
-.td-grp { margin-bottom: 12px; }
-.td-grp-kopf { font-size: 0.8rem; font-weight: 700; margin-bottom: 6px; }
-.td-grp.an .td-grp-kopf { color: var(--gruen); }
-.td-grp.ab .td-grp-kopf { color: var(--b); }
-.td-grp.un .td-grp-kopf { color: var(--grau); }
-.td-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.td-chip { background: var(--karte); border-radius: 8px; padding: 6px 10px; font-size: 0.9rem; box-shadow: 0 1px 2px rgba(0,0,0,.05); }
-.td-chip .tw { font-size: 0.7rem; color: var(--gruen); }
-.td-chip .td-grund { color: var(--grau); font-size: 0.82rem; }
+/* Die Gruppen (Zugesagt/Unsicher/Abgesagt/Offen) sind hier dieselben wie in
+   der aufgeklappten Zeile der Übersicht — nur der Abstand ist eigener. */
+.td-teilnahme { display: flex; flex-direction: column; gap: 14px; margin-bottom: 16px; }
 
 /* Eigene Zu-/Absage (Spielerin) */
 .td-rsvp { background: var(--karte); border-radius: 12px; padding: 12px 14px; margin-bottom: 14px; }
@@ -671,6 +832,8 @@ button:active { transform: scale(.98); }
   background: linear-gradient(160deg, var(--c1, #2F62BD), var(--c2, #16376F));
 }
 .wappen .ini { font-weight: 800; font-size: calc(var(--w, 46px) * .34); margin-top: -6%; }
+/* Foto liegt ueber den Initialen: fehlt es, kommen die Initialen zum Vorschein. */
+.wappen .pf { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .wappen.leer { background: repeating-linear-gradient(45deg, #CBD8E7 0 6px, #DDE6F1 6px 12px); }
 
 .feld-box {
@@ -932,4 +1095,45 @@ button:active { transform: scale(.98); }
   .toast { bottom: 24px; left: calc(50% + 48px); }
 
   main { max-width: 1100px; }
+}
+
+/* ==========================================================================
+   SZENEN-VIDEOS - Liste der Clips und der Player.
+   ========================================================================== */
+.videos-liste { display: grid; gap: 10px; }
+
+.video-karte {
+  display: flex; flex-direction: column; gap: 3px;
+  text-align: left; width: 100%;
+  padding: 12px 14px; border: 1px solid var(--linie); border-radius: 12px;
+  background: var(--karte); color: inherit; cursor: pointer;
+}
+.video-karte:active { background: var(--flaeche); }
+.video-karte .vk-titel { font-weight: 700; }
+.video-karte .vk-meta { font-size: 0.8rem; color: var(--grau); }
+.video-karte .vk-notiz { font-size: 0.9rem; margin-top: 2px; }
+.video-karte .vk-spieler {
+  font-size: 0.8rem; color: var(--tvg); margin-top: 4px;
+}
+
+.vd-meta { color: var(--grau); font-size: 0.9rem; margin: 2px 0 10px; }
+.vd-player {
+  width: 100%; max-height: 70vh; background: #000;
+  border-radius: 12px; display: block;
+}
+.vd-aktionen { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.vd-aktionen .plan-edit-btn { flex: 1; }
+
+.video-zuordnen {
+  flex-basis: 100%;
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 12px;
+  margin: 4px 0 8px;
+}
+.video-zuordnen label {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 0.9rem;
+}
+
+@media (min-width: 760px) {
+  .videos-liste { grid-template-columns: repeat(2, 1fr); }
 }

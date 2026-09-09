@@ -1,11 +1,26 @@
-# Spieler-ELO
+# Balu's Training
 
-ELO-System für die Trainingsspiele des Frauenteams (TVG). Jede Spielerin hat
-einen individuellen Spielstärke-Wert; daraus lassen sich per Knopfdruck faire
-Teams zusammenstellen. Ergebnisse werden im Training am Handy eingetippt, die
-ELOs werden nach Anytype zurückgeschrieben.
+*Offline-first PWA for a handball team: attendance, training plans, video clips,
+and fair team-balancing via an individual ELO rating. FastAPI + SQLite backend,
+vanilla-JS service-worker frontend with an offline outbox, deployed as a systemd
+user service. No external APIs.*
+
+---
+
+Früher `Spieler-ELO`. ELO-System für die Trainingsspiele des Frauenteams.
+Jede Spielerin hat einen individuellen Spielstärke-Wert; daraus lassen sich per
+Knopfdruck faire Teams zusammenstellen. Ergebnisse werden im Training am Handy
+eingetippt, die ELOs werden nach Anytype zurückgeschrieben.
 
 > Läuft komplett auf dem Homeserver — **keine LLM/API, keine laufenden Kosten.**
+
+## Screenshots
+
+<!-- docs/screenshot-*.png — werden nach dem lokalen Lauf mit Demo-Daten ergänzt -->
+
+| Startseite | Faire Teams | Trainingsplan |
+|---|---|---|
+| ![Startseite](docs/screenshot-start.png) | ![Faire Teams](docs/screenshot-teams.png) | ![Trainingsplan](docs/screenshot-plan.png) |
 
 Die aktuelle Version steht im Kopf der App und in
 **[CHANGELOG.md](CHANGELOG.md)** — dort gehört zu **jeder** neuen Version ein
@@ -20,6 +35,9 @@ Eintrag, was geändert wurde (samt Checkliste für den Versions-Bump).
 | `db.py`           | SQLite-Datenhaltung (Spieler, Spiele, ELO-Verlauf)          |
 | `app.py`          | FastAPI-Backend (JSON-Endpunkte + liefert die PWA aus)      |
 | `static/`         | PWA (index.html, app.js, style.css, manifest, sw, Icons)    |
+| `portraits/`      | Original-Fotos der Spielerinnen (groß, unverändert)         |
+| `static/portraits/` | Zugeschnittene Portraits für die App + `index.json`        |
+| `portraits.py`    | Baut aus den Originalen die Bilder für die App              |
 | `make_icons.py`   | Erzeugt die PWA-Icons                                        |
 | `demo.py`         | End-to-End-Test des Kerns ohne Server                       |
 | *(geplant)*       | Anytype-Sync, Import der Spielerinnen, Deployment            |
@@ -33,7 +51,7 @@ uvicorn app:app --host 0.0.0.0 --port 8200
 ```
 
 Dann im Browser `http://localhost:8200` öffnen. Am Homeserver läuft es später
-unter `http://192.168.8.125:8200` bzw. über Tailscale von unterwegs.
+unter `http://homeserver:8200` bzw. über Tailscale von unterwegs.
 
 ### Endpunkte
 
@@ -49,9 +67,16 @@ unter `http://192.168.8.125:8200` bzw. über Tailscale von unterwegs.
 | POST    | `/api/seiten`    | Seite anlegen (titel, kategorie, parent_id) |
 | POST    | `/api/seiten/{id}` | Titel/Inhalt setzen                    |
 | POST    | `/api/seiten/{id}/loeschen` | Seite löschen                 |
+| POST    | `/api/trainings/{tid}/teilnahme` | Eigene Zu-/Absage (Grund bei Absage Pflicht) |
+| POST    | `/api/trainings/{tid}/teilnahme/{spieler_id}` | Trainer trägt für eine Spielerin ein; `status: "offen"` setzt zurück |
 | POST    | `/api/trainings/{tid}/loeschen` | Termin löschen (Trainer)  |
 | POST    | `/api/trainings/{tid}/blocks` | Trainingsplan als Blöcke setzen (Trainer) |
 | POST    | `/api/trainings/{tid}/blocks/aus-text` | Alten Plantext in Blöcke zerlegen |
+| GET     | `/api/clips`     | Szenen-Videos (Spielerin: nur eigene, Trainer: alle) |
+| GET     | `/api/clips/{id}/video` | Videodatei streamen (Range-fähig, Zugriff geprüft) |
+| POST    | `/api/clips`     | Clip anlegen (Trainer; multipart: `video` + `meta`-JSON) |
+| POST    | `/api/clips/{id}` | Titel/Notiz/Datum bzw. `spieler_ids` ändern (Trainer) |
+| POST    | `/api/clips/{id}/loeschen` | Clip + Datei löschen (Trainer) |
 
 Die **Angriffsposition** steht als Freitext in `spieler.position_angriff`, bei
 mehreren mit `/` getrennt (`Halblinks/Kreis`). Sieben Positionen: Tor,
@@ -134,6 +159,84 @@ gehören ab jetzt in die App, nicht in ein Skript.
 Zwei möglichst gleich starke Teams (Größen unterscheiden sich um höchstens eine
 Spielerin). Sind mindestens zwei Torhüterinnen anwesend, bekommt jedes Team eine.
 
+## Termine: Trainings, Testspiele, Ligaspiele
+
+Alle Termine stehen in **einer** Tabelle (`trainings`) und unterscheiden sich
+über die Spalte `art`:
+
+| `art`       | Bedeutung | zusätzliche Felder                        |
+|-------------|-----------|-------------------------------------------|
+| `training`  | Normalfall (Default, auch für den Altbestand) | –                     |
+| `testspiel` | Testspiel | `gegner`, `heim` (1/0), `abfahrt`          |
+| `ligaspiel` | Ligaspiel | dito                                       |
+
+`uhrzeit` ist bei Spielen der **Anwurf**, `abfahrt` die gemeinsame Abfahrt und
+wird nur bei **Auswärtsspielen** gespeichert (der Server verwirft sie bei
+Heimspielen). Ein Spiel ohne `gegner` wird mit 400 abgelehnt.
+
+Warum eine gemeinsame Tabelle: Teilnahme, Erinnerungen, Termin-Detail und die
+Offline-Spiegelung gelten für Spiele genauso wie für Trainings — getrennte
+Tabellen hätten jede dieser Stellen verdoppelt.
+
+**Wichtig beim Anfassen dieser Stellen:** alles, was ein Training „am Datum"
+sucht (`db.training_anlegen`, `db.naechstes_training`, `trainings_termine.py`,
+der Anytype-Import), filtert auf `art = 'training'`. Sonst überschreibt der
+nächtliche Import ein Spiel, das am selben Tag steht. Ebenso zählt die
+Trainingsquote (`db.spieler_detail`) nur `art = 'training'`.
+
+In der App: Trainings sind weiße Karten, Testspiele ocker, Ligaspiele blau; die
+nächsten drei Spiele stehen fest auf der Startseite (bei Auswärtsspielen mit
+der Abfahrtszeit).
+
+## Portraits
+
+Die Wappen in der App (Aufstellung, Bank, Rangliste, Profil) zeigen Fotos der
+Spielerinnen; wer keins hat, bekommt weiterhin die Initialen.
+
+- **Originale** liegen in `portraits/`, ein Bild je Spielerin, beliebig groß.
+- **`portraits.py`** schneidet daraus automatisch einen Kopf-Schulter-Ausschnitt
+  im Wappen-Format 5:6 (460×552, JPEG) und legt ihn in `static/portraits/` ab.
+  Der Zuschnitt findet die Person über den hellen Studio-Hintergrund und
+  positioniert danach einen fest großen Ausschnitt — dadurch ist der Zoom über
+  alle Bilder gleich.
+- **Zugeordnet wird über den Namen**, nicht über die Datenbank-ID:
+  `static/portraits/index.json` bildet den Namens-Slug (`Franzi O.` →
+  `franzi-o`) auf die Datei ab; `app.js` bildet denselben Slug.
+
+Neues Foto einpflegen:
+
+```bash
+# 1. Bild nach portraits/ legen (z. B. portraits/Sarah.jpg)
+# 2. in portraits.py eine Zeile in ZUORDNUNG ergaenzen: "Sarah": "Sarah"
+py portraits.py --pruefen     # baut die Bilder + gleicht die Namen mit dem Kader ab
+bash deploy.sh                # laedt static/portraits mit hoch
+```
+
+Sitzt ein Ausschnitt daneben, hilft `FEIN` in `portraits.py`:
+`"Sarah": (0.0, -0.05, 0.9)` = etwas höher und näher dran.
+
+Die Fotos gehören **nicht** ins Repository (siehe `.gitignore`) — sie liegen
+lokal und auf dem Homeserver. Der Service Worker cacht sie beim Start mit,
+damit die Gesichter in der Halle auch offline da sind.
+
+## Szenen-Videos
+
+Einzelne Spielszenen aus einer Aufzeichnung, zugeordnet zu einzelnen
+Spielerinnen. Geschnitten und beschriftet (Pfeile, Kreise, Text, Standbilder)
+werden sie am PC mit dem Schwesterprojekt **`Balu-Videoschnitt`**; von dort lädt
+das Werkzeug den fertigen Clip per `POST /api/clips` hoch (angemeldet als
+Trainerin).
+
+- Die MP4-Dateien liegen unter `media/clips/` — **nicht** im Repository (`.gitignore`),
+  wie die Portraits. Der Ordner wird beim Start automatisch angelegt.
+- Ausgeliefert wird ein Clip nur über `GET /api/clips/{id}/video` mit Rollen- und
+  Zuordnungsprüfung, **nicht** über den `StaticFiles`-Mount. Range-Anfragen
+  bedient Starlette selbst, damit der Player springen kann.
+- Tabellen: `video_clip` (Titel, Notiz, Dateiname, Aufnahmedatum, Dauer) und
+  `video_clip_spieler` (n:m — eine Szene kann mehrere Spielerinnen betreffen).
+- Der Service Worker cacht Clips **nicht** (zu groß); `/api/…` ist von der
+  Offline-Hülle ohnehin ausgenommen.
+
 ## Anytype-Anbindung
 
 - `python anytype_sync.py --pruefe` — Verbindung + Eigenschaften prüfen
@@ -146,7 +249,7 @@ Config in der `.env` (siehe `.env.example`): `Api_key`, `ANYTYPE_SPACE_ID`,
 
 ## Deployment (Homeserver)
 
-Läuft auf **192.168.8.125** unter `~/elo/` als systemd-**User**-Dienst
+Läuft auf **homeserver** unter `~/elo/` als systemd-**User**-Dienst
 `elo.service` (Interpreter: `~/anytype-sync/.venv/bin/python`, Port **8200**).
 Die `.env` liegt nur auf dem Server (nicht im Repo).
 
@@ -155,15 +258,21 @@ Die `.env` liegt nur auf dem Server (nicht im Repo).
 export XDG_RUNTIME_DIR=/run/user/$(id -u)
 systemctl --user status|restart|stop elo.service
 
-# Neu deployen (vom PC aus, im Ordner „Handball Frauen"):
-tar czf - --exclude='__pycache__' --exclude='elo.db' --exclude='.env' -C . Spieler-ELO \
-  | ssh luca@192.168.8.125 "tar xzf - -C ~/elo --strip-components=1 && \
+# Neu deployen (vom PC aus, im Ordner „Coding"):
+tar czf - --exclude='__pycache__' --exclude='elo.db' --exclude='.env' \
+  --exclude='media' -C . Balu-Training \
+  | ssh you@homeserver "tar xzf - -C ~/elo --strip-components=1 && \
     export XDG_RUNTIME_DIR=/run/user/\$(id -u) && systemctl --user restart elo.service"
 ```
 
+`bash deploy.sh` fasst nur die `static/`-Dateien an — für Änderungen an `app.py`
+oder `db.py` (etwa die Szenen-Videos) den vollen `tar`-Weg oben nehmen. Der
+Medienordner entsteht beim Start von selbst; falls nicht, einmalig
+`mkdir -p ~/elo/media/clips` auf dem Server.
+
 ## Zugriff in der Halle (Tailscale)
 
-Der Server ist im Heimnetz unter `http://192.168.8.125:8200` erreichbar. Für
+Der Server ist im Heimnetz unter `http://homeserver:8200` erreichbar. Für
 unterwegs **Tailscale** (kostenlos):
 
 1. **Server:** `curl -fsSL https://tailscale.com/install.sh | sh` und

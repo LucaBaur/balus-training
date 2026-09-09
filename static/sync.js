@@ -81,8 +81,11 @@ async function frischHolen(pfad) {
     const daten = await mitTimeout(netzAufruf(pfad, "GET", null), 4000);
     LocalDB.put("responses", { pfad, daten, ts: Date.now() }).catch(() => {});
     return daten;
-  } catch (_) {
-    statusSetzen(false);
+  } catch (err) {
+    // Nur ECHTE Netzfehler heissen "Server weg". Eine HTTP-Antwort (z. B. 403,
+    // weil die Rolle den Endpunkt nicht sehen darf - etwa im "Ansicht als"-
+    // Modus) bedeutet: Server ist da, sagt nur nein. Wie in flushOutbox.
+    if (!err || err.http === undefined) statusSetzen(false);
     return null;
   }
 }

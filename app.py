@@ -6,10 +6,14 @@ die das Frontend nutzt. Start:  uvicorn app:app --host 0.0.0.0 --port 8200
 
 from __future__ import annotations
 
+import json
+import re
+import uuid
 from datetime import date
 from pathlib import Path
 
-from fastapi import Cookie, Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
+from fastapi import (Cookie, Depends, FastAPI, File, Form, HTTPException, Request,
+                     Response, UploadFile)
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -22,6 +26,11 @@ import trainer
 
 BASIS = Path(__file__).parent
 STATIC = BASIS / "static"
+# Szenen-Videos: die fertigen Clips (hochgeladen vom Schnittwerkzeug am PC).
+# Gehoeren NICHT unter den StaticFiles-Mount - Auslieferung nur ueber
+# /api/clips/{id}/video mit Rollen-/Zuordnungspruefung. Nicht im Repo (.gitignore).
+MEDIA_CLIPS = BASIS / "media" / "clips"
+MEDIA_CLIPS.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title="Balu's Training")
 
@@ -32,6 +41,22 @@ async def sw_kein_cache(request, call_next):
     if request.url.path == "/sw.js":
         resp.headers["Cache-Control"] = "no-cache"
     return resp
+
+
+@app.middleware("http")
+async def ansicht_nur_lesen(request, call_next):
+    """Im "Ansicht als"-Modus (Trainer sieht die App als eine Spielerin) sind
+    alle schreibenden Aufrufe gesperrt - nichts soll versehentlich im fremden
+    Konto passieren. Ausgenommen: das Umschalten selbst und Abmelden."""
+    if request.method not in ("GET", "HEAD", "OPTIONS"):
+        d = auth.session_daten(request.cookies.get(auth.COOKIE_NAME))
+        if d and d.get("als") is not None:
+            pfad = request.url.path
+            if not (pfad.startswith("/api/ansicht/") or pfad == "/api/logout"):
+                return JSONResponse(
+                    {"detail": "Nur-Lesen: du siehst die App gerade als jemand anderes."},
+                    status_code=403)
+    return await call_next(request)
 
 # Datenbank beim Start sicherstellen (Verbindung sofort schliessen, sonst
 # bleibt die Datei gesperrt)
@@ -53,10 +78,31 @@ def hole_conn():
 #  ein gueltiges Session-Cookie, 'require_trainer' zusaetzlich die Trainer-Rolle.
 
 def aktueller_benutzer(request: Request, conn=Depends(hole_conn)) -> dict | None:
-    uid = auth.session_pruefen(request.cookies.get(auth.COOKIE_NAME))
-    if uid is None:
+    """Der effektive Benutzer. Sieht ein Trainer die App "als" eine Spielerin
+    (Feld 'als' im signierten Cookie), wird die Spielerin zurueckgegeben - alle
+    Rollen-Pruefungen wirken dann wie fuer sie."""
+    d = auth.session_daten(request.cookies.get(auth.COOKIE_NAME))
+    if d is None:
         return None
-    return db.benutzer_nach_id(conn, uid)
+    real = db.benutzer_nach_id(conn, int(d["uid"]))
+    if real is None:
+        return None
+    als = d.get("als")
+    if als is not None and real["rolle"] == "trainer":
+        eff = db.benutzer_nach_id(conn, int(als))
+        if eff is not None:
+            return {**eff, "_ansicht_als": True,
+                    "_echter_name": real["name"], "_echter_uid": real["id"]}
+    return real
+
+
+def echter_benutzer(request: Request, conn=Depends(hole_conn)) -> dict | None:
+    """Der wirklich angemeldete Benutzer - ignoriert 'als'. Fuer die
+    Umschalt-Endpunkte, damit nur ein echter Trainer schalten kann."""
+    d = auth.session_daten(request.cookies.get(auth.COOKIE_NAME))
+    if d is None:
+        return None
+    return db.benutzer_nach_id(conn, int(d["uid"]))
 
 
 def require_user(benutzer=Depends(aktueller_benutzer)) -> dict:
@@ -66,6 +112,14 @@ def require_user(benutzer=Depends(aktueller_benutzer)) -> dict:
 
 
 def require_trainer(benutzer=Depends(require_user)) -> dict:
+    if benutzer["rolle"] != "trainer":
+        raise HTTPException(403, "Nur für Trainer")
+    return benutzer
+
+
+def require_echter_trainer(benutzer=Depends(echter_benutzer)) -> dict:
+    if not benutzer:
+        raise HTTPException(401, "Nicht angemeldet")
     if benutzer["rolle"] != "trainer":
         raise HTTPException(403, "Nur für Trainer")
     return benutzer
@@ -120,10 +174,48 @@ def api_logout(resp: Response):
     return {"ok": True}
 
 
+def _me(benutzer: dict) -> dict:
+    ansicht = bool(benutzer.get("_ansicht_als"))
+    return {
+        "name": benutzer["name"], "rolle": benutzer["rolle"],
+        "spieler_id": benutzer.get("spieler_id"),
+        "ansicht_als": ansicht,
+        "echter_name": benutzer.get("_echter_name"),
+        "als_benutzer_id": benutzer["id"] if ansicht else None,
+    }
+
+
 @app.get("/api/me")
 def api_me(benutzer=Depends(require_user)):
-    return {"name": benutzer["name"], "rolle": benutzer["rolle"],
-            "spieler_id": benutzer.get("spieler_id")}
+    return _me(benutzer)
+
+
+# --------------------------------------------------------------- Ansicht als ----
+#  Ein Trainer kann die App aus Sicht einer Spielerin ansehen ("view as").
+#  Das Ziel steht im signierten Cookie (Feld 'als'); nur ein ECHTER Trainer kann
+#  es setzen. Der Modus ist nur lesend (siehe Middleware 'ansicht_nur_lesen').
+
+@app.get("/api/ansicht/konten")
+def api_ansicht_konten(conn=Depends(hole_conn), _t=Depends(require_echter_trainer)):
+    return [{"benutzer_id": b["id"], "name": b["name"]}
+            for b in db.benutzer_liste(conn)
+            if b["rolle"] == "spieler" and b["aktiv"]]
+
+
+@app.post("/api/ansicht/stop")
+def api_ansicht_stop(resp: Response, trainer=Depends(require_echter_trainer)):
+    _cookie_setzen(resp, auth.session_erstellen(trainer["id"]))
+    return _me(trainer)
+
+
+@app.post("/api/ansicht/{benutzer_id}")
+def api_ansicht_setzen(benutzer_id: int, resp: Response, conn=Depends(hole_conn),
+                       trainer=Depends(require_echter_trainer)):
+    ziel = db.benutzer_nach_id(conn, benutzer_id)
+    if ziel is None or ziel["rolle"] != "spieler":
+        raise HTTPException(404, "Kein Spielerinnen-Konto mit dieser ID")
+    _cookie_setzen(resp, auth.session_erstellen(trainer["id"], als=benutzer_id))
+    return _me({**ziel, "_ansicht_als": True, "_echter_name": trainer["name"]})
 
 
 # ------------------------------------------------------------ Datenmodelle ----
@@ -355,22 +447,49 @@ def api_training_blocks_aus_text(tid: int, conn=Depends(hole_conn),
 class TrainingNeu(BaseModel):
     datum: str                     # ISO 'YYYY-MM-DD'
     titel: str = ""
-    uhrzeit: str | None = None     # 'HH:MM'
+    uhrzeit: str | None = None     # 'HH:MM' (bei Spielen: Anwurf)
     ort: str | None = None
     markdown: str = ""             # optionaler Plan
+    art: str = "training"          # training / testspiel / ligaspiel
+    gegner: str | None = None      # nur Spiele
+    heim: bool | None = None       # True = Heimspiel, False = auswaerts
+    abfahrt: str | None = None     # 'HH:MM' Abfahrt (Auswaertsspiele)
     token: str | None = None
+
+
+def _spiel_titel(art: str, gegner: str | None, heim: bool | None) -> str:
+    """Titel eines Spiels aus Art, Gegner und Heimrecht - damit in der Liste
+    ohne Aufklappen steht, worum es geht."""
+    wort = "Testspiel" if art == "testspiel" else "Ligaspiel"
+    if not gegner:
+        return wort
+    return f"{wort} {'gegen' if heim else 'bei'} {gegner}"
 
 
 @app.post("/api/trainings")
 def api_training_anlegen(t: TrainingNeu, conn=Depends(hole_conn),
                          _t=Depends(require_trainer)):
-    """Training anlegen (oder bestehendes am Datum wiederverwenden) + optional
-    Uhrzeit/Ort/Coach-Plan. Ersetzt die Anytype-Neuanlage. Nur Trainer/Admin."""
+    """Termin anlegen: Training (bestehendes am Datum wird wiederverwendet)
+    oder Test-/Ligaspiel mit Gegner, Heimrecht und Abfahrtszeit.
+    Ersetzt die Anytype-Neuanlage. Nur Trainer/Admin."""
     if not t.datum.strip():
         raise HTTPException(400, "Datum fehlt")
-    tid, neu = db.training_anlegen(conn, t.datum.strip(), t.titel,
+    art = t.art if t.art in db.ARTEN else "training"
+    gegner = (t.gegner or "").strip() or None
+    if art in db.SPIEL_ARTEN and not gegner:
+        raise HTTPException(400, "Für ein Spiel fehlt der Gegner.")
+    heim = None if art == "training" else bool(t.heim)
+    # Abfahrt ergibt nur auswaerts Sinn - daheim faehrt niemand gemeinsam los.
+    abfahrt = (t.abfahrt or None) if (art in db.SPIEL_ARTEN and heim is False) else None
+    titel = t.titel.strip() if t.titel else ""
+    if not titel:
+        titel = _spiel_titel(art, gegner, heim) if art in db.SPIEL_ARTEN else "Training"
+    tid, neu = db.training_anlegen(conn, t.datum.strip(), titel,
                                    t.markdown or None,
-                                   uhrzeit=(t.uhrzeit or None), ort=(t.ort or None))
+                                   uhrzeit=(t.uhrzeit or None), ort=(t.ort or None),
+                                   art=art, gegner=gegner,
+                                   heim=(None if heim is None else int(heim)),
+                                   abfahrt=abfahrt)
     return {"id": tid, "neu": neu}
 
 
@@ -405,6 +524,41 @@ def api_teilnahme(tid: int, a: TeilnahmeAnfrage, conn=Depends(hole_conn),
     if conn.execute("SELECT 1 FROM trainings WHERE id = ?", (tid,)).fetchone() is None:
         raise HTTPException(404, "Training nicht gefunden")
     db.teilnahme_setzen(conn, tid, sid, a.status, grund, quelle="app")
+    return {"ok": True, "status": a.status, "grund": grund}
+
+
+class TeilnahmeFremdAnfrage(BaseModel):
+    status: str                    # anwesend / abgesagt / unsicher / offen
+    grund: str | None = None       # optional - der Trainer weiss ihn oft schon
+    token: str | None = None       # Outbox-Idempotenz (hier ignoriert)
+
+
+@app.post("/api/trainings/{tid}/teilnahme/{spieler_id}")
+def api_teilnahme_fremd(tid: int, spieler_id: int, a: TeilnahmeFremdAnfrage,
+                        conn=Depends(hole_conn), _t=Depends(require_trainer)):
+    """Trainer traegt die Antwort FUER eine Spielerin ein (Anruf, WhatsApp,
+    Absage am Hallenrand).
+
+    Zwei bewusste Unterschiede zur eigenen Antwort oben:
+    - Der Grund ist hier NICHT Pflicht. Beim Eintragen fuer andere kennt man
+      ihn oft nicht genau, und eine Pflichteingabe wuerde nur Phantasie-Gruende
+      erzeugen.
+    - `status = "offen"` loescht die Antwort wieder (Korrektur bei Vertippen).
+    Die Quelle wird als 'trainer' vermerkt - so bleibt unterscheidbar, wer
+    geantwortet hat und wer eingetragen wurde. Die Push-Erinnerung geht weiter
+    an alle ohne EIGENE Antwort (quelle != 'app').
+    """
+    if a.status not in ("anwesend", "abgesagt", "unsicher", "offen"):
+        raise HTTPException(400, "Ungültiger Status.")
+    if conn.execute("SELECT 1 FROM trainings WHERE id = ?", (tid,)).fetchone() is None:
+        raise HTTPException(404, "Training nicht gefunden")
+    if conn.execute("SELECT 1 FROM spieler WHERE id = ?", (spieler_id,)).fetchone() is None:
+        raise HTTPException(404, "Spielerin nicht gefunden")
+    if a.status == "offen":
+        db.teilnahme_loeschen(conn, tid, spieler_id)
+        return {"ok": True, "status": None, "grund": None}
+    grund = (a.grund or "").strip() or None
+    db.teilnahme_setzen(conn, tid, spieler_id, a.status, grund, quelle="trainer")
     return {"ok": True, "status": a.status, "grund": grund}
 
 
@@ -719,6 +873,109 @@ def api_trainer_anytype(t: AnytypeTraining, _t=Depends(require_trainer)):
     except Exception as e:
         raise HTTPException(502, f"Anytype-Anlage fehlgeschlagen: {e}")
     return res
+
+
+# ------------------------------------------------------------ Szenen-Videos ----
+#  Geschnitten und beschriftet am PC (Projekt "Balu-Videoschnitt"), hier nur als
+#  fertige MP4. Eine Spielerin sieht nur die ihr zugeordneten Clips; die
+#  Trainerin sieht und verwaltet alle. Der Upload kommt vom Schnittwerkzeug,
+#  das sich als Trainerin anmeldet.
+
+class ClipAendern(BaseModel):
+    titel: str | None = None
+    notiz: str | None = None
+    spiel_datum: str | None = None
+    spieler_ids: list[int] | None = None
+
+
+def _clip_oeffentlich(clip: dict) -> dict:
+    """Nur die Felder, die das Frontend braucht - ohne den Dateinamen."""
+    return {
+        "id": clip["id"], "titel": clip["titel"], "notiz": clip.get("notiz"),
+        "spiel_datum": clip.get("spiel_datum"), "dauer_s": clip.get("dauer_s"),
+        "erstellt_am": clip.get("erstellt_am"), "spieler": clip.get("spieler", []),
+    }
+
+
+@app.get("/api/clips")
+def api_clips(conn=Depends(hole_conn), benutzer=Depends(require_user)):
+    if benutzer["rolle"] == "trainer":
+        clips = db.clips_alle(conn)
+    else:
+        sid = benutzer.get("spieler_id")
+        clips = db.clips_fuer_spieler(conn, sid) if sid else []
+    return [_clip_oeffentlich(c) for c in clips]
+
+
+@app.get("/api/clips/{clip_id}/video")
+def api_clip_video(clip_id: int, conn=Depends(hole_conn), benutzer=Depends(require_user)):
+    clip = db.clip_nach_id(conn, clip_id)
+    if clip is None:
+        raise HTTPException(404, "Clip nicht gefunden")
+    darf = (benutzer["rolle"] == "trainer"
+            or benutzer.get("spieler_id") in clip["spieler_ids"])
+    if not darf:
+        raise HTTPException(403, "Kein Zugriff auf diesen Clip")
+    pfad = MEDIA_CLIPS / clip["datei"]
+    if not pfad.is_file():
+        raise HTTPException(404, "Videodatei fehlt")
+    # FileResponse (Starlette) bedient Range-Anfragen selbst -> Seek im Player.
+    return FileResponse(pfad, media_type="video/mp4")
+
+
+@app.post("/api/clips")
+async def api_clip_anlegen(video: UploadFile = File(...), meta: str = Form(...),
+                           conn=Depends(hole_conn), benutzer=Depends(require_trainer)):
+    try:
+        m = json.loads(meta)
+    except json.JSONDecodeError:
+        raise HTTPException(400, "meta ist kein gueltiges JSON")
+    titel = (m.get("titel") or "").strip()
+    if not titel:
+        raise HTTPException(400, "Titel fehlt")
+    spiel_datum = (m.get("spiel_datum") or "").strip() or None
+    if spiel_datum and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", spiel_datum):
+        raise HTTPException(400, "spiel_datum muss YYYY-MM-DD sein")
+    spieler_ids = [int(x) for x in (m.get("spieler_ids") or [])]
+
+    daten = await video.read()
+    if not daten:
+        raise HTTPException(400, "Leere Videodatei")
+    datei = f"{uuid.uuid4().hex}.mp4"           # kein Nutzer-Dateiname
+    (MEDIA_CLIPS / datei).write_bytes(daten)
+
+    try:
+        clip_id = db.clip_anlegen(
+            conn, titel=titel, notiz=(m.get("notiz") or "").strip() or None,
+            datei=datei, spiel_datum=spiel_datum, dauer_s=m.get("dauer_s"),
+            erstellt_von=benutzer["id"], spieler_ids=spieler_ids)
+    except Exception:
+        (MEDIA_CLIPS / datei).unlink(missing_ok=True)   # kein verwaistes File
+        raise
+    return _clip_oeffentlich(db.clip_nach_id(conn, clip_id))
+
+
+@app.post("/api/clips/{clip_id}")
+def api_clip_aendern(clip_id: int, aenderung: ClipAendern,
+                     conn=Depends(hole_conn), _t=Depends(require_trainer)):
+    if db.clip_nach_id(conn, clip_id) is None:
+        raise HTTPException(404, "Clip nicht gefunden")
+    if aenderung.spiel_datum and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", aenderung.spiel_datum):
+        raise HTTPException(400, "spiel_datum muss YYYY-MM-DD sein")
+    db.clip_metadaten_setzen(conn, clip_id, titel=aenderung.titel,
+                             notiz=aenderung.notiz, spiel_datum=aenderung.spiel_datum)
+    if aenderung.spieler_ids is not None:
+        db.clip_spieler_setzen(conn, clip_id, aenderung.spieler_ids)
+    return _clip_oeffentlich(db.clip_nach_id(conn, clip_id))
+
+
+@app.post("/api/clips/{clip_id}/loeschen")
+def api_clip_loeschen(clip_id: int, conn=Depends(hole_conn), _t=Depends(require_trainer)):
+    datei = db.clip_loeschen(conn, clip_id)
+    if datei is None:
+        raise HTTPException(404, "Clip nicht gefunden")
+    (MEDIA_CLIPS / datei).unlink(missing_ok=True)
+    return {"ok": True}
 
 
 @app.get("/")

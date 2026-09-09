@@ -4,7 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-ZIEL="luca@192.168.8.125:~/elo/static/"
+ZIEL="you@homeserver:~/elo/static/"
 STATIC=(static/local-db.js static/sync.js static/teams-local.js static/app.js static/sw.js static/index.html static/style.css static/manifest.webmanifest static/tvg-logo.png)
 
 echo "== 1/3 Syntax-Check =="
@@ -18,5 +18,8 @@ node tests/teams.test.mjs
 
 echo "== 3/3 Deploy nach ~/elo =="
 scp "${STATIC[@]}" "$ZIEL"
+# Portraits (gebaut von portraits.py) als ganzer Ordner mit.
+ssh you@homeserver "mkdir -p ~/elo/static/portraits"
+scp static/portraits/* "you@homeserver:~/elo/static/portraits/"
 
 echo "== Fertig: deployt =="

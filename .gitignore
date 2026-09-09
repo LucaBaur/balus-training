@@ -1,6 +1,7 @@
 # Zugangsdaten: gehoeren NIE ins Repository.
 .env
 .env.local
+.session_secret
 
 # Echte Daten der Mannschaft (Namen, ELO, Zu-/Absagen, Gruende).
 # Die Datenbank liegt auf dem Homeserver, gesichert wird sie dort.
@@ -8,6 +9,15 @@ elo.db
 elo.db.bak-*
 *.sqlite
 *.sqlite3
+
+# Portraits der Spielerinnen - Fotos gehoeren genauso wenig ins Repository
+# wie die Datenbank. Sie liegen lokal und auf dem Homeserver.
+portraits/
+static/portraits/
+
+# Szenen-Videos (hochgeladen vom Schnittwerkzeug). Wie die Portraits: gross,
+# echte Mannschaftsdaten, liegen nur lokal und auf dem Homeserver.
+media/
 
 # Python
 __pycache__/

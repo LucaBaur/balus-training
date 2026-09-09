@@ -44,6 +44,12 @@ const NAV = [
   { key: "home", label: "Home", rollen: ["trainer", "spieler"], unter: [
     { key: "home", label: "Übersicht", view: "view-home", init: ladeHome },
   ]},
+  // "Ich" gibt es fuer jede, die ein Spielerprofil hat - auch fuer Trainerinnen,
+  // die selbst mitspielen (dann haengt am Zugang eine spieler_id).
+  { key: "ich", label: "Ich", rollen: ["trainer", "spieler"], nurMitProfil: true, unter: [
+    { key: "ich", label: "Mein Profil", view: "view-ich", init: ladeIch },
+    { key: "videos", label: "Videos", view: "view-videos", init: ladeVideos },
+  ]},
   { key: "training", label: "Training", rollen: ["trainer", "spieler"], unter: [
     { key: "trainings", label: "Termine", view: "view-trainings", init: ladeTrainingsListe },
     { key: "aufstellung", label: "Aufstellung", view: "view-aufstellung", init: ladeAufstellung },
@@ -58,6 +64,9 @@ const NAV = [
     { key: "kader", label: "Kader", view: "view-kader", init: ladeKader },
     { key: "statistik", label: "Statistik", view: "view-wiki",
       init: () => ladeWiki("statistik", "Statistik") },
+    // Auch hier, damit eine Trainerin ohne eigenes Spielerprofil (kein "Ich"-Tab)
+    // die Clips verwalten kann. Dieselbe View, die je Rolle die Bedienelemente zeigt.
+    { key: "videos", label: "Videos", view: "view-videos", init: ladeVideos },
   ]},
   { key: "taktik", label: "Taktik", rollen: ["trainer", "spieler"], unter: [
     { key: "playbook", label: "Playbook", view: "view-wiki",
@@ -78,8 +87,11 @@ let aktBenutzer = null;    // {name, rolle, spieler_id} des angemeldeten Benutze
 let aktOber = "home";
 let aktUnter = "home";     // aktiver Unterpunkt (für „zurück" aus Detailansichten)
 
+const eigeneSpielerId = () => (aktBenutzer && aktBenutzer.spieler_id) || null;
+
 function sichtbareOber() {
-  return NAV.filter((o) => o.rollen.includes(aktRolle));
+  return NAV.filter((o) => o.rollen.includes(aktRolle)
+                        && (!o.nurMitProfil || eigeneSpielerId()));
 }
 function sichtbareUnter(o) {
   return o.unter.filter((u) => !(u.nurTrainer && aktRolle !== "trainer"));
@@ -170,6 +182,77 @@ function setzeBenutzer(me) {
   try { localStorage.setItem("benutzer", JSON.stringify(me)); } catch (_) {}
   const el = document.getElementById("benutzer-name");
   if (el) el.textContent = me.name + (aktRolle === "trainer" ? " · Trainer" : "");
+  renderAnsicht(me);
+}
+
+// ---------------------------------------------------------- Ansicht als ----
+//  Ein Trainer kann die App aus Sicht einer Spielerin ansehen. Der Server
+//  loest die Session dann auf die Spielerin auf (nur lesend). Hier nur die
+//  Bedienung: Umschalter in der Benutzer-Leiste + Banner im Ansicht-Modus.
+let ansichtKonten = null;
+
+function renderAnsicht(me) {
+  const banner = document.getElementById("ansicht-banner");
+  if (banner) {
+    if (me.ansicht_als) {
+      banner.classList.remove("hidden");
+      banner.innerHTML = "";
+      const t = document.createElement("span");
+      t.innerHTML = "👁 Ansicht als <b>" + escape(me.name) + "</b>";
+      const b = document.createElement("button");
+      b.textContent = "zurück zu " + (me.echter_name || "meinem Konto");
+      b.addEventListener("click", ansichtStop);
+      banner.append(t, b);
+    } else {
+      banner.classList.add("hidden");
+      banner.innerHTML = "";
+    }
+  }
+  const sel = document.getElementById("ansicht-select");
+  if (!sel) return;
+  const trainerSicht = me.rolle === "trainer" || me.ansicht_als;
+  if (!trainerSicht) { sel.classList.add("hidden"); return; }
+  fuelleAnsichtSelect(me);
+}
+
+async function fuelleAnsichtSelect(me) {
+  const sel = document.getElementById("ansicht-select");
+  if (!ansichtKonten) {
+    try {
+      const r = await fetch("/api/ansicht/konten", { cache: "no-store" });
+      if (r.ok) ansichtKonten = await r.json();
+    } catch (_) { /* offline: Umschalter bleibt verborgen */ }
+  }
+  if (!ansichtKonten) return;             // erst zeigen, wenn befüllbar
+  sel.classList.remove("hidden");
+  sel.innerHTML = "";
+  const eigen = document.createElement("option");
+  eigen.value = ""; eigen.textContent = "Mein Konto (Trainer)";
+  sel.appendChild(eigen);
+  for (const k of ansichtKonten) {
+    const o = document.createElement("option");
+    o.value = String(k.benutzer_id);
+    o.textContent = "Ansehen als: " + k.name;
+    sel.appendChild(o);
+  }
+  sel.value = me.als_benutzer_id ? String(me.als_benutzer_id) : "";
+}
+
+async function ansichtWechseln(wert) {
+  try {
+    const pfad = wert ? "/api/ansicht/" + wert : "/api/ansicht/stop";
+    const r = await fetch(pfad, { method: "POST" });
+    if (!r.ok) throw new Error();
+    location.reload();
+  } catch (_) { toast("Ansicht-Wechsel fehlgeschlagen – Verbindung prüfen."); }
+}
+
+async function ansichtStop() {
+  try {
+    const r = await fetch("/api/ansicht/stop", { method: "POST" });
+    if (!r.ok) throw new Error();
+    location.reload();
+  } catch (_) { toast("Kein Netz – gleich noch mal versuchen."); }
 }
 
 function benutzerHint() {
@@ -178,7 +261,12 @@ function benutzerHint() {
 
 async function ladeMe() {
   try {
-    const res = await fetch("/api/me", { cache: "no-store" });
+    // Mit Zeitlimit: ohne das kann ein haengender Fetch (z. B. eine tote
+    // WLAN-Route am PC) die App fuer immer im Ladebalken stehen lassen.
+    const res = await Promise.race([
+      fetch("/api/me", { cache: "no-store" }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 6000)),
+    ]);
     if (res.status === 401) return { status: "anon" };
     if (!res.ok) return { status: "fehler" };
     return { status: "ok", me: await res.json() };
@@ -206,13 +294,17 @@ function appStarten() {
 }
 
 async function pruefeAnmeldung() {
+  await ladePortraitIndex();          // vor dem ersten Rendern: Fotos sind da
   const r = await ladeMe();
   if (r.status === "ok") { setzeBenutzer(r.me); appStarten(); }
-  else if (r.status === "offline") {
-    const hint = benutzerHint();          // nach früherem Online-Login weiterarbeiten
+  else if (r.status === "offline" || r.status === "fehler") {
+    // Kein Netz ODER der Server hat gestolpert (500): beides ist KEIN
+    // "abgemeldet". Wer sich einmal angemeldet hat, arbeitet weiter — sonst
+    // landet man bei jedem Server-Schluckauf grundlos wieder auf dem Login.
+    const hint = benutzerHint();
     if (hint) { setzeBenutzer(hint); appStarten(); }
     else zeigeLogin();
-  } else { zeigeLogin(); }                 // anon / Fehler -> anmelden
+  } else { zeigeLogin(); }                 // anon (401) -> wirklich anmelden
 }
 
 async function login() {
@@ -253,6 +345,7 @@ async function logout() {
 $("#login-btn").addEventListener("click", login);
 $("#login-pin").addEventListener("keydown", (e) => { if (e.key === "Enter") login(); });
 $("#logout-btn").addEventListener("click", logout);
+$("#ansicht-select").addEventListener("change", (e) => ansichtWechseln(e.target.value));
 
 // ------------------------------------------------------------- Web-Push ----
 function pushMoeglich() {
@@ -385,8 +478,93 @@ async function ladeHome() {
     el.onclick = null;
     el.innerHTML = '<div class="hk-titel">Nächstes Training</div><p class="hinweis">Kein anstehendes Training gefunden.</p>';
   }
+  renderHomeSpiele();
+  renderHomeOffen();
   renderHomeSchnell();
   renderPushBox();
+}
+
+// Die naechsten drei Test-/Ligaspiele. Sie stehen fest oben auf der Startseite:
+// Spiele sind die Termine, um die herum die Saison geplant wird - und bei
+// Auswaertsspielen ist die Abfahrtszeit das, was man kurz nachschaut.
+async function renderHomeSpiele() {
+  const el = $("#home-spiele");
+  if (!el) return;
+  let liste = [];
+  try { liste = await Sync.apiOffline("/api/trainings"); } catch (_) { el.innerHTML = ""; return; }
+
+  const heute = new Date().toISOString().slice(0, 10);
+  const spiele = (liste || [])
+    .filter((t) => istSpiel(t) && (t.datum || "") >= heute)
+    .sort((a, b) => (a.datum || "").localeCompare(b.datum || ""))
+    .slice(0, 3);
+
+  if (!spiele.length) {
+    el.innerHTML = '<div class="hs-kopf">Nächste Spiele</div>' +
+                   '<p class="hinweis">Noch kein Test- oder Ligaspiel eingetragen.</p>';
+    return;
+  }
+
+  el.innerHTML = `<div class="hs-kopf">Nächste Spiele</div>`;
+  for (const t of spiele) {
+    const d = datumTeile(t.datum);
+    const karte = document.createElement("button");
+    karte.className = "hs-spiel " + terminArt(t) + (t.heim === 0 ? " auswaerts" : "");
+    karte.innerHTML =
+      `<span class="hs-datum"><b>${d.wt}</b><span>${escape(d.tag)}</span></span>
+       <span class="hs-mitte">
+         <span class="hs-titel">${escape(t.titel || ART_WORT[terminArt(t)])}</span>
+         <span class="hs-meta">${ART_WORT[terminArt(t)]}` +
+        `${t.heim === 0 ? " · auswärts" : " · daheim"}${t.ort ? " · " + escape(t.ort) : ""}</span>
+       </span>
+       <span class="hs-zeit">${t.heim === 0 && t.abfahrt
+          ? `<b>${escape(t.abfahrt)}</b><small>Abfahrt</small>`
+          : t.uhrzeit ? `<b>${escape(t.uhrzeit)}</b><small>Anwurf</small>` : ""}</span>`;
+    karte.addEventListener("click", () => {
+      gehe("training", "trainings");
+      setTimeout(() => oeffneTraining(t.id), 0);
+    });
+    el.appendChild(karte);
+  }
+}
+
+// „Worauf wartet das Team noch von MIR?" - alle kommenden Termine ohne eigene
+// Antwort, jeder direkt hier beantwortbar. Wer ein Spielerprofil hat, sieht
+// die Box (auch Trainerinnen, die selbst mitspielen).
+async function renderHomeOffen() {
+  const el = $("#home-offen");
+  if (!el) return;
+  if (!(aktBenutzer && aktBenutzer.spieler_id)) { el.innerHTML = ""; return; }
+
+  let liste = [];
+  try { liste = await Sync.apiOffline("/api/trainings"); } catch (_) { el.innerHTML = ""; return; }
+
+  const heute = new Date().toISOString().slice(0, 10);
+  const offen = (liste || [])
+    .filter((t) => (t.datum || "") >= heute && !t.meine_status)
+    .sort((a, b) => (a.datum || "").localeCompare(b.datum || ""));
+
+  if (!offen.length) {
+    el.innerHTML = '<div class="ho-fertig">✓ Für alle kommenden Termine hast du geantwortet.</div>';
+    return;
+  }
+
+  el.innerHTML = `<div class="ho-kopf">Deine Antwort fehlt noch · ${offen.length}</div>`;
+  for (const t of offen) {
+    const d = datumTeile(t.datum);
+    const karte = document.createElement("div");
+    karte.className = "ho-termin";
+    karte.innerHTML =
+      `<div class="ho-zeile"><span class="ho-datum"><b>${d.wt}</b> ${escape(d.tag)}</span>` +
+      `<span class="ho-titel">${escape(t.titel || "Training")}` +
+      `${t.uhrzeit ? ` <small>${escape(t.uhrzeit)}</small>` : ""}</span></div>`;
+    const box = document.createElement("div");
+    box.className = "td-rsvp";
+    // Kurz-Objekt: rsvpSenden mutiert es, cacht es aber bewusst NICHT.
+    rsvpFuellen(box, { id: t.id, teilnahme: [] });
+    karte.appendChild(box);
+    el.appendChild(karte);
+  }
 }
 
 function renderHomeSchnell() {
@@ -402,12 +580,6 @@ function renderHomeSchnell() {
     b.innerHTML = `<span class="sk-icon">${icon}</span><span>${label}</span>`;
     b.addEventListener("click", () => gehe(ober, unter));
     el.appendChild(b);
-  }
-  if (aktRolle === "spieler") {
-    const hin = document.createElement("p");
-    hin.className = "hinweis spieler-hinweis";
-    hin.textContent = "Zu- und Absagen machst du unter „Termine“.";
-    el.appendChild(hin);
   }
 }
 
@@ -495,6 +667,20 @@ function renderTerminWarnung(kommend) {
      </div></div>`;
 }
 
+// Art eines Termins - Altbestand ohne Feld ist ein Training.
+const terminArt = (t) => (t && t.art) || "training";
+const istSpiel = (t) => terminArt(t) !== "training";
+const ART_WORT = { training: "Training", testspiel: "Testspiel", ligaspiel: "Ligaspiel" };
+
+// Zeitzeile eines Spiels: bei Auswaerts steht die Abfahrt vorne - das ist die
+// Uhrzeit, nach der sich alle richten muessen.
+function spielZeiten(t) {
+  const teile = [];
+  if (t.heim === 0 && t.abfahrt) teile.push(`<span class="nw">Abfahrt ${escape(t.abfahrt)}</span>`);
+  if (t.uhrzeit) teile.push(`<span class="nw">Anwurf ${escape(t.uhrzeit)}</span>`);
+  return teile.join(" · ");
+}
+
 function terminKarte(t, vergangen) {
   const d = datumTeile(t.datum);
   const stufe = vergangen ? "ok" : terminStufe(t);
@@ -503,7 +689,7 @@ function terminKarte(t, vergangen) {
   const auf = offeneTermine.has(t.id);
 
   const art = document.createElement("article");
-  art.className = "termin"
+  art.className = "termin " + terminArt(t)
     + (vergangen ? " vergangen" : (stufe === "ok" ? "" : " " + stufe))
     + (auf ? " auf" : "");
 
@@ -514,10 +700,16 @@ function terminKarte(t, vergangen) {
   const kopf = document.createElement("button");
   kopf.className = "t-kopf";
   kopf.setAttribute("aria-expanded", auf ? "true" : "false");
+  const spiel = istSpiel(t);
+  const artChip = spiel
+    ? `<span class="t-art ${terminArt(t)}">${ART_WORT[terminArt(t)]}` +
+      `${t.heim === 0 ? " · auswärts" : t.heim === 1 ? " · daheim" : ""}</span>` : "";
+  const zeitText = spiel ? (spielZeiten(t) || "ohne Uhrzeit")
+                         : (t.uhrzeit ? escape(t.uhrzeit) : "ohne Uhrzeit");
   kopf.innerHTML =
     `<span class="t-datum"><b>${d.wt}</b><span>${escape(d.tag)}</span></span>
-     <span class="t-mitte"><b>${escape(t.titel || "Training")}</b>
-       <small>${t.uhrzeit ? escape(t.uhrzeit) : "ohne Uhrzeit"}${t.ort ? " · " + escape(t.ort) : ""}` +
+     <span class="t-mitte"><b>${escape(t.titel || "Training")}</b>${artChip}
+       <small>${zeitText}${t.ort ? " · " + escape(t.ort) : ""}` +
       `${t.hat_plan && aktRolle === "trainer"
           ? `<span class="t-planchip">PLAN${t.plan_minuten ? " " + t.plan_minuten + "′" : ""}</span>` : ""}${meinChip}</small>
        <span class="t-bar"><i class="zu" style="width:${(zu / kader) * 100}%"></i>` +
@@ -549,9 +741,6 @@ async function fuelleTerminDetail(det, t) {
     }
   }
   det.innerHTML = "";
-  const teil = d.teilnahme || [];
-  const grp = (s) => teil.filter((x) => x.status === s);
-
   if (aktBenutzer && aktBenutzer.spieler_id) {
     const box = document.createElement("div");
     box.className = "td-rsvp";
@@ -559,39 +748,134 @@ async function fuelleTerminDetail(det, t) {
     det.appendChild(box);
   }
 
-  anhaengen(det, namensGruppe("Zugesagt", "zu", grp("anwesend")));
-  anhaengen(det, namensGruppe("Unsicher", "un", grp("unsicher")));
-  anhaengen(det, absagenGruppe(grp("abgesagt")));
-  anhaengen(det, namensGruppe("Keine Rückmeldung", "offen",
-    teil.filter((x) => x.status === "nominiert" || !x.status)));
+  teilnahmeGruppen(det, d);
 
   if (aktRolle === "trainer") det.appendChild(terminAktionen(t));
 }
 
 function anhaengen(ziel, el) { if (el) ziel.appendChild(el); }
 
-function namensGruppe(titel, kl, arr) {
+// Wer noch gar nicht geantwortet hat. Der Server liefert dafuer den ganzen
+// Kader (Spielerinnen ohne Antwort mit status = null).
+function offeneAntworten(teil) {
+  return (teil || []).filter((x) => !x.status || x.status === "nominiert");
+}
+
+// Die vier Gruppen eines Termins - an ZWEI Stellen gleich (aufgeklappte Zeile
+// in der Uebersicht und Termin-Detail), deshalb eine Funktion.
+function teilnahmeGruppen(ziel, d) {
+  const teil = d.teilnahme || [];
+  const grp = (s) => teil.filter((x) => x.status === s);
+  anhaengen(ziel, namensGruppe("Zugesagt", "zu", grp("anwesend"), d, false));
+  anhaengen(ziel, namensGruppe("Unsicher", "un", grp("unsicher"), d, false));
+  anhaengen(ziel, namensGruppe("Abgesagt", "ab", grp("abgesagt"), d, true));
+  anhaengen(ziel, namensGruppe("Noch keine Rückmeldung", "offen",
+    offeneAntworten(teil), d, false));
+}
+
+// Eine Gruppe. Fuer Spielerinnen zum Lesen (Chips bzw. Liste mit Grund),
+// fuer Trainer eine Zeile je Name MIT Knoepfen - so laesst sich direkt
+// eintragen, wer am Telefon zu- oder abgesagt hat.
+function namensGruppe(titel, kl, arr, d, mitGrund) {
   if (!arr.length) return null;
   const g = document.createElement("div");
   g.className = "t-gruppe " + kl;
-  g.innerHTML = `<div class="gk">${titel} · ${arr.length}</div><div class="t-namen">` +
+  const kopf = document.createElement("div");
+  kopf.className = "gk";
+  kopf.textContent = `${titel} · ${arr.length}`;
+  g.appendChild(kopf);
+
+  if (aktRolle === "trainer" && d) {
+    const box = document.createElement("div");
+    box.className = "tr-zeilen";
+    arr.forEach((p) => box.appendChild(trainerZeile(p, d, mitGrund)));
+    g.appendChild(box);
+    return g;
+  }
+
+  if (mitGrund) {                                   // Absagen: Grund daneben
+    g.insertAdjacentHTML("beforeend", `<div class="ab-liste">` +
+      arr.map((p) =>
+        `<div class="ab-zeile"><span class="az-n">${escape(p.name)}</span>` +
+        `<span class="az-g${p.grund ? "" : " fehlt"}">${escape(p.grund || "kein Grund angegeben")}</span></div>`
+      ).join("") + `</div>`);
+    return g;
+  }
+  g.insertAdjacentHTML("beforeend", `<div class="t-namen">` +
     arr.map((p) => `<span class="t-name">${escape(p.name)}` +
       `${p.position === "Tor" ? ' <span class="tw">TW</span>' : ""}</span>`).join("") +
-    `</div>`;
+    `</div>`);
   return g;
 }
 
-// Absagen als Liste statt als Chips - hier gehoert der Grund daneben.
-function absagenGruppe(arr) {
-  if (!arr.length) return null;
-  const g = document.createElement("div");
-  g.className = "t-gruppe ab";
-  g.innerHTML = `<div class="gk">Abgesagt · ${arr.length}</div><div class="ab-liste">` +
-    arr.map((p) =>
-      `<div class="ab-zeile"><span class="az-n">${escape(p.name)}</span>` +
-      `<span class="az-g${p.grund ? "" : " fehlt"}">${escape(p.grund || "kein Grund angegeben")}</span></div>`
-    ).join("") + `</div>`;
-  return g;
+// Trainer-Zeile: Name + drei Mini-Knoepfe. Der aktive Knopf nochmal getippt
+// setzt die Antwort auf "noch offen" zurueck (Vertipper-Korrektur).
+function trainerZeile(p, d, mitGrund) {
+  const z = document.createElement("div");
+  z.className = "tr-zeile";
+  const st = p.status || "offen";
+  const knopf = (s, zeichen, kl, titel) =>
+    `<button class="tzb ${kl}${st === s ? " aktiv" : ""}" data-s="${s}" title="${titel}">${zeichen}</button>`;
+  z.innerHTML =
+    `<span class="tz-name">${escape(p.name)}` +
+    `${p.position === "Tor" ? ' <span class="tw">TW</span>' : ""}` +
+    `${p.quelle === "trainer" ? '<span class="tz-quelle" title="vom Trainer eingetragen">✎</span>' : ""}</span>` +
+    `${mitGrund ? `<span class="tz-grund">${escape(p.grund || "")}</span>` : ""}` +
+    `<span class="tz-knoepfe">` +
+      knopf("anwesend", "✓", "ja", "zusagen") +
+      knopf("unsicher", "?", "un", "unsicher") +
+      knopf("abgesagt", "✗", "nein", "absagen") +
+    `</span>`;
+  z.querySelectorAll(".tzb").forEach((b) => b.addEventListener("click", () => {
+    const neu = b.classList.contains("aktiv") ? "offen" : b.dataset.s;
+    trainerRsvpSenden(d, p, neu);
+  }));
+  return z;
+}
+
+// Trainer traegt fuer eine Spielerin ein. Braucht Netz (der Server leitet die
+// Spielerin aus der URL ab und prueft die Trainer-Rolle).
+async function trainerRsvpSenden(d, p, status) {
+  const lab = { anwesend: "zugesagt", unsicher: "unsicher", abgesagt: "abgesagt",
+                offen: "wieder offen" };
+  try {
+    await api("/api/trainings/" + d.id + "/teilnahme/" + p.id, "POST", { status });
+    const neu = {
+      status: status === "offen" ? null : status,
+      quelle: status === "offen" ? null : "trainer",
+      grund: null,                      // Grund gehoert zur alten Antwort
+    };
+    Object.assign(p, neu);
+    // dieselbe Spielerin im zwischengespeicherten Detail nachziehen
+    const det = terminDetails.get(d.id);
+    if (det && det !== d) {
+      const q = (det.teilnahme || []).find((x) => x.id === p.id);
+      if (q) Object.assign(q, neu);
+    }
+    if (aktTraining && aktTraining.id === d.id && aktTraining !== d) {
+      const q = (aktTraining.teilnahme || []).find((x) => x.id === p.id);
+      if (q) Object.assign(q, neu);
+    }
+    toast(`${p.name}: ${lab[status]} ✓`);
+    await Sync.frischHolen("/api/trainings").catch(() => {});
+    Sync.frischHolen("/api/trainings/" + d.id).catch(() => {});
+    Sync.frischHolen("/api/naechstes-training").catch(() => {});
+    zeichneTeilnahmeNeu(d.id);
+  } catch (e) {
+    toast(navigator.onLine ? ("Fehler: " + e.message)
+      : "Kein Netz – Eintragen für andere braucht eine Verbindung.");
+  }
+}
+
+// Nach einer Aenderung alles neu zeichnen, was diesen Termin zeigt.
+function zeichneTeilnahmeNeu(tid) {
+  if (aktTraining && aktTraining.id === tid
+      && !$("#view-training-detail").classList.contains("hidden")) {
+    renderRSVP(aktTraining);
+    renderTeilnahme(aktTraining);
+  }
+  if (!$("#view-trainings").classList.contains("hidden")) ladeTrainingsListe();
+  if (!$("#view-home").classList.contains("hidden")) { ladeHome(); }
 }
 
 function terminAktionen(t) {
@@ -660,32 +944,86 @@ function renderTrainingNeu() {
   if (!el) return;
   if (aktRolle !== "trainer") { el.innerHTML = ""; return; }
   el.innerHTML =
-    `<button id="tn-toggle" class="tn-toggle">＋ Neues Training</button>
+    `<button id="tn-toggle" class="tn-toggle">＋ Neuer Termin</button>
      <div id="tn-form" class="tn-form hidden">
-       <input id="tn-datum" type="date" />
-       <input id="tn-uhrzeit" type="time" />
+       <div class="tn-art">
+         <button data-art="training" class="aktiv">Training</button>
+         <button data-art="testspiel">Testspiel</button>
+         <button data-art="ligaspiel">Ligaspiel</button>
+       </div>
+       <div class="tn-zeile">
+         <input id="tn-datum" type="date" />
+         <input id="tn-uhrzeit" type="time" title="Beginn bzw. Anwurf" />
+       </div>
+       <div id="tn-spiel" class="tn-spiel hidden">
+         <input id="tn-gegner" type="text" placeholder="Gegner (z. B. TSV Blaustein)" />
+         <div class="tn-heim">
+           <button data-heim="1" class="aktiv">Heimspiel</button>
+           <button data-heim="0">Auswärts</button>
+         </div>
+         <label id="tn-abfahrt-box" class="tn-abfahrt hidden">
+           <span>Abfahrt</span><input id="tn-abfahrt" type="time" />
+         </label>
+       </div>
        <input id="tn-ort" type="text" placeholder="Ort (z. B. Gerhausen)" />
        <button id="tn-speichern" class="primaer">Anlegen</button>
      </div>`;
   document.getElementById("tn-toggle").addEventListener("click", () =>
     document.getElementById("tn-form").classList.toggle("hidden"));
-  document.getElementById("tn-speichern").addEventListener("click", trainingAnlegen);
+
+  // Art umschalten: bei einem Spiel kommen Gegner und Heimrecht dazu.
+  const artKnoepfe = el.querySelectorAll(".tn-art button");
+  artKnoepfe.forEach((b) => b.addEventListener("click", () => {
+    artKnoepfe.forEach((x) => x.classList.toggle("aktiv", x === b));
+    tnArt = b.dataset.art;
+    document.getElementById("tn-spiel").classList.toggle("hidden", tnArt === "training");
+    tnAbfahrtSichtbar();
+  }));
+  // Heim/Auswaerts: die Abfahrtszeit gibt es nur auswaerts.
+  const heimKnoepfe = el.querySelectorAll(".tn-heim button");
+  heimKnoepfe.forEach((b) => b.addEventListener("click", () => {
+    heimKnoepfe.forEach((x) => x.classList.toggle("aktiv", x === b));
+    tnHeim = b.dataset.heim === "1";
+    tnAbfahrtSichtbar();
+  }));
+  document.getElementById("tn-speichern").addEventListener("click", terminAnlegen);
 }
 
-async function trainingAnlegen() {
-  const datum = document.getElementById("tn-datum").value;
-  const uhrzeit = document.getElementById("tn-uhrzeit").value;
-  const ort = document.getElementById("tn-ort").value.trim();
+let tnArt = "training";
+let tnHeim = true;
+
+function tnAbfahrtSichtbar() {
+  const box = document.getElementById("tn-abfahrt-box");
+  if (box) box.classList.toggle("hidden", tnArt === "training" || tnHeim);
+}
+
+async function terminAnlegen() {
+  const wert = (id) => (document.getElementById(id).value || "").trim();
+  const datum = wert("tn-datum");
+  const uhrzeit = wert("tn-uhrzeit");
+  const ort = wert("tn-ort");
+  const gegner = wert("tn-gegner");
+  const abfahrt = wert("tn-abfahrt");
+  const spiel = tnArt !== "training";
   if (!datum) { toast("Bitte ein Datum wählen."); return; }
+  if (spiel && !gegner) { toast("Bitte den Gegner eintragen."); return; }
   try {
-    const r = await api("/api/trainings", "POST",
-      { datum, uhrzeit, ort, titel: ort ? "Training " + ort : "Training" });
-    toast(r.neu ? "Training angelegt ✓" : "Termin am Datum aktualisiert ✓");
-    document.getElementById("tn-datum").value = "";
-    document.getElementById("tn-uhrzeit").value = "";
-    document.getElementById("tn-ort").value = "";
+    const r = await api("/api/trainings", "POST", {
+      datum, uhrzeit, ort, art: tnArt,
+      gegner: spiel ? gegner : null,
+      heim: spiel ? tnHeim : null,
+      abfahrt: spiel && !tnHeim ? abfahrt : null,
+      titel: spiel ? "" : (ort ? "Training " + ort : "Training"),
+    });
+    const wort = { training: "Training", testspiel: "Testspiel", ligaspiel: "Ligaspiel" }[tnArt];
+    toast(r.neu ? wort + " angelegt ✓" : "Termin am Datum aktualisiert ✓");
+    ["tn-datum", "tn-uhrzeit", "tn-ort", "tn-gegner", "tn-abfahrt"].forEach((id) => {
+      const f = document.getElementById(id); if (f) f.value = "";
+    });
     document.getElementById("tn-form").classList.add("hidden");
-    Sync.frischHolen("/api/trainings").catch(() => {});
+    // Erst die Liste frisch holen, dann neu zeichnen - sonst rendert die
+    // Uebersicht noch den gespiegelten Stand und der neue Termin fehlt.
+    await Sync.frischHolen("/api/trainings").catch(() => {});
     ladeTrainingsListe();
   } catch (e) { toast("Fehler: " + e.message); }
 }
@@ -698,7 +1036,13 @@ async function oeffneTraining(id) {
   $("#td-titel").textContent = d.titel || (d.datum ? datumKurz(d.datum) : "Training");
   const teile = [];
   if (d.datum) teile.push(datumKurz(d.datum));
-  if (d.uhrzeit) teile.push(d.uhrzeit);
+  if (istSpiel(d)) {
+    teile.push(ART_WORT[terminArt(d)] + (d.heim === 0 ? " · auswärts" : " · daheim"));
+    if (d.heim === 0 && d.abfahrt) teile.push("Abfahrt " + d.abfahrt);
+    if (d.uhrzeit) teile.push("Anwurf " + d.uhrzeit);
+  } else if (d.uhrzeit) {
+    teile.push(d.uhrzeit);
+  }
   if (d.ort) teile.push(d.ort);
   $("#td-meta").textContent = teile.join(" · ");
   renderRSVP(d);
@@ -711,18 +1055,9 @@ async function oeffneTraining(id) {
 // Zusagen/Unsicher/Abgesagt-Listen. Bei Absagen wird der Grund mit angezeigt
 // (für Trainer UND Spielerinnen sichtbar).
 function renderTeilnahme(d) {
-  const grp = (status) => (d.teilnahme || []).filter((t) => t.status === status);
-  const chip = (t, mitGrund) =>
-    `<span class="td-chip">${escape(t.name)}${t.position === "Tor" ? ' <span class="tw">TW</span>' : ""}` +
-    `${mitGrund && t.grund ? ` <span class="td-grund">– ${escape(t.grund)}</span>` : ""}</span>`;
-  const block = (titel, kl, arr, mitGrund) => arr.length
-    ? `<div class="td-grp ${kl}"><div class="td-grp-kopf">${titel} (${arr.length})</div>` +
-      `<div class="td-chips">${arr.map((t) => chip(t, mitGrund)).join("")}</div></div>`
-    : "";
-  $("#td-teilnahme").innerHTML =
-    block("Zugesagt", "an", grp("anwesend"), false) +
-    block("Unsicher", "un", grp("unsicher"), false) +
-    block("Abgesagt", "ab", grp("abgesagt"), true);
+  const el = $("#td-teilnahme");
+  el.innerHTML = "";
+  teilnahmeGruppen(el, d);
 }
 
 // Haeufige Absagegruende zum Antippen. Freitext bleibt daneben moeglich -
@@ -796,23 +1131,26 @@ async function rsvpSenden(status, grund, d) {
     // Online-Aktion (Push/Team-Planung brauchen aktuelle Daten): direkt senden.
     await api("/api/trainings/" + d.id + "/teilnahme", "POST", { status, grund });
     const sid = aktBenutzer.spieler_id;
-    d.teilnahme = d.teilnahme || [];
-    let m = d.teilnahme.find((t) => t.id === sid);
-    if (!m) { m = { id: sid, name: aktBenutzer.name, position: "Feld" }; d.teilnahme.push(m); }
-    m.status = status; m.grund = grund; m.quelle = "app";
-    terminDetails.set(d.id, d);
+    // Die eigene Antwort in JEDEM Objekt nachziehen, das diesen Termin zeigt.
+    // Bewusst kein terminDetails.set(): `d` kann ein Kurz-Objekt der Home-Box
+    // sein - das wuerde die vollstaendige Namensliste im Cache ueberschreiben.
+    const setzen = (obj) => {
+      if (!obj) return;
+      obj.teilnahme = obj.teilnahme || [];
+      let m = obj.teilnahme.find((t) => t.id === sid);
+      if (!m) { m = { id: sid, name: aktBenutzer.name, position: "Feld" }; obj.teilnahme.push(m); }
+      m.status = status; m.grund = grund; m.quelle = "app";
+    };
+    setzen(d);
+    setzen(terminDetails.get(d.id));
+    if (aktTraining && aktTraining.id === d.id) setzen(aktTraining);
     toast(status === "abgesagt" ? "Abgesagt – der Grund steht jetzt beim Termin."
                                 : "Antwort gespeichert ✓");
+    // Zahlen und `meine_status` stimmen erst nach dem Nachladen der Liste.
+    await Sync.frischHolen("/api/trainings").catch(() => {});
     Sync.frischHolen("/api/trainings/" + d.id).catch(() => {});
     Sync.frischHolen("/api/naechstes-training").catch(() => {});
-    if (aktTraining && aktTraining.id === d.id) { renderRSVP(aktTraining); renderTeilnahme(aktTraining); }
-    // Zahlen in der Uebersicht stimmen erst nach dem Nachladen der Liste.
-    if (!$("#view-trainings").classList.contains("hidden")) {
-      await Sync.frischHolen("/api/trainings").catch(() => {});
-      ladeTrainingsListe();
-    } else {
-      Sync.frischHolen("/api/trainings").catch(() => {});
-    }
+    zeichneTeilnahmeNeu(d.id);
   } catch (e) {
     toast(navigator.onLine ? ("Fehler: " + e.message)
       : "Kein Netz – bitte online zu-/absagen.");
@@ -1896,6 +2234,7 @@ async function ladeRangliste() {
       zeile.className = "rang-zeile";
       zeile.innerHTML = `
         <span class="platz">${i + 1}</span>
+        ${wappen(p, 34)}
         <span class="name">${escape(p.name)}${p.position === "Tor" ? ' <span class="tor">TW</span>' : ""}</span>
         <span class="elo">${p.elo}</span>
         <span class="sp">${p.spiele_gesamt} Sp.</span>`;
@@ -1971,43 +2310,278 @@ function eloSparkline() {
     `</svg>`;
 }
 
-// Profilkopf: Position, Trainings-Anwesenheit, ELO-Sparkline.
-function renderProfil() {
-  const el = $("#detail-profil");
-  if (!el) return;
-  const sp = detailSpieler;
+// Bausteine des Profils. Sie werden an ZWEI Stellen gebraucht: im Spieler-
+// Detail (Trainerblick auf eine Spielerin) und auf der eigenen Seite "Ich" -
+// darum liefern sie HTML zurueck, statt selbst irgendwo hineinzuschreiben.
+function positionsBadges(sp) {
   const badges = [];
   if (sp.position === "Tor") badges.push("Torhüterin");
   if (sp.position_angriff) badges.push("Angriff: " + escape(sp.position_angriff));
   if (sp.position_abwehr) badges.push("Abwehr: " + escape(sp.position_abwehr));
-  const badgeHtml = badges.length
+  return badges.length
     ? `<div class="profil-badges">${badges.map((b) => `<span class="pb">${b}</span>`).join("")}</div>` : "";
-  let training = "";
-  const tr = detailTraining;
-  if (tr && tr.erfasst) {
-    const q = tr.quote != null ? tr.quote + "%" : "–";
-    training = `<div class="profil-training">
+}
+function trainingBlockHtml(tr) {
+  if (!tr || !tr.erfasst) return "";
+  const q = tr.quote != null ? tr.quote + "%" : "–";
+  return `<div class="profil-training">
       <span class="pt-wert">${tr.anwesend}<small>/${tr.anwesend + tr.abgesagt}</small></span>
       <span class="pt-label">Trainings da (${q})</span></div>`;
-  }
-  let lauf = "";
-  const lc = detailLC;
-  if (lc) {
-    const platz = lc.rang ? `Platz ${lc.rang}${lc.teilnehmer ? " / " + lc.teilnehmer : ""}` : "";
-    const andere = lc.andere ? ` · ${lc.andere} andere` : "";
-    lauf = `<div class="profil-lauf">
+}
+function laufBlockHtml(lc) {
+  if (!lc) return "";
+  const platz = lc.rang ? `Platz ${lc.rang}${lc.teilnehmer ? " / " + lc.teilnehmer : ""}` : "";
+  const andere = lc.andere ? ` · ${lc.andere} andere` : "";
+  return `<div class="profil-lauf">
       <div class="pl-kopf">🏃 ${escape(lc.challenge || "Laufchallenge")}</div>
       <div class="pl-zahlen">
         <span class="pl-km">${lc.km}<small>km</small></span>
         <span class="pl-meta">${lc.laeufe} Läufe${andere}</span>
         ${platz ? `<span class="pl-rang">${platz}</span>` : ""}
       </div></div>`;
-  }
+}
+
+// Profilkopf: Position, Trainings-Anwesenheit, ELO-Sparkline.
+function renderProfil() {
+  const el = $("#detail-profil");
+  if (!el) return;
+  const sp = detailSpieler;
+  const badgeHtml = positionsBadges(sp);
+  // Kopfzeile: Portrait im Wappen, daneben die Positions-Badges.
+  const kopfHtml = `<div class="profil-kopf">${wappen(sp, 88)}` +
+                   `<div class="pk-text">${badgeHtml || '<span class="pk-leer">Keine Position hinterlegt</span>'}</div></div>`;
+  const training = trainingBlockHtml(detailTraining);
+  const lauf = laufBlockHtml(detailLC);
   const spark = eloSparkline();
   const sparkBlock = spark
     ? `<div class="profil-elo"><div class="pe-kopf">ELO-Verlauf</div>${spark}</div>` : "";
-  el.innerHTML = badgeHtml + training + lauf + sparkBlock;
+  el.innerHTML = kopfHtml + training + lauf + sparkBlock;
 }
+
+// ------------------------------------------------------------------ Ich ----
+// Die eigene Seite. Sie zeigt genau das, was einen selbst betrifft: Portrait,
+// Positionen, Trainingsbeteiligung, Laufchallenge. Die Daten kommen aus
+// demselben Endpunkt wie das Spieler-Detail - der Server laesst Spielerinnen
+// dort ausdruecklich das EIGENE Profil sehen (und nur das).
+let ichDaten = null;
+
+async function ladeIch() {
+  const el = $("#ich-inhalt");
+  const sid = eigeneSpielerId();
+  if (!sid) {
+    el.innerHTML = '<p class="hinweis">Zu diesem Zugang gehört keine Spielerin – ' +
+                   'darum gibt es hier nichts zu zeigen.</p>';
+    return;
+  }
+  if (!ichDaten) el.innerHTML = '<p class="hinweis">Lädt…</p>';
+  try {
+    ichDaten = await Sync.apiOffline("/api/spieler/" + sid + "/spiele");
+    renderIch();
+  } catch (_) {
+    if (!ichDaten) {
+      el.innerHTML = '<p class="hinweis">Offline – dein Profil wurde noch nicht ' +
+                     'geladen. Einmal mit Netz öffnen, danach ist es auch offline da.</p>';
+    }
+  }
+}
+
+function renderIch() {
+  const el = $("#ich-inhalt");
+  const sp = ichDaten.spieler;
+  const tr = ichDaten.training;
+  const lc = ichDaten.laufchallenge;
+
+  // Kopf: grosses Portrait, Name, Positionen.
+  let html = `<div class="ich-kopf">${wappen(sp, 116)}
+    <div class="ich-kopf-text">
+      <h2>${escape(sp.name)}</h2>
+      ${positionsBadges(sp) || '<span class="pk-leer">Für dich ist noch keine Position hinterlegt – sag deinem Trainer Bescheid.</span>'}
+    </div></div>`;
+
+  // Trainingsbeteiligung: Quote gross, darunter der Balken und die Zahlen.
+  if (tr && tr.erfasst) {
+    const quote = tr.quote != null ? tr.quote : 0;
+    const gezaehlt = tr.anwesend + tr.abgesagt;
+    html += `<section class="ich-karte">
+      <div class="ik-kopf">Trainingsbeteiligung</div>
+      <div class="ik-quote"><span class="iq-zahl">${tr.quote != null ? quote + "%" : "–"}</span>
+        <span class="iq-sub">${tr.anwesend} von ${gezaehlt} Trainings da</span></div>
+      <div class="ik-balken"><span style="width:${quote}%"></span></div>
+      <div class="ik-zahlen">
+        <span><b>${tr.anwesend}</b> zugesagt</span>
+        <span><b>${tr.abgesagt}</b> abgesagt</span>
+        ${tr.unsicher ? `<span><b>${tr.unsicher}</b> unsicher</span>` : ""}
+      </div></section>`;
+  } else {
+    html += `<section class="ich-karte"><div class="ik-kopf">Trainingsbeteiligung</div>
+      <p class="hinweis">Noch keine Trainings erfasst.</p></section>`;
+  }
+
+  // Laufchallenge.
+  if (lc) {
+    const platz = lc.rang ? `Platz ${lc.rang}${lc.teilnehmer ? " von " + lc.teilnehmer : ""}` : "–";
+    html += `<section class="ich-karte">
+      <div class="ik-kopf">🏃 ${escape(lc.challenge || "Laufchallenge")}</div>
+      <div class="ik-kacheln">
+        <div class="ik-kachel"><span class="ikw">${lc.km}</span><span class="ikt">km gelaufen</span></div>
+        <div class="ik-kachel"><span class="ikw">${lc.laeufe}</span><span class="ikt">Läufe</span></div>
+        <div class="ik-kachel"><span class="ikw">${lc.rang || "–"}</span><span class="ikt">${platz}</span></div>
+      </div></section>`;
+  } else {
+    html += `<section class="ich-karte"><div class="ik-kopf">🏃 Laufchallenge</div>
+      <p class="hinweis">Für dich ist noch kein Ergebnis eingetragen.</p></section>`;
+  }
+
+  el.innerHTML = html;
+}
+
+// ============================================================ Szenen-Videos ==
+//  Einzelne Spielszenen, geschnitten und beschriftet am PC (Projekt
+//  "Balu-Videoschnitt"). Eine Spielerin sieht nur die ihr zugeordneten Clips;
+//  die Trainerin sieht alle, kann sie umhaengen und loeschen. Der Upload
+//  passiert im Schnittwerkzeug, nicht hier. Online-only (Streaming braucht Netz).
+let videoClips = null;
+let videoKader = null;      // nur Trainerin: Kader fuer die Zuordnung
+let aktVideo = null;
+
+async function ladeVideos() {
+  const el = $("#videos-liste");
+  if (!videoClips) el.innerHTML = '<p class="hinweis">Lädt…</p>';
+  try {
+    videoClips = await api("/api/clips");
+    if (aktRolle === "trainer" && !videoKader) {
+      try { videoKader = await api("/api/spieler"); } catch (_) { videoKader = []; }
+    }
+    renderVideos();
+  } catch (_) {
+    if (!videoClips) {
+      el.innerHTML = '<p class="hinweis">Videos konnten nicht geladen werden – ' +
+        'dafür brauchst du eine Verbindung.</p>';
+    }
+  }
+}
+
+function renderVideos() {
+  const el = $("#videos-liste");
+  const clips = videoClips || [];
+  if (!clips.length) {
+    el.innerHTML = aktRolle === "trainer"
+      ? '<p class="hinweis">Noch keine Clips. Szenen werden am PC mit „Balu-Videoschnitt" ' +
+        'geschnitten und hochgeladen.</p>'
+      : '<p class="hinweis">Für dich sind noch keine Videos hinterlegt.</p>';
+    return;
+  }
+  el.innerHTML = "";
+  for (const c of clips) el.appendChild(videoKarte(c));
+}
+
+function videoKarte(c) {
+  const karte = document.createElement("button");
+  karte.className = "video-karte";
+  const meta = [];
+  if (c.spiel_datum) meta.push(datumKurz(c.spiel_datum));
+  if (c.dauer_s) meta.push(Math.round(c.dauer_s) + " s");
+  let inner = `<span class="vk-titel">${escape(c.titel)}</span>`;
+  if (meta.length) inner += `<span class="vk-meta">${escape(meta.join(" · "))}</span>`;
+  if (c.notiz) inner += `<span class="vk-notiz">${escape(c.notiz)}</span>`;
+  if (aktRolle === "trainer") {
+    const namen = (c.spieler || []).map((s) => s.name).join(", ") || "niemandem zugeordnet";
+    inner += `<span class="vk-spieler">${escape(namen)}</span>`;
+  }
+  karte.innerHTML = inner;
+  karte.addEventListener("click", () => oeffneVideo(c));
+  return karte;
+}
+
+function oeffneVideo(c) {
+  aktVideo = c;
+  $("#vd-titel").textContent = c.titel;
+  const player = $("#vd-player");
+  player.src = "/api/clips/" + c.id + "/video";
+  player.load();
+  const teile = [];
+  if (c.spiel_datum) teile.push(datumKurz(c.spiel_datum));
+  if (c.notiz) teile.push(c.notiz);
+  $("#vd-meta").textContent = teile.join(" · ");
+  renderVideoAktionen(c);
+  zeigeView("view-video-detail");
+}
+
+function stoppeVideoPlayer() {
+  const p = $("#vd-player");
+  if (!p) return;
+  p.pause();
+  p.removeAttribute("src");
+  p.load();
+}
+
+function renderVideoAktionen(c) {
+  const box = $("#vd-aktionen");
+  box.innerHTML = "";
+  if (aktRolle !== "trainer") return;
+  const umhaengen = document.createElement("button");
+  umhaengen.className = "plan-edit-btn";
+  umhaengen.textContent = "👥 Spielerinnen zuordnen";
+  umhaengen.addEventListener("click", () => videoZuordnenDialog(c));
+  const loeschen = document.createElement("button");
+  loeschen.className = "plan-edit-btn gefahr";
+  loeschen.textContent = "🗑 Löschen";
+  let scharf = false;
+  loeschen.addEventListener("click", async () => {
+    if (!scharf) { scharf = true; loeschen.textContent = "Wirklich löschen?"; return; }
+    try {
+      await api("/api/clips/" + c.id + "/loeschen", "POST");
+      toast("Clip gelöscht.");
+      videoClips = null;
+      stoppeVideoPlayer();
+      gehe(aktOber, "videos");
+    } catch (e) { toast("Fehler: " + e.message); }
+  });
+  box.appendChild(umhaengen);
+  box.appendChild(loeschen);
+}
+
+function videoZuordnenDialog(c) {
+  const box = $("#vd-aktionen");
+  box.innerHTML = "";
+  const gewaehlt = new Set((c.spieler || []).map((s) => s.id));
+  const liste = document.createElement("div");
+  liste.className = "video-zuordnen";
+  for (const sp of (videoKader || [])) {
+    const label = document.createElement("label");
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = gewaehlt.has(sp.id);
+    cb.addEventListener("change", () => {
+      if (cb.checked) gewaehlt.add(sp.id); else gewaehlt.delete(sp.id);
+    });
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(" " + sp.name));
+    liste.appendChild(label);
+  }
+  const speichern = document.createElement("button");
+  speichern.className = "primaer";
+  speichern.textContent = "Speichern";
+  speichern.addEventListener("click", async () => {
+    try {
+      const akt = await api("/api/clips/" + c.id, "POST", { spieler_ids: [...gewaehlt] });
+      toast("Zuordnung gespeichert ✓");
+      videoClips = null;
+      oeffneVideo(akt);
+    } catch (e) { toast("Fehler: " + e.message); }
+  });
+  const abbrechen = document.createElement("button");
+  abbrechen.textContent = "Abbrechen";
+  abbrechen.addEventListener("click", () => renderVideoAktionen(c));
+  box.appendChild(liste);
+  box.appendChild(speichern);
+  box.appendChild(abbrechen);
+}
+
+$("#btn-video-zurueck").addEventListener("click", () => {
+  stoppeVideoPlayer();
+  gehe(aktOber, "videos");
+});
 
 function renderStats() {
   const el = $("#detail-stats");
@@ -2157,13 +2731,19 @@ $("#btn-spiel-zurueck").addEventListener("click", () => zeigeView("view-spieler-
 //  Die Spiel-Aufstellung ist eine Tafel, kein Dokument: sie liegt lokal auf
 //  dem Geraet (localStorage), nicht auf dem Server.
 
+// WICHTIG - links und rechts sind hier gespiegelt, und das ist Absicht:
+// Das Tor steht UNTEN, angegriffen wird nach unten. Die Positionsnamen kommen
+// aus Sicht der ANGREIFERIN, die zum Tor schaut - ihre linke Seite liegt auf
+// dem Bildschirm also RECHTS. Darum sitzt Halblinks bei x=76 und Halbrechts
+// bei x=24. Wer die Werte "geradezieht", dreht die Aufstellung wieder falsch
+// herum. (x/y = Spielansicht, gx/gy = Trainingsansicht.)
 const POSITIONEN = [
   { k: "TW", lang: "Tor",         x: 50,   y: 88.5, gx: 50, gy: 88 },
-  { k: "LA", lang: "Linksaußen",  x: 10.5, y: 79.5, gx: 15, gy: 78 },
-  { k: "HL", lang: "Halblinks",   x: 24,   y: 39.5, gx: 20, gy: 36 },
+  { k: "LA", lang: "Linksaußen",  x: 89.5, y: 79.5, gx: 85, gy: 78 },
+  { k: "HL", lang: "Halblinks",   x: 76,   y: 39.5, gx: 80, gy: 36 },
   { k: "RM", lang: "Mitte",       x: 50,   y: 36.5, gx: 50, gy: 29 },
-  { k: "HR", lang: "Halbrechts",  x: 76,   y: 39.5, gx: 80, gy: 36 },
-  { k: "RA", lang: "Rechtsaußen", x: 89.5, y: 79.5, gx: 85, gy: 78 },
+  { k: "HR", lang: "Halbrechts",  x: 24,   y: 39.5, gx: 20, gy: 36 },
+  { k: "RA", lang: "Rechtsaußen", x: 10.5, y: 79.5, gx: 15, gy: 78 },
   { k: "KM", lang: "Kreis",       x: 50,   y: 62.0, gx: 50, gy: 63 },
 ];
 const POS_LANG = Object.fromEntries(POSITIONEN.map((p) => [p.k, p.lang]));
@@ -2214,11 +2794,41 @@ function feldSVG() {
   </svg>`;
 }
 
-// Portrait im Wappen: Initialen jetzt, Fotos spaeter in derselben Form.
+// ------------------------------------------------------------ Portraits ----
+// Die Fotos liegen unter /portraits/<slug>.jpg, die Zuordnung Name -> Datei in
+// /portraits/index.json (gebaut von portraits.py). Zugeordnet wird ueber den
+// Namen, nicht ueber die ID - so bleibt eine neue Datenbank-ID folgenlos.
+// Der Index wird gespiegelt, damit die Fotos auch offline gleich da sind.
+let portraitIndex = {};
+const nameSlug = (name) =>
+  (name || "").toLowerCase()
+    .replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss")
+    .normalize("NFKD").replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+const portraitBild = (name) => portraitIndex[nameSlug(name)] || null;
+
+async function ladePortraitIndex() {
+  try { portraitIndex = JSON.parse(localStorage.getItem("portraits") || "{}"); } catch (_) {}
+  try {
+    const r = await fetch("/portraits/index.json", { cache: "no-cache" });
+    if (!r.ok) return;
+    const daten = await r.json();
+    portraitIndex = (daten && daten.spieler) || {};
+    localStorage.setItem("portraits", JSON.stringify(portraitIndex));
+  } catch (_) { /* offline: der gespiegelte Index reicht */ }
+}
+
+// Portrait im Wappen: Foto, wenn eins da ist - sonst die Initialen.
+// Die Initialen bleiben im Markup und werden sichtbar, falls das Bild fehlt.
 function wappen(sp, groesse) {
   const t = [["#3467C9", "#16376F"], ["#2F62BD", "#122F5E"], ["#4A7BD4", "#1B3F7E"]][sp.id % 3];
+  const datei = portraitBild(sp.name);
+  const foto = datei
+    ? `<img class="pf" src="/portraits/${encodeURIComponent(datei)}" alt=""` +
+      ` loading="lazy" decoding="async" onerror="this.remove()" />`
+    : "";
   return `<span class="wappen" style="--w:${groesse}px;--c1:${t[0]};--c2:${t[1]}">` +
-         `<span class="ini">${escape(initialen(sp.name))}</span></span>`;
+         `<span class="ini">${escape(initialen(sp.name))}</span>${foto}</span>`;
 }
 
 let aufTraining = null;         // geladenes Training (mit Teilnahme)
@@ -2849,7 +3459,7 @@ $("#btn-mic").addEventListener("click", async () => {
 // Sichtbare Versionsnummer im Kopf — was drin ist, steht in CHANGELOG.md.
 // Bei jeder Aenderung: hier hochzaehlen, Eintrag im CHANGELOG, sw.js CACHE
 // bumpen und die ?v= der geaenderten Dateien in index.html.
-const APP_VERSION = "v0.40.0";
+const APP_VERSION = "v0.46.0";
 const versionEl = document.getElementById("version");
 if (versionEl) versionEl.textContent = APP_VERSION;
 
