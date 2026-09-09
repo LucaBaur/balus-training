@@ -5,7 +5,7 @@ noch NICHT in der App geantwortet haben. Standard: Trainings, die in `--tage`
 Tagen (Default 2) stattfinden.
 
 Als Cron (CRON_TZ=Europe/Berlin), z. B. taeglich 18:00:
-  0 18 * * *  /home/luca/anytype-sync/.venv/bin/python /home/luca/elo/push_erinnerung.py
+  0 18 * * *  /home/you/anytype-sync/.venv/bin/python /home/you/elo/push_erinnerung.py
 
 CLI:
   py push_erinnerung.py                # 2 Tage vorher
