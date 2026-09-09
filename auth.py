@@ -80,14 +80,21 @@ def _b64d(s: str) -> bytes:
     return base64.urlsafe_b64decode(s + "=" * (-len(s) % 4))
 
 
-def session_erstellen(benutzer_id: int) -> str:
-    payload = _b64e(json.dumps({"uid": benutzer_id, "iat": int(time.time())}).encode())
+def session_erstellen(benutzer_id: int, als: int | None = None) -> str:
+    """Session-Cookie fuer 'benutzer_id'. Mit 'als' (nur vom Server fuer einen
+    Trainer gesetzt) sieht dieser die App aus Sicht von Benutzer 'als' -
+    "Ansicht als"."""
+    inhalt = {"uid": benutzer_id, "iat": int(time.time())}
+    if als is not None:
+        inhalt["als"] = int(als)
+    payload = _b64e(json.dumps(inhalt).encode())
     sig = _b64e(hmac.new(_SECRET, payload.encode("ascii"), hashlib.sha256).digest())
     return f"{payload}.{sig}"
 
 
-def session_pruefen(token: str | None) -> int | None:
-    """Liefert die Benutzer-ID aus einem gueltigen Cookie, sonst None."""
+def session_daten(token: str | None) -> dict | None:
+    """Geprueftes Payload eines gueltigen Cookies ({'uid', 'iat', optional
+    'als'}), sonst None. Prueft HMAC-Signatur und Alter."""
     if not token or "." not in token:
         return None
     payload, sig = token.rsplit(".", 1)
@@ -98,6 +105,13 @@ def session_pruefen(token: str | None) -> int | None:
         daten = json.loads(_b64d(payload))
         if int(time.time()) - int(daten["iat"]) > _MAX_ALTER:
             return None
-        return int(daten["uid"])
+        int(daten["uid"])                       # muss eine Zahl sein
+        return daten
     except (ValueError, KeyError, TypeError):
         return None
+
+
+def session_pruefen(token: str | None) -> int | None:
+    """Liefert die Benutzer-ID aus einem gueltigen Cookie, sonst None."""
+    d = session_daten(token)
+    return int(d["uid"]) if d else None

@@ -19,29 +19,252 @@ Zahl, Fehlerbehebungen und Design-Feinschliff die letzte.
 
 ---
 
-## Offen — beim nächsten Mal anschauen
+## v0.46.0 — 2026-09-03
 
-**Am PC hängt sich die App auf.** Gemeldet am 2026-08-08, noch nicht
-nachgestellt. Am Handy und am Tablet ist es bisher nicht aufgefallen.
+**„Ansicht als" für das Trainerteam.** Auf der Startseite gibt es neben dem
+Namen eine Auswahl „Ansehen als: <Spielerin>". Damit siehst du die App genau so,
+wie diese Spielerin sie sieht – ihre Termine, ihr Playbook, ihre Videos, ihre
+Startseite. Oben läuft ein Streifen mit „zurück zu <dein Name>".
 
-Was ich zum Suchen bräuchte: **auf welchem Bildschirm** es passiert, was zuletzt
-angetippt wurde, und welcher Browser. Wenn möglich einmal `F12` drücken, auf
-„Console" gehen und abtippen oder abfotografieren, was dort rot steht — damit
-ist es meist in Minuten gefunden.
+Der Modus ist **nur zum Anschauen**: solange du als jemand anderes unterwegs
+bist, sind alle Eingaben gesperrt (Zu-/Absagen, Playbook bearbeiten usw.). Zum
+Eintragen erst über den Streifen oder die Auswahl zurück auf dein Trainerkonto.
 
-Drei Verdächtige, die ich zuerst prüfen würde:
+Umschalten braucht eine Verbindung; die Rolle wird bei jedem Aufruf serverseitig
+geprüft, ein „als"-Zugriff lässt sich nicht selbst basteln.
 
-1. **Team-Einteilung bei vielen Ausgewählten.** „Teams generieren" probiert für
-   zwei Teams *alle* Aufteilungen durch. Bei 20 Anwesenden sind das 184 000
-   Kombinationen — am Handy wählt man selten so viele, am PC eher. Die Notbremse
-   greift erst bei 300 000; darunter kann der Tab für einige Sekunden stehen und
-   wirkt eingefroren. Verdacht Nummer eins, und leicht zu entschärfen (Grenze
-   senken oder die Rechnung aus dem Hauptfenster auslagern).
-2. **Das neue Querformat-Layout** greift ab 760 px Breite im Querformat — also
-   an *jedem* PC-Monitor. Wenn dort etwas klemmt, sieht das nur am PC so aus.
-3. **Der Service Worker mit altem Cache.** Am PC hängt oft noch eine ältere
-   Fassung im Speicher. Einmal `Strg`+`Umschalt`+`R` ausprobieren: hilft das,
-   war es nur der Cache und kein Fehler im Programm.
+---
+
+## v0.45.0 — 2026-09-03
+
+**Neuer Bereich „Videos" unter „Ich".** Jede Spielerin sieht dort die Szenen aus
+Spielaufzeichnungen, die ihr zugeordnet wurden, und kann sie im Player ansehen
+(vor- und zurückspulen inklusive). Eine Spielerin sieht nur ihre eigenen Clips.
+
+Für das Trainerteam gibt es den Bereich zusätzlich unter „Team". Dort sind alle
+Clips sichtbar; pro Clip lässt sich einstellen, **welche Spielerinnen ihn sehen**,
+und ein Clip lässt sich löschen.
+
+Geschnitten und beschriftet (Pfeile, Kreise, Text, Standbilder) werden die Szenen
+am PC mit dem eigenen Werkzeug **Balu-Videoschnitt**; von dort wird der fertige
+Clip hochgeladen. Die App speichert und zeigt nur das fertige Video – der
+Homeserver rechnet nichts.
+
+---
+
+## v0.44.0 — 2026-08-10
+
+**Test- und Ligaspiele sind jetzt eigene Termine.** Unter „Termine" legt das
+Trainerteam über **„+ Neuer Termin“** wahlweise ein Training, ein Testspiel oder
+ein Ligaspiel an. Bei einem Spiel kommen dazu:
+
+- **Gegner** (Pflicht — ohne Gegner nimmt der Server das Spiel nicht an)
+- **Heimspiel oder auswärts**
+- **Abfahrtszeit**, die nur bei Auswärtsspielen abgefragt wird
+- **Anwurf** (das Uhrzeit-Feld) und Ort
+
+Der Titel schreibt sich selbst: „Ligaspiel bei TSV Blaustein“ bzw. „Testspiel
+gegen SG Ulm“.
+
+**Die nächsten drei Spiele stehen auf der Startseite**, gleich unter dem
+nächsten Training. Bei einem Auswärtsspiel steht rechts groß die **Abfahrt**,
+daheim der Anwurf — die Uhrzeit, nach der man sich richten muss, ohne
+Nachschlagen. Ein Tipp auf die Karte führt direkt in den Termin.
+
+**In der Terminliste sind die Arten an der Farbe zu unterscheiden:** Trainings
+bleiben die weiße Karte, **Testspiele sind ockerfarben**, **Ligaspiele blau**,
+dazu jeweils ein Kennzeichen „TESTSPIEL · DAHEIM“ bzw. „LIGASPIEL · AUSWÄRTS“.
+Der farbige Balken links bedeutet weiterhin die Zusagenlage (knapp/kritisch).
+
+Zu- und Absagen laufen bei Spielen genau wie beim Training — dieselbe Liste,
+dieselben Erinnerungen.
+
+**Zwei Dinge, die im Hintergrund sauber bleiben:**
+
+- Ein Spiel und ein Training können am **selben Tag** stehen. Der
+  SpielerPlus-/Anytype-Import und der Wochenplan fassen nur noch Trainings an,
+  ein Spiel wird nie überschrieben.
+- Die **Trainingsbeteiligung** im „Ich“-Reiter zählt weiterhin nur Trainings.
+  Spiele verwässern die Quote nicht.
+
+Bestehende Termine sind unverändert Trainings — an der Datenbank musste dazu
+nichts von Hand geändert werden.
+
+---
+
+## v0.43.0 — 2026-08-10
+
+**Neuer Reiter „Ich“ — die eigene Seite.** Jede Spielerin hat jetzt unten in der
+Leiste einen eigenen Punkt (zwischen Home und Training). Dort steht auf einen
+Blick, was sie selbst betrifft:
+
+- das **Portrait** im Wappen, groß, mit dem Namen daneben
+- **Angriffs- und Abwehrposition** (und „Torhüterin“, wo hinterlegt)
+- die **Trainingsbeteiligung**: Quote groß, dazu ein Balken und die Zahlen —
+  wie viele Trainings zugesagt, abgesagt, unsicher
+- die **Laufchallenge**: gelaufene Kilometer, Anzahl der Läufe und der Platz
+
+Ist noch nichts hinterlegt — keine Position, keine Trainings erfasst, kein
+Laufchallenge-Ergebnis — steht das auch so da, statt dass die Karte fehlt.
+
+Den Reiter sieht, wer eine eigene Spielerin im Kader hat. Trainerinnen, die
+selbst mitspielen, bekommen ihn also auch; ein reiner Trainer-Zugang ohne
+Spielerprofil nicht.
+
+Die Seite lädt aus demselben Endpunkt wie das Spielerprofil, das der Trainer
+sieht — der Server gibt einer Spielerin dort **nur ihr eigenes** Profil heraus.
+Einmal mit Netz geöffnet, steht die Seite danach auch offline.
+
+---
+
+## v0.42.1 — 2026-08-10
+
+**Pim ist aus der Datenbank raus.** Mit ihr entfernt wurden ihr Zugang zur App,
+ihr Eintrag in der Laufchallenge und vier Trainings-Rückmeldungen. Spiele oder
+ELO-Verlauf hatte sie keine, an der Rangliste ändert sich also nichts. Der Kader
+umfasst jetzt 19 Spielerinnen. Eine Sicherung der Datenbank von vorher liegt am
+Server (`elo.db.bak-20260810-1613-vor-pim`).
+
+**Ein Portrait war falsch zugeordnet:** das Foto gehört zu **Annika Lutz**, nicht
+zu Anni Dussler. Es sitzt jetzt bei Annika; Anni hat vorerst wieder ihre
+Initialen. Wer die App offen hat, bekommt das mit dem nächsten Start.
+
+---
+
+## v0.42.0 — 2026-08-10
+
+**Echte Portraits statt Initialen.** Die Wappen zeigen jetzt die Fotos vom
+Mannschaftsshooting — auf dem Feld in der Aufstellung, auf der Bank, in der
+Rangliste und oben im Spielerprofil. Die Form bleibt dieselbe wie vorher, es
+sitzt nur ein Gesicht darin statt zweier Buchstaben.
+
+Fotos gibt es aktuell für elf Spielerinnen: Anne, Anni, Franzi O., Franzi P.,
+Hanna, Helen, Lilly, Linda, Maike, Rebecca und Svenja. Wer noch keins hat,
+bekommt weiterhin die Initialen — es fehlt also nirgends etwas.
+
+**Neu in der Rangliste:** vor jedem Namen steht ein kleines Portrait, dadurch
+findet man eine Spielerin schneller als über die Namensspalte allein.
+
+**Im Profil** sitzt das Portrait oben links neben den Positions-Angaben.
+
+Die Bilder gehören zur Offline-Hülle: beim ersten Start legt die App alle
+Portraits mit in den Speicher, in der Halle sind die Gesichter also auch ohne
+Netz da.
+
+**Für neue Fotos:** Bild nach `portraits/` legen, in `portraits.py` eine Zeile
+in `ZUORDNUNG` ergänzen (Dateiname → Name der Spielerin), dann
+`py portraits.py --pruefen` laufen lassen — das schneidet automatisch auf Kopf
+und Schultern zu und meldet, ob der Name zu einer Spielerin passt. Danach normal
+`bash deploy.sh`.
+
+---
+
+## v0.41.1 — 2026-08-09
+
+**Die Aufstellung stand seitenverkehrt.** Halblinks saß auf der linken
+Bildschirmhälfte, Linksaußen ebenso — und das ist falsch herum.
+
+Auf dem Feld steht das **Tor unten**, angegriffen wird nach unten. Die
+Positionsnamen kommen aber aus Sicht der **Angreiferin**, die zum Tor schaut:
+ihre linke Seite liegt auf dem Bildschirm rechts. Halblinks gehört also nach
+rechts, Halbrechts nach links — und bei den Außen genauso.
+
+Getauscht sind jetzt **HL ↔ HR** und **LA ↔ RA**. Das gilt für beide Ansichten
+gleichzeitig, die Trainingsaufstellung und die Spielaufstellung, weil sich beide
+dieselbe Positionstabelle teilen. An den Spielerinnen und ihren hinterlegten
+Positionen ändert sich nichts — nur der Platz auf dem Feld stimmt jetzt.
+
+Über der Tabelle im Code steht eine Warnung, damit die Werte niemand später
+„geradezieht" und die Aufstellung damit wieder verdreht.
+
+---
+
+## v0.41.0 — 2026-08-09
+
+**Man sieht jetzt, auf wen man noch wartet — und der Trainer kann für andere
+eintragen.** Drei Dinge, die zusammengehören.
+
+**1. „Noch keine Rückmeldung" steht bei jedem Termin.** Bisher zeigte ein Termin
+nur die, die schon geantwortet hatten. Wer gar nichts angeklickt hatte, tauchte
+nirgends auf — man sah „4 Zusagen" und wusste nicht, ob die anderen abgesagt
+haben oder einfach noch nicht geschaut haben. Jetzt geht die Liste vom **ganzen
+Kader** aus: unter den Zusagen, Unsicheren und Absagen steht die Gruppe „Noch
+keine Rückmeldung" mit allen fehlenden Namen. Das gilt in der aufgeklappten
+Zeile in der Übersicht genauso wie in der Termin-Ansicht.
+
+**2. Der Trainer trägt für Spielerinnen ein.** Absagen kommen selten in der App
+an — sie kommen per WhatsApp, am Telefon oder am Hallenrand. Als Trainer steht
+deshalb jetzt hinter **jedem** Namen ein kleines Knopftrio:
+
+> **✓** zusagen · **?** unsicher · **✗** absagen
+
+Der eingefärbte Knopf zeigt den aktuellen Stand. Nochmal auf den aktiven Knopf
+tippen setzt die Antwort wieder auf „noch offen" — für den Fall, dass man sich
+vertippt. Ein **✎** hinter dem Namen bedeutet „vom Trainer eingetragen, nicht
+von ihr selbst".
+
+Ein Grund ist beim Eintragen für andere **nicht** Pflicht (anders als bei der
+eigenen Absage). Man kennt ihn oft nicht genau, und eine Pflichteingabe würde
+nur erfundene Gründe erzeugen.
+
+Die Push-Erinnerung „bitte zu-/absagen" wurde mit angepasst: sie geht nur noch
+an die, für die **gar keine** Antwort vorliegt. Wer schon eingetragen wurde,
+wird nicht mehr genervt.
+
+**3. Auf der Startseite steht, was von dir noch fehlt.** Spielerinnen sehen dort
+jetzt einen Block **„Deine Antwort fehlt noch"** mit allen kommenden Terminen
+ohne eigene Rückmeldung — jeder direkt an Ort und Stelle beantwortbar, ohne
+vorher in die Terminliste zu wechseln. Ist alles beantwortet, steht dort ein
+kurzes „Für alle kommenden Termine hast du geantwortet." Den alten Hinweissatz
+„Zu- und Absagen machst du unter Termine" braucht es damit nicht mehr.
+
+*Hinweis: Dieses Update ändert auch `app.py` und `db.py` am Server.*
+
+---
+
+## v0.40.1 — 2026-08-09
+
+**Der Fehler, der die App am PC lahmgelegt und Zu-/Absagen verschluckt hat, ist
+gefunden und behoben.** Er saß nicht im Layout und nicht in der Bedienung,
+sondern im Server.
+
+**Was los war.** Der Server holt sich für jede Anfrage eine eigene Verbindung
+zur Datenbank. Das Web-Gerüst darunter verteilt eine einzelne Anfrage aber auf
+mehrere Arbeits-Threads: die Verbindung wird in einem aufgemacht, in einem
+zweiten benutzt und in einem dritten geschlossen. SQLite verbietet das
+standardmäßig und bricht dann mit einem Fehler ab — die Anfrage endet mit
+„500 Internal Server Error". In den letzten zwei Wochen ist das **196 Mal**
+passiert.
+
+Ob es einen trifft, ist reiner Zufall und hängt davon ab, wie viele Anfragen
+gleichzeitig unterwegs sind. Deshalb war es **am PC am schlimmsten**: der
+Browser dort holt viel mehr parallel, das Handy im Mobilnetz eher nacheinander.
+Und deshalb wirkte es so willkürlich:
+
+- **Zu-/Absagen ging nicht.** Beim Tippen auf „Zusagen" oder „Absagen" kam
+  statt der Bestätigung eine Fehlermeldung — nicht immer, aber oft genug, dass
+  es sich kaputt anfühlte.
+- **Am PC hing die App.** Wenn es die Anmelde-Prüfung erwischte, hielt die App
+  das für „nicht angemeldet" und warf einen zurück auf den Login. Erwischte es
+  die Terminliste, blieb sie leer.
+
+**Was jetzt anders ist.** Der Server erlaubt der Datenbankverbindung
+ausdrücklich den Thread-Wechsel innerhalb einer Anfrage. Das ist gefahrlos,
+weil jede Anfrage ihre eigene Verbindung hat und sie nacheinander benutzt.
+Nachgemessen mit 180 gleichzeitigen Anfragen: **vorher Ausfälle, jetzt alle
+grün.**
+
+**Zwei Schutznetze in der App obendrauf**, damit ein Server-Schluckauf nie
+wieder wie ein Defekt aussieht:
+
+- Ein Serverfehler beim Start bedeutet **nicht mehr „abgemeldet"**. Wer sich
+  einmal angemeldet hat, arbeitet weiter, statt grundlos auf dem Login zu
+  landen.
+- Die Anmelde-Prüfung beim Start hat jetzt ein **Zeitlimit von 6 Sekunden**.
+  Bleibt der Server stumm, geht die App weiter — vorher konnte sie ewig im
+  Ladebalken stehen.
+
+*Hinweis: Dieses Update ändert auch `db.py` am Server, nicht nur die App.*
 
 ---
 

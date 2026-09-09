@@ -131,8 +131,8 @@ Sichtbare Versionsnummer im Kopf (`#version`, aktuell v14) zum Prüfen am Gerät
 - [x] Konfliktregel dokumentiert (siehe „Konfliktregel" unten): Server gewinnt
       bei GET; Schreiben läuft über die Outbox mit Idempotenz-Token, wird erst
       nach erfolgreichem Push entfernt.
-- [x] PC: nichts Neues nötig — `https://homeserver.tail112520.ts.net` bzw.
-      `http://192.168.8.125:8200` im Browser „installieren".
+- [x] PC: nichts Neues nötig — `https://homeserver.tailnet.ts.net` bzw.
+      `http://homeserver:8200` im Browser „installieren".
 - [x] **Responsive Breitbild (v22):** additive Media Queries in `style.css`
       (ab 760px 2-spaltig, ab 1100px 3-spaltig) für aufgeklappten Z Fold + PC;
       Handy-Layout unberührt. `style.css` jetzt auch in `deploy.sh`.
@@ -343,7 +343,7 @@ Voraussetzung: Phase 1–3 stehen. Erst wenn SpielerPlus abgelöst werden soll.
 
 Bausteine:
 - [x] **Öffentlich erreichbar (2026-07-17): Tailscale Funnel AN.**
-      `https://homeserver.tail112520.ts.net/` → App (nur diese eine, Rest privat).
+      `https://homeserver.tailnet.ts.net/` → App (nur diese eine, Rest privat).
       Über die öffentliche URL verifiziert: Shell 200, ohne Login 401, Login 200.
       Abschalten: `tailscale funnel --https=443 off`.
 - [x] **Login (2026-07-17): Name+PIN.** `auth.py` (PIN als pbkdf2-Hash,

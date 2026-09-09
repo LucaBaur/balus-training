@@ -11,12 +11,12 @@
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="apple-touch-icon" href="/icon-192.png?v=3" />
   <link rel="icon" href="/icon-192.png?v=3" />
-  <link rel="stylesheet" href="/style.css?v=30" />
+  <link rel="stylesheet" href="/style.css?v=36" />
   <title>Balu's Training</title>
 </head>
 <body>
-  <!-- Die Wappenform: jedes Portrait sitzt darin (Feld, Bank, Profil).
-       Statt Fotos stehen heute Initialen drin - die Form bleibt gleich. -->
+  <!-- Die Wappenform: jedes Portrait sitzt darin (Feld, Bank, Rangliste,
+       Profil, "Ich"). Wer kein Foto hat, bekommt in derselben Form Initialen. -->
   <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
     <clipPath id="wappen" clipPathUnits="objectBoundingBox">
       <path d="M0 0 H1 V0.54 C1 0.80 0.79 0.94 0.5 1 C0.21 0.94 0 0.80 0 0.54 Z"/>
@@ -59,6 +59,8 @@
     </button>
     <small id="version"></small>
   </header>
+  <!-- Ansicht-als: sichtbar, wenn ein Trainer die App als eine Spielerin ansieht. -->
+  <div id="ansicht-banner" class="ansicht-banner hidden"></div>
   <!-- Sub-Navigation des aktiven Überpunkts (per JS gefüllt). -->
   <nav id="subnav"></nav>
 
@@ -67,11 +69,37 @@
     <section id="view-home" class="view">
       <div id="benutzer-leiste" class="benutzer-leiste">
         <span id="benutzer-name"></span>
+        <select id="ansicht-select" class="hidden" title="Ansehen als …"></select>
         <button id="logout-btn">Abmelden</button>
       </div>
       <div id="push-box" class="push-box"></div>
       <div id="home-naechstes" class="home-karte"></div>
+      <!-- Die nächsten drei Test-/Ligaspiele (mit Abfahrt bei auswärts) -->
+      <div id="home-spiele" class="home-spiele"></div>
+      <!-- Termine, für die die eigene Zu-/Absage noch fehlt (nur Spielerinnen) -->
+      <div id="home-offen" class="home-offen"></div>
       <div id="home-schnell" class="home-schnell"></div>
+    </section>
+
+    <!-- Ich: die eigene Seite (Portrait, Positionen, Beteiligung, Laufchallenge) -->
+    <section id="view-ich" class="view hidden">
+      <div id="ich-inhalt"></div>
+    </section>
+
+    <!-- Videos: Szenen aus Spielaufzeichnungen. Spielerin sieht die eigenen,
+         Trainerin alle (mit Zuordnen/Löschen). -->
+    <section id="view-videos" class="view hidden">
+      <h2>Videos</h2>
+      <div id="videos-liste" class="videos-liste"></div>
+    </section>
+
+    <!-- Video-Detail: der Clip im Player -->
+    <section id="view-video-detail" class="view hidden">
+      <button id="btn-video-zurueck" class="zurueck-btn">← Videos</button>
+      <h2 id="vd-titel"></h2>
+      <div id="vd-meta" class="vd-meta"></div>
+      <video id="vd-player" class="vd-player" controls playsinline preload="metadata"></video>
+      <div id="vd-aktionen" class="vd-aktionen"></div>
     </section>
 
     <!-- Termine-Übersicht: kommende Einheiten mit Zusagen, aufklappbar -->
@@ -219,6 +247,7 @@
 
   <nav id="tableiste">
     <button data-ober="home" class="aktiv"><span class="t-icon">🏠</span><span class="t-text">Home</span></button>
+    <button data-ober="ich"><span class="t-icon">🙋</span><span class="t-text">Ich</span></button>
     <button data-ober="training"><span class="t-icon">📋</span><span class="t-text">Training</span></button>
     <button data-ober="team"><span class="t-icon">👥</span><span class="t-text">Team</span></button>
     <button data-ober="taktik"><span class="t-icon">🎯</span><span class="t-text">Taktik</span></button>
@@ -226,8 +255,8 @@
   </nav>
 
   <script src="/local-db.js?v=2"></script>
-  <script src="/sync.js?v=9"></script>
+  <script src="/sync.js?v=10"></script>
   <script src="/teams-local.js?v=2"></script>
-  <script src="/app.js?v=41"></script>
+  <script src="/app.js?v=50"></script>
 </body>
 </html>

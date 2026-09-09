@@ -57,7 +57,8 @@ def _cli() -> None:
             iso = d.isoformat()
             titel = f"Training {ort}"
             row = conn.execute(
-                "SELECT id FROM trainings WHERE datum=? ORDER BY id LIMIT 1", (iso,)
+                "SELECT id FROM trainings WHERE datum=? AND art='training' ORDER BY id LIMIT 1",
+                (iso,)
             ).fetchone()
             if row:
                 if not args.trocken:
@@ -69,7 +70,8 @@ def _cli() -> None:
             else:
                 if not args.trocken:
                     conn.execute(
-                        "INSERT INTO trainings (datum, titel, uhrzeit, ort) VALUES (?,?,?,?)",
+                        "INSERT INTO trainings (datum, titel, uhrzeit, ort, art) "
+                        "VALUES (?,?,?,?,'training')",
                         (iso, titel, uhr, ort))
                 neu += 1
                 marke = "neu"

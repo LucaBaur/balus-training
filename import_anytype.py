@@ -36,7 +36,7 @@ BASIS = Path(__file__).parent
 # SpielerPlus-Projekt. Beide Kandidaten der Reihe nach probieren.
 ENV_KANDIDATEN = [
     BASIS / ".env",
-    BASIS.parent / "SpielerPlus-Anytype-Sync" / ".env",
+    BASIS.parent / "Anytype-Sync" / ".env",
 ]
 
 

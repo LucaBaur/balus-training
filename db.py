@@ -16,6 +16,12 @@ import elo
 
 DB_PFAD = Path(__file__).with_name("elo.db")
 
+# Termin-Arten. 'training' ist der Normalfall (und der Default in der DB),
+# 'testspiel'/'ligaspiel' sind Spiele: sie haben einen Gegner, sind Heim- oder
+# Auswaertsspiel und tragen bei Auswaerts eine Abfahrtszeit.
+ARTEN = ("training", "testspiel", "ligaspiel")
+SPIEL_ARTEN = ("testspiel", "ligaspiel")
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS spieler (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -179,11 +185,39 @@ CREATE TABLE IF NOT EXISTS push_abo (
     auth         TEXT    NOT NULL,
     erstellt_am  TEXT    NOT NULL DEFAULT (datetime('now'))
 );
+
+-- Szenen-Videos: einzelne Spielszenen, geschnitten und beschriftet am PC
+-- (Projekt "Balu-Videoschnitt"), hier nur als fertige MP4 abgelegt. Die Datei
+-- liegt unter media/clips/ (nicht im Repo, wie die Portraits); 'datei' ist der
+-- reine Dateiname. Eine Szene kann mehrere Spielerinnen betreffen.
+CREATE TABLE IF NOT EXISTS video_clip (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    titel        TEXT    NOT NULL,
+    notiz        TEXT,
+    datei        TEXT    NOT NULL,                       -- Dateiname in media/clips/
+    spiel_datum  TEXT,                                   -- YYYY-MM-DD der Aufnahme
+    dauer_s      REAL,
+    erstellt_von INTEGER REFERENCES benutzer(id) ON DELETE SET NULL,
+    erstellt_am  TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS video_clip_spieler (
+    clip_id    INTEGER NOT NULL REFERENCES video_clip(id) ON DELETE CASCADE,
+    spieler_id INTEGER NOT NULL REFERENCES spieler(id)    ON DELETE CASCADE,
+    PRIMARY KEY (clip_id, spieler_id)
+);
 """
 
 
 def verbinde(pfad: Path | str = DB_PFAD) -> sqlite3.Connection:
-    conn = sqlite3.connect(pfad)
+    # check_same_thread=False ist hier PFLICHT, nicht Bequemlichkeit: FastAPI
+    # legt die Verbindung in der Dependency (hole_conn) in einem Worker-Thread
+    # an, ruft den Endpunkt in einem ZWEITEN und schliesst sie in einem DRITTEN.
+    # Mit der Standard-Pruefung wirft SQLite dabei sporadisch
+    # "SQLite objects created in a thread can only be used in that same thread"
+    # -> HTTP 500. Gefaehrlich waere das nur bei echt gleichzeitigem Zugriff;
+    # jede Anfrage bekommt aber ihre EIGENE Verbindung und nutzt sie nacheinander.
+    conn = sqlite3.connect(pfad, check_same_thread=False, timeout=15)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
@@ -250,6 +284,22 @@ def _migriere(conn: sqlite3.Connection) -> None:
     _spalte_ergaenzen(conn, "benutzer", "fehlversuche", "INTEGER NOT NULL DEFAULT 0")
     # Zu-/Absage-Grund an der Teilnahme (Pflicht bei Absage).
     _spalte_ergaenzen(conn, "training_teilnahme", "grund", "TEXT")
+
+    # Termine sind nicht nur Trainings: Test- und Ligaspiele stehen in derselben
+    # Tabelle (gleiche Teilnahme, gleiche Erinnerungen) und unterscheiden sich
+    # ueber 'art'. Bestand bleibt 'training' - darum der Default.
+    #   gegner  : Name des Gegners (nur Spiele)
+    #   heim    : 1 = Heimspiel, 0 = Auswaertsspiel (NULL bei Trainings)
+    #   abfahrt : 'HH:MM' Abfahrt/Treffpunkt - bei Auswaertsspielen das Wichtigste
+    _spalte_ergaenzen(conn, "trainings", "art", "TEXT NOT NULL DEFAULT 'training'")
+    _spalte_ergaenzen(conn, "trainings", "gegner", "TEXT")
+    _spalte_ergaenzen(conn, "trainings", "heim", "INTEGER")
+    _spalte_ergaenzen(conn, "trainings", "abfahrt", "TEXT")
+    conn.execute("CREATE INDEX IF NOT EXISTS ix_trainings_art ON trainings(art, datum)")
+
+    # Szenen-Videos: schneller Zugriff auf die Clips einer Spielerin.
+    conn.execute("CREATE INDEX IF NOT EXISTS ix_clip_spieler "
+                 "ON video_clip_spieler(spieler_id)")
 
 
 # ---------------------------------------------------------------- Spieler ----
@@ -541,9 +591,13 @@ def spieler_detail(conn: sqlite3.Connection, spieler_id: int, limit: int = 40) -
         s["team_b"] = s["teams"][1] if len(s["teams"]) > 1 else []
 
     # Trainings-Anwesenheit (aus training_teilnahme, Quelle SpielerPlus/Anytype).
+    # Nur echte TRAININGS zaehlen - Test- und Ligaspiele stehen in derselben
+    # Tabelle, gehoeren aber nicht in die Trainingsquote.
     tt = conn.execute(
-        "SELECT status, COUNT(*) AS n FROM training_teilnahme "
-        "WHERE spieler_id = ? GROUP BY status", (spieler_id,)
+        "SELECT tt.status, COUNT(*) AS n FROM training_teilnahme tt "
+        "JOIN trainings t ON t.id = tt.training_id "
+        "WHERE tt.spieler_id = ? AND t.art = 'training' GROUP BY tt.status",
+        (spieler_id,)
     ).fetchall()
     z = {r["status"]: r["n"] for r in tt}
     anw, abg, uns = z.get("anwesend", 0), z.get("abgesagt", 0), z.get("unsicher", 0)
@@ -751,6 +805,7 @@ def trainings_liste(conn: sqlite3.Connection, spieler_id: int | None = None) -> 
     Mit `spieler_id` zusaetzlich `meine_status` (eigene Antwort) je Training."""
     rows = conn.execute(
         "SELECT t.id, t.datum, t.titel, t.uhrzeit, t.ort, "
+        "       t.art, t.gegner, t.heim, t.abfahrt, "
         "       ((t.plan_markdown IS NOT NULL AND t.plan_markdown <> '') "
         "        OR EXISTS (SELECT 1 FROM training_block b WHERE b.training_id = t.id)) AS hat_plan, "
         "       (SELECT COALESCE(SUM(b.dauer_min), 0) FROM training_block b "
@@ -771,15 +826,27 @@ def trainings_liste(conn: sqlite3.Connection, spieler_id: int | None = None) -> 
 
 
 def training_detail(conn: sqlite3.Connection, tid: int) -> dict | None:
-    """Ein Training mit voller Teilnahmeliste (Name/Position/Status) + Plan."""
+    """Ein Training mit voller Teilnahmeliste (Name/Position/Status) + Plan.
+
+    Die Liste geht vom KADER aus, nicht von den vorhandenen Antworten: wer noch
+    gar nicht geantwortet hat, steht mit `status = None` drin. Nur so kann die
+    App zeigen, auf wen man noch wartet - vorher fehlten diese Namen komplett,
+    weil ohne Antwort auch keine Zeile in `training_teilnahme` existiert.
+
+    Ausserdem dabei: bereits ausgetretene (inaktive) Spielerinnen, die fuer
+    dieses Training schon geantwortet hatten - ihre Antwort verschwindet nicht
+    rueckwirkend aus einem alten Termin.
+    """
     t = conn.execute("SELECT * FROM trainings WHERE id = ?", (tid,)).fetchone()
     if t is None:
         return None
     teil = conn.execute(
         "SELECT s.id, s.name, s.position, s.position_angriff, "
         "       tt.status, tt.quelle, tt.grund "
-        "FROM training_teilnahme tt JOIN spieler s ON s.id = tt.spieler_id "
-        "WHERE tt.training_id = ? "
+        "FROM spieler s "
+        "LEFT JOIN training_teilnahme tt "
+        "       ON tt.spieler_id = s.id AND tt.training_id = ? "
+        "WHERE s.aktiv = 1 OR tt.spieler_id IS NOT NULL "
         "ORDER BY CASE tt.status WHEN 'anwesend' THEN 0 WHEN 'unsicher' THEN 1 "
         "         WHEN 'abgesagt' THEN 2 ELSE 3 END, s.name",
         (tid,),
@@ -849,10 +916,22 @@ def teilnahme_setzen(conn: sqlite3.Connection, training_id: int, spieler_id: int
     conn.commit()
 
 
+def teilnahme_loeschen(conn: sqlite3.Connection, training_id: int,
+                       spieler_id: int) -> None:
+    """Antwort zuruecksetzen auf 'noch offen' (Trainer-Korrektur). Ohne Zeile
+    zaehlt die Spielerin wieder zu denen, auf die man wartet."""
+    conn.execute(
+        "DELETE FROM training_teilnahme WHERE training_id = ? AND spieler_id = ?",
+        (training_id, spieler_id),
+    )
+    conn.commit()
+
+
 def naechstes_training(conn: sqlite3.Connection) -> dict | None:
     """Das naechste Training ab heute (fuer den Home-Screen), sonst None."""
     row = conn.execute(
-        "SELECT id FROM trainings WHERE datum >= ? ORDER BY datum ASC, id ASC LIMIT 1",
+        "SELECT id FROM trainings WHERE datum >= ? AND art = 'training' "
+        "ORDER BY datum ASC, id ASC LIMIT 1",
         (date.today().isoformat(),),
     ).fetchone()
     return training_detail(conn, row["id"]) if row else None
@@ -931,12 +1010,24 @@ def training_plan_setzen(conn: sqlite3.Connection, tid: int, markdown: str) -> b
 
 def training_anlegen(conn: sqlite3.Connection, datum: str, titel: str = "",
                      plan_markdown: str | None = None, uhrzeit: str | None = None,
-                     ort: str | None = None) -> tuple[int, bool]:
-    """Training anlegen ODER ein bestehendes am selben Datum wiederverwenden
-    (verhindert Doppel-Trainings). Liefert (id, war_neu)."""
-    vorhanden = conn.execute(
-        "SELECT id FROM trainings WHERE datum = ? ORDER BY id LIMIT 1", (datum,)
-    ).fetchone()
+                     ort: str | None = None, art: str = "training",
+                     gegner: str | None = None, heim: int | None = None,
+                     abfahrt: str | None = None) -> tuple[int, bool]:
+    """Termin anlegen. Liefert (id, war_neu).
+
+    Ein TRAINING am selben Datum wird wiederverwendet statt doppelt angelegt
+    (der Anytype-/SpielerPlus-Import lauft sonst in Dubletten). SPIELE dagegen
+    werden immer neu angelegt und auch nie als Ziel wiederverwendet: an einem
+    Tag koennen ein Training und ein Testspiel nebeneinander stehen, und ein
+    Spiel darf ein Training nicht ueberschreiben.
+    """
+    art = art if art in ARTEN else "training"
+    vorhanden = None
+    if art == "training":
+        vorhanden = conn.execute(
+            "SELECT id FROM trainings WHERE datum = ? AND art = 'training' "
+            "ORDER BY id LIMIT 1", (datum,)
+        ).fetchone()
     if vorhanden:
         tid = int(vorhanden["id"])
         felder, werte = [], []
@@ -951,8 +1042,10 @@ def training_anlegen(conn: sqlite3.Connection, datum: str, titel: str = "",
         conn.commit()
         return tid, False
     cur = conn.execute(
-        "INSERT INTO trainings (datum, titel, uhrzeit, ort, plan_markdown) VALUES (?,?,?,?,?)",
-        (datum, titel or "", uhrzeit, ort, plan_markdown),
+        "INSERT INTO trainings (datum, titel, uhrzeit, ort, plan_markdown, "
+        "art, gegner, heim, abfahrt) VALUES (?,?,?,?,?,?,?,?,?)",
+        (datum, titel or "", uhrzeit, ort, plan_markdown,
+         art, gegner, heim, abfahrt),
     )
     conn.commit()
     return int(cur.lastrowid), True
@@ -1066,14 +1159,20 @@ def push_abos_fuer(conn: sqlite3.Connection, benutzer_ids: list[int]) -> list[di
 
 
 def offene_spieler_benutzer(conn: sqlite3.Connection, training_id: int) -> list[int]:
-    """Benutzer-IDs aktiver Spielerinnen, die fuer dieses Training noch NICHT
-    selbst in der App geantwortet haben (quelle != 'app')."""
+    """Benutzer-IDs aktiver Spielerinnen, fuer die noch gar keine Antwort
+    vorliegt - die Empfaengerinnen der Push-Erinnerung.
+
+    Als Antwort zaehlt die eigene in der App (quelle 'app') UND das, was der
+    Trainer fuer sie eingetragen hat (quelle 'trainer'). Wer schon abgesagt
+    hat, soll keine Erinnerung mehr bekommen - egal, wer es eingetippt hat.
+    Blosse Nominierungen aus SpielerPlus sind KEINE Antwort.
+    """
     rows = conn.execute(
         "SELECT b.id FROM benutzer b "
         "WHERE b.rolle = 'spieler' AND b.aktiv = 1 AND b.spieler_id IS NOT NULL "
         "AND b.spieler_id NOT IN ("
         "  SELECT spieler_id FROM training_teilnahme "
-        "  WHERE training_id = ? AND quelle = 'app')",
+        "  WHERE training_id = ? AND quelle IN ('app', 'trainer'))",
         (training_id,)).fetchall()
     return [r["id"] for r in rows]
 
@@ -1085,3 +1184,112 @@ def benutzer_liste(conn: sqlite3.Connection) -> list[dict]:
         "FROM benutzer b ORDER BY b.rolle DESC, b.name"
     ).fetchall()
     return [dict(r) for r in rows]
+
+
+# ------------------------------------------------------------ Szenen-Videos ----
+#  Fertige Clips (geschnitten am PC, siehe Projekt "Balu-Videoschnitt"). Die
+#  MP4-Datei liegt unter media/clips/; hier steht nur der Dateiname. Ausgeliefert
+#  wird sie ausschliesslich ueber /api/clips/{id}/video mit Rollen-/Zuordnungs-
+#  Pruefung - nicht ueber den StaticFiles-Mount.
+
+def _clip_spieler(conn: sqlite3.Connection, clip_ids: list[int]) -> dict[int, list[dict]]:
+    """{clip_id: [{id, name}, ...]} fuer eine Menge Clips (eine Abfrage)."""
+    if not clip_ids:
+        return {}
+    q = ("SELECT cs.clip_id, s.id, s.name FROM video_clip_spieler cs "
+         "JOIN spieler s ON s.id = cs.spieler_id "
+         f"WHERE cs.clip_id IN ({','.join('?' * len(clip_ids))}) "
+         "ORDER BY s.name")
+    aus: dict[int, list[dict]] = {cid: [] for cid in clip_ids}
+    for r in conn.execute(q, clip_ids).fetchall():
+        aus[r["clip_id"]].append({"id": r["id"], "name": r["name"]})
+    return aus
+
+
+def _clips_mit_spielern(conn: sqlite3.Connection, rows) -> list[dict]:
+    clips = [dict(r) for r in rows]
+    zuord = _clip_spieler(conn, [c["id"] for c in clips])
+    for c in clips:
+        c["spieler"] = zuord.get(c["id"], [])
+    return clips
+
+
+def clips_alle(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute(
+        "SELECT id, titel, notiz, datei, spiel_datum, dauer_s, erstellt_am "
+        "FROM video_clip ORDER BY COALESCE(spiel_datum, '') DESC, id DESC"
+    ).fetchall()
+    return _clips_mit_spielern(conn, rows)
+
+
+def clips_fuer_spieler(conn: sqlite3.Connection, spieler_id: int) -> list[dict]:
+    rows = conn.execute(
+        "SELECT c.id, c.titel, c.notiz, c.datei, c.spiel_datum, c.dauer_s, c.erstellt_am "
+        "FROM video_clip c JOIN video_clip_spieler cs ON cs.clip_id = c.id "
+        "WHERE cs.spieler_id = ? "
+        "ORDER BY COALESCE(c.spiel_datum, '') DESC, c.id DESC", (spieler_id,)
+    ).fetchall()
+    return _clips_mit_spielern(conn, rows)
+
+
+def clip_nach_id(conn: sqlite3.Connection, clip_id: int) -> dict | None:
+    r = conn.execute("SELECT * FROM video_clip WHERE id = ?", (clip_id,)).fetchone()
+    if not r:
+        return None
+    clip = dict(r)
+    clip["spieler"] = _clip_spieler(conn, [clip_id]).get(clip_id, [])
+    clip["spieler_ids"] = [s["id"] for s in clip["spieler"]]
+    return clip
+
+
+def clip_spieler_setzen(conn: sqlite3.Connection, clip_id: int,
+                        spieler_ids: list[int]) -> None:
+    conn.execute("DELETE FROM video_clip_spieler WHERE clip_id = ?", (clip_id,))
+    conn.executemany(
+        "INSERT OR IGNORE INTO video_clip_spieler (clip_id, spieler_id) VALUES (?, ?)",
+        [(clip_id, int(sid)) for sid in spieler_ids])
+    conn.commit()
+
+
+def clip_anlegen(conn: sqlite3.Connection, titel: str, notiz: str | None,
+                 datei: str, spiel_datum: str | None, dauer_s: float | None,
+                 erstellt_von: int | None, spieler_ids: list[int]) -> int:
+    cur = conn.execute(
+        "INSERT INTO video_clip (titel, notiz, datei, spiel_datum, dauer_s, erstellt_von) "
+        "VALUES (?,?,?,?,?,?)",
+        (titel, notiz, datei, spiel_datum, dauer_s, erstellt_von))
+    clip_id = int(cur.lastrowid)
+    conn.executemany(
+        "INSERT OR IGNORE INTO video_clip_spieler (clip_id, spieler_id) VALUES (?, ?)",
+        [(clip_id, int(sid)) for sid in spieler_ids])
+    conn.commit()
+    return clip_id
+
+
+def clip_metadaten_setzen(conn: sqlite3.Connection, clip_id: int, *,
+                          titel: str | None = None, notiz: str | None = None,
+                          spiel_datum: str | None = None) -> bool:
+    sets, params = [], []
+    if titel is not None:
+        sets.append("titel = ?"); params.append(titel)
+    if notiz is not None:
+        sets.append("notiz = ?"); params.append(notiz)
+    if spiel_datum is not None:
+        sets.append("spiel_datum = ?"); params.append(spiel_datum)
+    if not sets:
+        return False
+    params.append(clip_id)
+    cur = conn.execute(f"UPDATE video_clip SET {', '.join(sets)} WHERE id = ?", params)
+    conn.commit()
+    return cur.rowcount > 0
+
+
+def clip_loeschen(conn: sqlite3.Connection, clip_id: int) -> str | None:
+    """Loescht die Zeile (ON DELETE CASCADE raeumt die Zuordnung) und gibt den
+    Dateinamen zurueck, damit der Aufrufer die Datei entfernen kann."""
+    r = conn.execute("SELECT datei FROM video_clip WHERE id = ?", (clip_id,)).fetchone()
+    if not r:
+        return None
+    conn.execute("DELETE FROM video_clip WHERE id = ?", (clip_id,))
+    conn.commit()
+    return r["datei"]
