@@ -16,11 +16,11 @@ eingetippt, die ELOs werden nach Anytype zurückgeschrieben.
 
 ## Screenshots
 
-<!-- docs/screenshot-*.png — werden nach dem lokalen Lauf mit Demo-Daten ergänzt -->
+Aufgenommen mit erfundenen Demo-Daten.
 
-| Startseite | Faire Teams | Trainingsplan |
+| Startseite | Zu- und Absagen | Trainingsplan |
 |---|---|---|
-| ![Startseite](docs/screenshot-start.png) | ![Faire Teams](docs/screenshot-teams.png) | ![Trainingsplan](docs/screenshot-plan.png) |
+| ![Startseite](docs/screenshot-start.png) | ![Zu- und Absagen](docs/screenshot-zusagen.png) | ![Trainingsplan](docs/screenshot-plan.png) |
 
 Die aktuelle Version steht im Kopf der App und in
 **[CHANGELOG.md](CHANGELOG.md)** — dort gehört zu **jeder** neuen Version ein
