@@ -27,14 +27,14 @@ function makeLocalDB() {
   };
 }
 
-function ladeSync({ navigatorOnline = true, fetchImpl, localdb }) {
+function ladeSync({ navigatorOnline = true, fetchImpl, localdb, onEvent = null }) {
   const win = { addEventListener() {} };
   const sandbox = {
     window: win,
     navigator: { onLine: navigatorOnline },
     fetch: fetchImpl,
     crypto: { randomUUID: () => "tok-" + Math.random().toString(16).slice(2) },
-    document: { dispatchEvent() {}, addEventListener() {}, hidden: false },
+    document: { dispatchEvent(e) { if (onEvent) onEvent(e); }, addEventListener() {}, hidden: false },
     LocalDB: localdb,
     setTimeout, clearTimeout, setInterval, clearInterval, console,
     CustomEvent: class { constructor(t, o) { this.type = t; this.detail = o && o.detail; } },
@@ -70,6 +70,22 @@ async function main() {
     const dt = Date.now() - t0;
     assert.strictEqual(res.marker, 42);
     assert.ok(dt < 500, `zu langsam: ${dt}ms`);
+  });
+
+  // 1b) Regressionstest (v0.55.1): Das Ereignis "server:status" kommt nur bei einer AENDERUNG.
+  //     sync.js laeuft vor app.js und pingt sofort - kommt die Antwort, bevor app.js zuhoert,
+  //     verpasst app.js das einzige Ereignis. Darauf darf es sich nicht verlassen: es muss den
+  //     Stand beim Start ueber Sync.serverOnline abfragen. Dieser Test haelt den Vertrag fest.
+  await test("Status-Ereignis nur bei Aenderung - Sync.serverOnline liefert den Stand trotzdem", async () => {
+    const db = makeLocalDB();
+    const ereignisse = [];
+    const { Sync } = ladeSync({ fetchImpl: okResp, localdb: db,
+                                onEvent: (e) => { if (e.type === "server:status") ereignisse.push(e.detail.online); } });
+    await delay(50);                       // Start-Ping fertig, noch kein Zuhoerer "installiert"
+    assert.deepStrictEqual(ereignisse, [true], "genau ein Ereignis beim ersten erfolgreichen Ping");
+    await Sync.pingServer();               // weiterer erfolgreicher Ping: keine Aenderung -> kein Ereignis
+    assert.deepStrictEqual(ereignisse, [true], "kein zweites Ereignis ohne Aenderung");
+    assert.strictEqual(Sync.serverOnline, true, "spaeter Zuhoerer kann den Stand direkt lesen");
   });
 
   // 2) offline + kein Cache -> schnelle Ablehnung

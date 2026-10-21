@@ -4323,7 +4323,7 @@ $("#btn-mic").addEventListener("click", async () => {
 // Sichtbare Versionsnummer im Kopf — was drin ist, steht in CHANGELOG.md.
 // Bei jeder Aenderung: hier hochzaehlen, Eintrag im CHANGELOG, sw.js CACHE
 // bumpen und die ?v= der geaenderten Dateien in index.html.
-const APP_VERSION = "v0.55.0";
+const APP_VERSION = "v0.55.1";
 const versionEl = document.getElementById("version");
 if (versionEl) versionEl.textContent = APP_VERSION;
 
@@ -4354,6 +4354,10 @@ function malePunkt() {
   }
 }
 document.addEventListener("server:status", (e) => { _serverOnline = e.detail.online; malePunkt(); });
+// sync.js laeuft VOR app.js und pingt sofort. Kommt die Antwort, bevor dieser Code zuhoert
+// (beim ersten Laden oder nach einem Update ist app.js noch nicht im Cache), ist das
+// Ereignis weg - und es kommt nur bei einer AENDERUNG wieder. Deshalb den Stand selbst lesen.
+_serverOnline = !!(window.Sync && Sync.serverOnline);
 document.addEventListener("outbox:offen", (e) => { _offen = e.detail.offen; malePunkt(); });
 const _punkt = document.getElementById("server-punkt");
 if (_punkt) _punkt.addEventListener("click", async () => {

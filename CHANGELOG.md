@@ -19,6 +19,17 @@ Zahl, Fehlerbehebungen und Design-Feinschliff die letzte.
 
 ---
 
+## v0.55.1 — 2026-10-21
+
+**Fehler behoben: Nach dem Anmelden stand oben rechts „offline“, obwohl alles lief.** Beim
+ersten Öffnen der App (und nach jedem Update) zeigte der Punkt oben rechts rot „offline“, auch
+nach dem Antippen. Erst ein Neuladen hat ihn auf „synchron“ gesetzt. Die App war die ganze Zeit
+verbunden, nur die Anzeige hat die Meldung „Server erreichbar“ verpasst, weil sie zu spät
+mitgehört hat. Jetzt liest sie den Stand beim Start selbst ab. Daten und Zu-/Absagen waren nie
+betroffen, nur die Anzeige.
+
+---
+
 ## v0.55.0 — 2026-10-21
 
 **Trainings legen sich jetzt selbst an.** Die App erzeugt jeden Morgen die Trainings der
