@@ -32,38 +32,44 @@ Eintrag, was geändert wurde (samt Checkliste für den Versions-Bump).
 
 Die Rolle bestimmt, was man sieht: **Trainer** bekommen alles, **Spielerinnen** ihre
 eigenen Sachen. Die Rechte werden im Server erzwungen (`app.py`), nicht nur im
-Frontend ausgeblendet. Unten die sechs Bereiche der App.
+Frontend ausgeblendet. Unten die sechs Bereiche der App. Jeden Bereich zeigt die
+**[Anleitung mit Handy-Bildern](docs/anleitung-funktionen/Anleitung-Funktionen.pdf)**;
+die Installation auf Android und iPhone steht in der
+[Anleitung zum Videoschauen](docs/anleitung-videos/Anleitung-Videos.pdf).
 
-**Home** – Das nächste Training mit Zu-/Absage, die nächsten drei Spiele, Liga-Tabelle
-und Spielplan der Bezirksoberliga (Daten vom Verband, zwischengespeichert, mit
-Hinweis wenn die Quelle nicht erreichbar ist).
+**Home** – Übersicht mit dem nächsten Training (Zu-/Absage direkt dort), den nächsten drei
+Spielen und Abkürzungen; dazu **Liga** mit Tabelle und Spielplan der Bezirksoberliga
+(Daten vom Verband, zwischengespeichert, mit Hinweis wenn die Quelle nicht erreichbar ist).
 
-**Ich** – Eigenes Profil mit Portrait, Trainingsquote und Spielstatistik; eigene
-Szenen-Videos und die Videoanalyse der Spiele (nur die eigenen Szenen, das ganze
-Spiel für alle).
+**Ich** – *Mein Profil* mit Portrait, Trainingsbeteiligung, Laufchallenge und eigener
+Spielstatistik; *Videos* mit der Videoanalyse der Spiele und einzelnen Szenen-Clips
+(jede Spielerin sieht nur ihre eigenen Szenen, das ganze Spiel sehen alle).
 
-**Training** (Termine)
-- Trainings, Testspiele und Ligaspiele in einer Terminübersicht, farblich getrennt.
-- Zu-/Absage in der App (bei Absage mit Grund), Trainer tragen für andere ein; Namen
-  der noch Offenen sind sichtbar, Frühwarnung bei weniger als sechs Zusagen.
-- Push-Erinnerung an alle, die noch nicht geantwortet haben.
-- **Trainingsplan als Blöcke** (Dauer optional, Übungen aus der Sammlung übernehmbar),
-  nur für Trainer sichtbar.
-- **Coach-Chat:** aus Text oder Sprachnachricht einen Planvorschlag erzeugen.
-- **Aufstellung auf dem Spielfeld** (zwei Ansichten, Positionen der Spielerinnen).
+**Training**
+- *Termine:* Trainings, Testspiele und Ligaspiele in einer Übersicht, farblich getrennt.
+  Zu-/Absage in der App (bei Absage mit Grund), Trainer tragen für andere ein, Frühwarnung
+  bei weniger als sechs Zusagen, Push-Erinnerung an alle ohne Antwort.
+- Im Termin (Trainer): **Trainingsplan als Blöcke** (Dauer optional, Übungen aus der
+  Sammlung übernehmbar, nur für Trainer sichtbar) und der Knopf „Aus SpielerPlus aktualisieren“.
+- *Aufstellung:* alle Zusagen auf ihrer Position im Spielfeld (Training oder Spiel,
+  Portraits oder Namen).
+- *Einteilung* (Trainer): Anwesende anhaken, faire Teams für 2 bis 4 Mannschaften bilden,
+  Ergebnis eintragen (ELO).
+- *Übungen* (Trainer): Übungssammlung. *Coach* (Trainer): aus Text oder Sprachnachricht
+  einen Planvorschlag erzeugen.
 - **Automatische Termine:** Montag und Donnerstag legt der Server die Trainings der
   nächsten 14 Tage selbst an (`trainings_termine.py`).
-- **Zu-/Absagen aus SpielerPlus:** siehe unten.
 
-**Team** – Kader mit Positionen, faire Teams für 2 bis 4 Mannschaften (ELO, Torhüterinnen
-verteilt), Ergebnis eintragen und rückgängig machen,
-Nutzungs- und Fehlerübersicht (Geräte, App-Versionen).
+**Team** (nur Trainer) – *Rangliste* mit ELO-Verlauf je Spielerin, *Kader* (Stärkestufe,
+Positionen, aktiv/inaktiv), *Statistik* (Notizseiten), *Videos* (Szenen-Clips) und *Nutzung*
+(wer nutzt die App, Geräte, Fehlerberichte).
 
-**Taktik** – Playbook/Wiki als Seitenbaum (Spielzüge, Überzahl, Unterzahl, Abwehr),
-Übungssammlung, pflegbar direkt in der App, auch offline.
+**Taktik** – *Playbook* als Seitenbaum (Spielzüge, Überzahl, Unterzahl, Abwehr; alle lesen,
+Trainer bearbeiten, auch offline) und *Gegner* (Gegnercheck, nur Trainer).
 
-**Saison** – Spielanalyse je Spiel: Tore, Fehlwürfe, Spielzüge mit Ampel und Kommentar,
-Auswertung nach Spielerin und Position, Szenen als kurze Clips.
+**Saison** (nur Trainer) – *Orga*, *Statistik Spiele* (Auswertung je analysiertem Spiel:
+Effektivität, Spielzüge mit Ampel, je Spielerin und Position) und *Notizen*. Trainer können
+die App außerdem **als eine Spielerin ansehen** („Ansehen als“ auf Home).
 
 **Querschnitt**
 - **Offline-first:** Service Worker, lokale Kopie und Outbox. Eingaben ohne Netz werden
@@ -113,6 +119,7 @@ des Sync-Ordners (`SP_SYNC_DIR`, Standard `~/anytype-sync`).
 | `liga.py`         | Liga-Tabelle und Spielplan vom Verband (mit Zwischenspeicher)|
 | `trainer.py`      | Coach-Chat: Trainingsplan aus Text/Sprache                  |
 | `anytype_sync.py` | Alt-Anbindung an Anytype (läuft aus)                         |
+| `docs/anleitung-funktionen/` | Anleitung als PDF + Skripte, die sie neu bauen (Demo-Daten, Aufnahmen) |
 | `tests/`          | Tests (`py tests/<name>_test.py`, `node tests/*.test.mjs`)  |
 
 ## Starten (lokal zum Ausprobieren)
