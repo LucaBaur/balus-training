@@ -19,6 +19,227 @@ Zahl, Fehlerbehebungen und Design-Feinschliff die letzte.
 
 ---
 
+## v0.55.0 — 2026-10-21
+
+**Trainings legen sich jetzt selbst an.** Die App erzeugt jeden Morgen die Trainings der
+nächsten 14 Tage: Montag 20:00 in Gerhausen und Donnerstag 20:15 in Blaubeuren. Das
+Training ist also schon da, bevor du es brauchst. Der Freitag ist aus dem Muster
+entfernt, weil dann nicht mehr trainiert wird. Was du an einem Training von Hand
+änderst (Titel, Uhrzeit, Ort), bleibt stehen.
+
+**Zu- und Absagen kommen automatisch aus SpielerPlus.** Der Server holt sie morgens und
+an Trainingstagen um 12:00, 16:00 und 18:30 Uhr. Wer im Training ist, steht danach
+direkt in der Teilnehmerliste. Wichtig: Was Spielerinnen in der App selbst eintragen
+oder du als Trainer einträgst, gilt immer und wird von SpielerPlus nicht überschrieben.
+
+**Neuer Knopf im Training: „⟳ Aus SpielerPlus aktualisieren“** (nur Trainer). Damit holst
+du den aktuellen Stand sofort, zum Beispiel wenn kurz vor Beginn noch jemand absagt.
+Das geht höchstens alle 45 Sekunden.
+
+---
+
+## v0.54.0 — 2026-10-20
+
+**Neu: Liga-Tabelle und Spielplan (Home → Liga).** Die App zeigt jetzt die aktuelle Tabelle
+der Frauen-Bezirksoberliga (Oberschwaben-Ostalb) und alle Spiele von Gerhausen: die
+nächsten Spiele mit Datum, Anwurf, Halle und Ort (bei Auswärtsspielen mit Link zur
+Route) und darunter die Ergebnisse mit Halbzeitstand. Unsere Mannschaft ist in der
+Tabelle hervorgehoben, ein Sieg, Unentschieden oder eine Niederlage ist farblich markiert.
+
+Die Daten kommen vom Verband (bwhv.org, über den Dienst handball4all). Der Server ruft
+sie höchstens alle 15 Minuten ab, an Spieltagen alle 3 Minuten, und nur dann, wenn
+jemand die Seite öffnet. Ist die Verbandsseite nicht erreichbar, zeigt die App den
+letzten bekannten Stand mit einem Hinweis.
+
+**Startseite:** Solange keine eigenen Test- oder Ligaspiele eingetragen sind, stehen unter
+„Nächste Spiele“ jetzt die nächsten drei Spiele aus dem Verbands-Spielplan.
+
+---
+
+## v0.53.0 — 2026-10-20
+
+**Videoanalyse jetzt unter „Ich → Videos“.** Dort stehen jetzt zuerst die **Spiele**, zum
+Beispiel „HSG Oberkochen/Königsbronn“. Ein Tipp öffnet die Videoanalyse gegen diesen
+Gegner: oben der Knopf „Ganzes Spiel ansehen“, darunter die eigenen Szenen (Tore,
+Fehlwürfe, Spielzüge mit Ampel), die sich einzeln als kurzer Clip abspielen lassen. Die
+einzeln geschnittenen Szenen stehen darunter unter „Einzelne Szenen“.
+
+**Alle Spielerinnen sehen die Spiele**, auch wer in einem Spiel nicht vorkommt. Sie sehen
+dann den Hinweis „Für dich wurden in diesem Spiel keine Szenen erfasst“ und können das
+ganze Spiel ansehen. Die Szenen und Clips anderer Spielerinnen bleiben weiter verborgen.
+
+**„Mein Profil“ zeigt nur noch die Zahlen:** unter „Meine Spielstatistik“ eine kurze Zeile
+je Spiel (Tore, Fehlwürfe, Ballverluste, Paraden, Vorlagen, Strafen, Spielzug-Ampel) und
+darunter „Insgesamt“. Ein Tipp auf ein Spiel führt zur Videoanalyse.
+
+**Sicherheit:** Ein Zugang ohne zugeordnetes Spielerprofil bekommt keine Analyse zu sehen.
+
+**Sicherheit auf gemeinsam genutzten Geräten:** Die App hat bisher Antworten des Servers
+zwischengespeichert, ohne zu merken, wer angemeldet war. Wer sich auf demselben Gerät
+nach jemand anderem anmeldete (z. B. eine Spielerin nach dem Trainer), konnte kurz dessen
+Stand sehen. Beim Abmelden, beim Wechsel des Kontos und bei „Ansehen als“ wird dieser
+Speicher jetzt geleert. Noch nicht gesendete Änderungen bleiben erhalten.
+
+---
+
+## v0.52.0 — 2026-10-20
+
+**Neu: Geräteinfos und Fehlerberichte (Team → Nutzung).** Bei jedem Besuch merkt sich
+die App grobe Angaben zum Gerät: Betriebssystem mit Version (z. B. „Android 13“),
+Browser mit Version, ob die App installiert läuft oder im Browser, Bildschirmgröße,
+App-Version und, falls der Browser es nennt, das Gerätemodell. Bei jeder Spielerin
+stehen die Geräte jetzt unter „Geräte“, in der Übersicht sieht man das Gerät und die
+App-Version. Eine ältere App-Version ist rot markiert.
+
+Stürzt in der App etwas ab oder lässt sich ein Video nicht abspielen, meldet sie das
+automatisch. Oben auf der Nutzungs-Seite steht der neue Abschnitt „Fehler“: gleiche
+Fehler sind zusammengefasst, mit Häufigkeit, betroffenen Spielerinnen, Geräten,
+Bereich und App-Version. Ein Fehler wird pro Sitzung nur einmal gemeldet, höchstens
+20 pro Stunde je Konto. Reine Netzfehler (z. B. im Funkloch) werden nicht gemeldet.
+
+Nicht erfasst werden IP-Adresse, Standort und Gerätekennungen.
+
+---
+
+## v0.51.0 — 2026-10-20
+
+**Neu: Nutzung nachverfolgen (Team → Nutzung, nur für Trainer).** Die App merkt sich
+jetzt, wann jemand sie öffnet, welchen Bereich sie oder er besucht und welches Video
+angesehen wird. Die neue Seite zeigt pro Spielerin, wann sie zuletzt aktiv war, an
+wie vielen Tagen sie in den letzten 30 Tagen drin war, wie viele Besuche und Videos
+es waren. Beim Antippen einer Spielerin klappen die meistbesuchten Bereiche und die
+angesehenen Videos auf. Wer noch nie in der App war, steht ganz unten mit „noch nicht
+in der App“.
+
+Gezählt wird ein Besuch höchstens alle 30 Minuten, damit kurzes Hin- und Herwechseln
+nicht mitzählt. Gespeichert werden nur Konto, Zeitpunkt und was geöffnet wurde, keine
+IP-Adresse und keine Gerätedaten. Es wird nichts automatisch gelöscht. Wenn du die App
+über „Ansehen als“ als Spielerin anschaust, zählt das nicht mit.
+
+---
+
+## v0.50.0 — 2026-10-20
+
+**Fehler behoben: Nach dem Anmelden fehlten „Ich“ und „Videos“.** Beim Login hat der
+Server der App nicht mitgeteilt, zu welchem Spielerprofil der Zugang gehört. Die
+Reiter erschienen erst nach einem Neuladen der App. Das betraf z. B. Anne und Maike.
+Jetzt kommen beim Login dieselben Angaben wie sonst auch.
+
+**Neu: Die App prüft im Hintergrund, ob alles aktuell ist.** Kurz nach dem Start,
+beim Zurückkehren in die App, alle 5 Minuten und beim Antippen von „synchron“ oben
+rechts gleicht sie Rolle und Spielerprofil mit dem Server ab und sucht nach einer
+neuen App-Version. Ändert sich etwas, zeigt sie „Dein Zugang wurde aktualisiert ✓“,
+und die Reiter erscheinen sofort. Läuft die Anmeldung ab, kommt die Aufforderung zur
+neuen Anmeldung statt einer leeren App.
+
+**Neu: Hinweis auf der Startseite**, wenn ein Zugang keinem Spielerprofil zugeordnet
+ist. Vorher fehlten die Reiter ohne Erklärung.
+
+## v0.49.0 — 2026-10-19
+
+**Neuer Reiter „Saison → Statistik Spiele".** Für jedes hochgeladene Spiel (zuerst
+Oberkochen) gibt es jetzt eine Auswertung nur für Trainer: Angriffs- und
+Wurfeffektivität insgesamt, die Spielzüge mit Anteil gut / mittel / schlecht,
+jede Spielerin einzeln (Würfe, Tore, Fehlwürfe, Wurfeffektivität, Ballverluste),
+die Torhüterin mit Paraden und eine Auswertung nach Positionen. Helen zählt dabei
+als Rückraum, Franzi O. als Außen; alle anderen nach ihrer Position im Kader.
+
+Angriffseffektivität heißt Tore geteilt durch Würfe plus Ballverluste.
+
+---
+
+## v0.48.0 — 2026-10-19
+
+**Szenen als kurze Clips: laden auf dem Handy in Sekunden.** Das ganze Spielvideo ist
+rund 4 GB groß. Über die öffentliche Adresse (Tailscale Funnel) kamen davon auf dem
+Handy nur etwa 5 Mbit/s an, das Video hakte oder startete erst nach langem Warten.
+Jetzt gibt es zu jeder Szene einen eigenen kurzen Clip. Ein Tipp auf einen Spielzug
+oder ein Ereignis spielt den Clip ab, darunter steht wie bisher der Kommentar.
+
+Das ganze Spiel bleibt zusätzlich auf dem Server. Im Hinweis unter dem Clip gibt es
+den Knopf „Im ganzen Spiel ab hier". Szenen ohne Clip (zum Beispiel bei älteren
+Uploads) öffnen weiter das ganze Spiel an der Stelle.
+
+Clips sieht jede Spielerin nur bei Szenen, an denen sie beteiligt ist; für alle
+anderen sind sie gesperrt. Ein Tor aus einem grünen Spielzug teilt sich den Clip mit
+dem Spielzug.
+
+Geschnitten werden die Clips am PC in „Balu-Spielanalyse" (ohne Neukodieren, also
+schnell und ohne Qualitätsverlust). Bei einem erneuten Upload gehen nur geänderte
+oder neue Clips hoch; Clips gelöschter Szenen entfernt der Server selbst.
+
+Serverseitig neu: Tabelle `spiel_szene_clip`, Spalte `szene_key` an `spiel_event` und
+`spiel_zug` (die Migration läuft beim Start von selbst, bestehende Daten bleiben),
+Ordner `media/szenen/`.
+
+---
+
+## v0.47.2 — 2026-10-19
+
+**Spielzug anklicken: Video läuft, darunter steht der Kommentar.** Tippt man in der
+Spielanalyse auf eine Szene, startet das Spielvideo wie bisher kurz vor der Stelle.
+Neu ist der Kasten direkt unter dem Video: Er zeigt, worum es bei dieser Szene geht
+(zum Beispiel „Spielzug Kreisel – Fehler"), den Zeitraum und bei Spielzügen den
+Kommentar vom Trainer, so lange das Video läuft. Die Farbe am Rand entspricht der
+Ampel. Bei Szenen ohne Kommentar, etwa einem Tor, steht nur die Kurzbeschreibung da.
+Die Clip-Videos (Reiter „Videos") bleiben unverändert.
+
+Nur Oberfläche (`static/`), der Server ist nicht betroffen.
+
+---
+
+## v0.47.1 — 2026-10-19
+
+**Spielerinnen sehen deine Kommentare zu den Spielzügen.** In der Spielanalyse
+steht unter einem orangen oder roten Spielzug jetzt der Kommentar, den du beim
+Erfassen dazu geschrieben hast. Er erscheint bei allen Spielerinnen, die in diesem
+Spielzug mitgespielt haben, und nur dort. Wer nicht beteiligt war, sieht den
+Spielzug und den Kommentar nicht.
+
+Das ersetzt die Regel aus v0.47.0, nach der Kommentare nur für dich sichtbar waren.
+Geändert ist nur die Serverseite (`app.py`), ein Update der Datenbank ist nicht nötig.
+
+---
+
+## Playbook-Daten — 2026-10-18
+
+Der Spielzug **„Hopp (Auftakt)" heißt jetzt „Zack"** (Playbook → Allgemeine
+Spielzüge). Reine Datenänderung auf dem Server, Text und Einordnung der Seite
+sind unverändert, kein Deploy nötig. In der Seite „X" steht im Text noch
+„Auftakt/Hopp Variation auf Halb Position" – das ist Fließtext und wurde nicht
+angefasst.
+
+Die Playbook-Seiten **„X" und „Jugo-Lövgren" wurden gelöscht** (beide lagen unter
+„Allgemeine Spielzüge", keine hatte Unterseiten). Das Playbook hat jetzt 18 Seiten.
+Eine Kopie der beiden Texte liegt in `Balu-Spielanalyse/export/`.
+
+---
+
+## v0.47.0 — 2026-10-18
+
+**Spielanalyse im Spielerprofil.** Zu einem Spiel gibt es jetzt das ganze
+Spielvideo mit Zeitstempeln: Tore, Fehlwürfe, Ballverluste, Paraden, Strafen
+und Spielzüge. Im Profil einer Spielerin (Trainer: Kader → Spielerin, Spielerin:
+Reiter „Ich") erscheint der neue Block „Spielanalyse" mit ihrer Statistik pro
+Spiel und der Liste ihrer Szenen. Ein Tipp auf eine Szene öffnet das Spielvideo
+kurz vor dieser Stelle.
+
+Spielzüge haben eine Ampel: grün = Tor, orange = okay, rot = etwas
+Elementares ist schiefgelaufen. Spielerinnen sehen nur Szenen, an denen sie
+selbst beteiligt sind, und **keine** Trainer-Kommentare zu orange/roten
+Spielzügen. Es gibt weiterhin keine ELO und keine Rangliste in diesem Bereich.
+
+Erfasst und hochgeladen wird am PC mit der neuen App „Balu-Spielanalyse". Der
+Server nimmt das Video als Stream an (es wird nicht komplett in den Speicher
+gelesen) und legt es unter `media/spiele/` ab. Neue Tabellen: `spiel_analyse`,
+`spiel_event`, `spiel_zug`, `spiel_zug_spieler` (entstehen beim Start von selbst).
+
+**Wichtig beim Einspielen:** Diese Version ändert `app.py` und `db.py`, nicht nur
+`static/`. `deploy.sh` reicht dafür nicht – der volle Weg aus der README ist nötig,
+danach `elo.service` neu starten.
+
+---
+
 ## v0.46.0 — 2026-09-03
 
 **„Ansicht als" für das Trainerteam.** Auf der Startseite gibt es neben dem

@@ -7,12 +7,14 @@ user service. No external APIs.*
 
 ---
 
-Früher `Spieler-ELO`. ELO-System für die Trainingsspiele des Frauenteams.
-Jede Spielerin hat einen individuellen Spielstärke-Wert; daraus lassen sich per
-Knopfdruck faire Teams zusammenstellen. Ergebnisse werden im Training am Handy
-eingetippt, die ELOs werden nach Anytype zurückgeschrieben.
+Früher `Spieler-ELO`. Heute die zentrale App des Frauenteams: Zu- und Absagen,
+Trainingsplanung, Taktik-Wiki, Spielanalyse mit Video und – wie am Anfang – faire
+Teams per ELO für die Trainingsspiele. Spielerinnen sehen **keine ELO und keine
+Rangliste**; das ist Absicht.
 
-> Läuft komplett auf dem Homeserver — **keine LLM/API, keine laufenden Kosten.**
+> Läuft auf dem eigenen Homeserver, ohne laufende Kosten. Externe Dienste nur dort,
+> wo sie nötig sind: Verbandsdaten (Liga), SpielerPlus (Übergangsbrücke) und für den
+> Coach-Chat ein Sprach-/Sprachmodell-Anbieter (siehe `trainer.py`).
 
 ## Screenshots
 
@@ -25,6 +27,71 @@ Aufgenommen mit erfundenen Demo-Daten.
 Die aktuelle Version steht im Kopf der App und in
 **[CHANGELOG.md](CHANGELOG.md)** — dort gehört zu **jeder** neuen Version ein
 Eintrag, was geändert wurde (samt Checkliste für den Versions-Bump).
+
+## Was die App kann
+
+Die Rolle bestimmt, was man sieht: **Trainer** bekommen alles, **Spielerinnen** ihre
+eigenen Sachen. Die Rechte werden im Server erzwungen (`app.py`), nicht nur im
+Frontend ausgeblendet. Unten die sechs Bereiche der App.
+
+**Home** – Das nächste Training mit Zu-/Absage, die nächsten drei Spiele, Liga-Tabelle
+und Spielplan der Bezirksoberliga (Daten vom Verband, zwischengespeichert, mit
+Hinweis wenn die Quelle nicht erreichbar ist).
+
+**Ich** – Eigenes Profil mit Portrait, Trainingsquote und Spielstatistik; eigene
+Szenen-Videos und die Videoanalyse der Spiele (nur die eigenen Szenen, das ganze
+Spiel für alle).
+
+**Training** (Termine)
+- Trainings, Testspiele und Ligaspiele in einer Terminübersicht, farblich getrennt.
+- Zu-/Absage in der App (bei Absage mit Grund), Trainer tragen für andere ein; Namen
+  der noch Offenen sind sichtbar, Frühwarnung bei weniger als sechs Zusagen.
+- Push-Erinnerung an alle, die noch nicht geantwortet haben.
+- **Trainingsplan als Blöcke** (Dauer optional, Übungen aus der Sammlung übernehmbar),
+  nur für Trainer sichtbar.
+- **Coach-Chat:** aus Text oder Sprachnachricht einen Planvorschlag erzeugen.
+- **Automatische Termine:** Montag und Donnerstag legt der Server die Trainings der
+  nächsten 14 Tage selbst an (`trainings_termine.py`).
+- **Zu-/Absagen aus SpielerPlus:** siehe unten.
+
+**Team** – Kader mit Positionen, faire Teams für 2 bis 4 Mannschaften (ELO, Torhüterinnen
+verteilt), Ergebnis eintragen und rückgängig machen, Aufstellung auf dem Spielfeld,
+Nutzungs- und Fehlerübersicht (Geräte, App-Versionen).
+
+**Taktik** – Playbook/Wiki als Seitenbaum (Spielzüge, Überzahl, Unterzahl, Abwehr),
+Übungssammlung, pflegbar direkt in der App, auch offline.
+
+**Saison** – Spielanalyse je Spiel: Tore, Fehlwürfe, Spielzüge mit Ampel und Kommentar,
+Auswertung nach Spielerin und Position, Szenen als kurze Clips.
+
+**Querschnitt**
+- **Offline-first:** Service Worker, lokale Kopie und Outbox. Eingaben ohne Netz werden
+  nachgesendet, Wiederholungen sind idempotent.
+- Installierbar als PWA, auch als Android-App (TWA); Querformat fürs Tablet in der Halle.
+- Anmeldung per Name und PIN, gemeinsam genutzte Geräte werden beim Kontowechsel geleert.
+- Sichtbare Versionsnummer und gepflegter [Changelog](CHANGELOG.md).
+
+## SpielerPlus-Brücke
+
+Ziel ist, dass die App **alles selbst** kann und SpielerPlus überflüssig wird. Bis
+dahin holt `sp_import.py` die Zu-/Absagen der kommenden Trainings dorthin, damit
+niemand doppelt pflegen muss.
+
+- **Einbahnstraße:** SpielerPlus → App. Es wird nichts zurückgeschrieben.
+- **Die App ist die Wahrheit:** Antworten aus der App oder vom Trainer
+  (`quelle = app/trainer`) überschreibt der Import nie. Er ändert nur Antworten, die
+  selbst aus SpielerPlus stammen. Das ist ein bedingter Upsert in `db.teilnahme_spiegeln`.
+- **Kein Datenverlust:** Liefert SpielerPlus für einen Termin keine Namen, wird er
+  übersprungen. Es wird nie ein Training gelöscht.
+- **Austauschbar:** Nur `sp_import.py` kennt SpielerPlus. Zum Abschalten reichen diese
+  Datei, der Cronjob und der Knopf „Aus SpielerPlus aktualisieren“.
+- **Zuordnung** über `spieler.spielerplus_id`. Spielerinnen ohne Eintrag meldet der
+  Lauf im Log.
+
+Zeitplan am Server (Berlin-Zeit): 06:00 Trainings der nächsten 14 Tage anlegen,
+06:10 Abgleich, an Trainingstagen zusätzlich 12:00, 16:00 und 18:30. Der Job
+schreibt seinen Status für Home Assistant. Zugangsdaten stehen in der `.env`
+des Sync-Ordners (`SP_SYNC_DIR`, Standard `~/anytype-sync`).
 
 ## Aufbau
 
@@ -40,7 +107,12 @@ Eintrag, was geändert wurde (samt Checkliste für den Versions-Bump).
 | `portraits.py`    | Baut aus den Originalen die Bilder für die App              |
 | `make_icons.py`   | Erzeugt die PWA-Icons                                        |
 | `demo.py`         | End-to-End-Test des Kerns ohne Server                       |
-| *(geplant)*       | Anytype-Sync, Import der Spielerinnen, Deployment            |
+| `trainings_termine.py` | Legt Trainings aus dem Wochenmuster an (Mo/Do), idempotent |
+| `sp_import.py`    | Brücke: Zu-/Absagen aus SpielerPlus übernehmen              |
+| `liga.py`         | Liga-Tabelle und Spielplan vom Verband (mit Zwischenspeicher)|
+| `trainer.py`      | Coach-Chat: Trainingsplan aus Text/Sprache                  |
+| `anytype_sync.py` | Alt-Anbindung an Anytype (läuft aus)                         |
+| `tests/`          | Tests (`py tests/<name>_test.py`, `node tests/*.test.mjs`)  |
 
 ## Starten (lokal zum Ausprobieren)
 
@@ -70,6 +142,7 @@ unter `http://homeserver:8200` bzw. über Tailscale von unterwegs.
 | POST    | `/api/trainings/{tid}/teilnahme` | Eigene Zu-/Absage (Grund bei Absage Pflicht) |
 | POST    | `/api/trainings/{tid}/teilnahme/{spieler_id}` | Trainer trägt für eine Spielerin ein; `status: "offen"` setzt zurück |
 | POST    | `/api/trainings/{tid}/loeschen` | Termin löschen (Trainer)  |
+| POST    | `/api/spielerplus-abgleich` | Zu-/Absagen jetzt aus SpielerPlus holen (Trainer, höchstens alle 45 s) |
 | POST    | `/api/trainings/{tid}/blocks` | Trainingsplan als Blöcke setzen (Trainer) |
 | POST    | `/api/trainings/{tid}/blocks/aus-text` | Alten Plantext in Blöcke zerlegen |
 | GET     | `/api/clips`     | Szenen-Videos (Spielerin: nur eigene, Trainer: alle) |
@@ -285,5 +358,11 @@ unterwegs **Tailscale** (kostenlos):
 ## Test
 
 ```bash
-python demo.py
+python demo.py                      # Kern ohne Server
+py tests/sp_import_test.py          # SpielerPlus-Import (ohne Netz)
+py tests/liga_test.py
+py tests/analyse_test.py
+py tests/nutzung_test.py
+node tests/offline.test.mjs
+node tests/teams.test.mjs
 ```

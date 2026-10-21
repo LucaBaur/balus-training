@@ -1117,6 +1117,20 @@ button:active { transform: scale(.98); }
 }
 
 .vd-meta { color: var(--grau); font-size: 0.9rem; margin: 2px 0 10px; }
+/* Hinweis unter dem Spielvideo: was bei dieser Szene los war + Kommentar der Trainerin */
+.vd-notiz:empty { display: none; }
+.vd-notiz {
+  margin-top: 12px; padding: 12px 14px; background: var(--karte); border-radius: 12px;
+  border-left: 5px solid var(--unent); box-shadow: 0 1px 2px rgba(0,0,0,.05);
+}
+.vd-notiz.gruen { border-left-color: #1f9d55; } .vd-notiz.orange { border-left-color: #d9890b; }
+.vd-notiz.rot { border-left-color: var(--warn); }
+.vd-notiz .vn-titel { font-weight: 700; }
+.vd-notiz .vn-meta { color: var(--grau); font-size: 0.82rem; margin-top: 2px; }
+.vd-notiz .vn-voll { margin-top: 12px; }
+.vd-notiz .vn-kommentar { margin: 8px 0 0; white-space: pre-wrap; line-height: 1.4; }
+.vd-notiz .vn-label { display: block; margin-top: 10px; font-size: 0.68rem; letter-spacing: .12em;
+  text-transform: uppercase; font-weight: 800; color: var(--grau); }
 .vd-player {
   width: 100%; max-height: 70vh; background: #000;
   border-radius: 12px; display: block;
@@ -1137,3 +1151,100 @@ button:active { transform: scale(.98); }
 @media (min-width: 760px) {
   .videos-liste { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ---- Spielanalyse (Statistik + Szenen im Spielerprofil) ---------------- */
+.profil-analyse { margin-top: 14px; }
+.an-spiel { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--linie); }
+.an-spiel:first-of-type { border-top: 0; padding-top: 0; }
+.an-titel { font-weight: 700; display: flex; align-items: baseline; gap: 8px; }
+.an-titel small { color: var(--grau); font-weight: 500; }
+.an-kacheln { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 6px; }
+.an-kachel {
+  background: var(--flaeche); border-radius: 10px; padding: 5px 10px; font-size: 0.78rem; color: var(--grau);
+  display: inline-flex; align-items: baseline; gap: 5px;
+}
+.an-kachel b { color: var(--text); font-size: 1.05rem; }
+.an-ampel { font-size: 0.82rem; color: var(--grau); display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.an-p { min-width: 24px; text-align: center; border-radius: 999px; padding: 1px 8px; font-weight: 700; color: #fff; }
+.an-p.gruen { background: #1f9d55; } .an-p.orange { background: #d9890b; } .an-p.rot { background: var(--warn); }
+.an-szenen { display: grid; gap: 4px; margin-top: 6px; }
+.an-szene {
+  display: grid; grid-template-columns: 14px 1fr auto; gap: 10px; align-items: start; text-align: left;
+  width: 100%; border: 0; background: var(--flaeche); border-radius: 10px; padding: 9px 11px;
+  font: inherit; color: inherit; cursor: pointer;
+}
+.an-szene:active { background: var(--linie); }
+.an-text small { display: block; color: var(--grau); font-size: 0.78rem; margin-top: 2px; }
+.an-zeit { color: var(--grau); font-variant-numeric: tabular-nums; font-size: 0.82rem; }
+.an-punkt { width: 11px; height: 11px; border-radius: 50%; margin-top: 4px; background: var(--unent); }
+.an-punkt.gruen { background: #1f9d55; } .an-punkt.orange { background: #d9890b; } .an-punkt.rot { background: var(--warn); }
+
+/* Statistik Spiele (Saison) */
+.stat-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.chip-btn { border: 0; background: var(--flaeche); color: var(--text); border-radius: 999px; padding: 6px 14px; font: inherit; cursor: pointer; }
+.chip-btn.aktiv { background: var(--tvg); color: #fff; }
+#view-statspiele h3 { margin: 18px 0 6px; }
+.stat-scroll { overflow-x: auto; }
+.stat-tab { border-collapse: collapse; width: 100%; font-size: 0.88rem; background: var(--karte); border-radius: 10px; }
+.stat-tab th, .stat-tab td { padding: 7px 8px; border-bottom: 1px solid var(--linie); text-align: left; white-space: nowrap; }
+.stat-tab th { color: var(--grau); font-weight: 600; font-size: 0.78rem; }
+.stat-tab .r { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Nutzung (Team) */
+.nutz-karte { background: var(--karte); border-radius: 12px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(14,28,51,.06); }
+.nutz-karte summary {
+  display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 11px 13px;
+  cursor: pointer; list-style: none;
+}
+.nutz-karte summary::-webkit-details-marker { display: none; }
+.nk-name { font-weight: 700; }
+.nk-zuletzt { color: var(--grau); font-size: 0.85rem; text-align: right; }
+.nk-zahlen { grid-column: 1 / -1; color: var(--grau); font-size: 0.85rem; }
+.nk-zahlen b { color: var(--text); }
+.nutz-karte.nie .nk-name, .nutz-karte.nie .nk-zuletzt { color: var(--grau); font-weight: 600; }
+.nk-detail { padding: 0 13px 12px; border-top: 1px solid var(--linie); }
+.nk-detail h4 { margin: 10px 0 4px; font-size: 0.75rem; color: var(--grau); text-transform: uppercase; letter-spacing: .04em; }
+.nk-zeile { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; font-size: 0.9rem; }
+.nk-zeile small { display: block; color: var(--grau); font-size: 0.76rem; }
+.nutz-h { margin: 18px 0 6px; font-size: 0.95rem; }
+.nk-fehler { font-weight: 600; font-size: 0.88rem; word-break: break-word; }
+.nutz-karte.fehler { border-left: 3px solid var(--warn); }
+.nk-zahlen .alt, .nk-zeile small.alt { color: var(--warn); }
+
+/* Ich -> Videos: Spiele, Videoanalyse; Mein Profil: Spielstatistik */
+.videos-h { margin: 14px 0 6px; font-size: 0.95rem; }
+.videos-h:first-child { margin-top: 2px; }
+#analyse-ganzes { width: 100%; margin: 4px 0 6px; }
+.stat-zeile {
+  display: block; width: 100%; text-align: left; border: 0; background: var(--flaeche);
+  border-radius: 10px; padding: 9px 11px; font: inherit; color: inherit; cursor: pointer; margin-top: 6px;
+}
+.stat-zeile:active { background: var(--linie); }
+.sz-titel { font-weight: 700; display: flex; justify-content: space-between; gap: 8px; }
+.sz-titel small { color: var(--grau); font-weight: 400; }
+.stat-zeile .an-kacheln, .stat-summe .an-kacheln { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px; }
+.stat-summe { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--linie); }
+
+/* Liga (Home -> Liga) */
+.liga-scroll { overflow-x: auto; }
+.liga-tab { width: 100%; border-collapse: collapse; font-size: 0.78rem; background: var(--karte); border-radius: 10px; }
+.liga-tab th, .liga-tab td { padding: 6px 3px; border-bottom: 1px solid var(--linie); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.liga-tab th:nth-child(2), .liga-tab td:nth-child(2) { text-align: left; white-space: normal; }
+.liga-tab th { color: var(--grau); font-size: 0.72rem; font-weight: 600; }
+.liga-tab tr.eigen td { background: #E3ECF8; font-weight: 700; }
+.ls-fuss { font-size: 0.76rem; color: var(--grau); margin: 6px 0 0; }
+.liga-spiel { background: var(--karte); border-radius: 12px; padding: 9px 12px; margin-bottom: 8px; border-left: 4px solid var(--linie); box-shadow: 0 1px 3px rgba(14,28,51,.06); }
+.liga-spiel.S { border-left-color: #1f9d55; }
+.liga-spiel.N { border-left-color: var(--warn); }
+.liga-spiel.U { border-left-color: #d9890b; }
+.ls-kopf { display: flex; gap: 8px; align-items: baseline; font-size: 0.78rem; color: var(--grau); }
+.ls-ort { margin-left: auto; text-transform: uppercase; letter-spacing: .06em; font-size: 0.68rem; font-weight: 700; }
+.ls-live { background: var(--warn); color: #fff; border-radius: 999px; padding: 0 7px; font-size: 0.68rem; font-weight: 800; }
+.ls-teams { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: center; margin-top: 4px; font-size: 0.92rem; }
+.ls-teams span:last-child { text-align: right; }
+.ls-teams .eigen { font-weight: 800; }
+.ls-erg { font-variant-numeric: tabular-nums; font-size: 1.05rem; text-align: center; }
+.ls-meta { margin-top: 4px; font-size: 0.76rem; color: var(--grau); }
+.liga-mehr summary { cursor: pointer; color: var(--tvg); font-weight: 600; font-size: 0.88rem; margin: 4px 0 8px; }
+.liga-tab th:first-child, .liga-tab td:first-child { padding-left: 8px; }
+.liga-tab th:last-child, .liga-tab td:last-child { padding-right: 8px; }

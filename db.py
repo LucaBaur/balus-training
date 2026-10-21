@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import elo
@@ -206,6 +206,118 @@ CREATE TABLE IF NOT EXISTS video_clip_spieler (
     spieler_id INTEGER NOT NULL REFERENCES spieler(id)    ON DELETE CASCADE,
     PRIMARY KEY (clip_id, spieler_id)
 );
+
+-- Spielanalysen: ganzes Spielvideo + Zeitstempel, erfasst am PC (Projekt
+-- "Balu-Spielanalyse"). 'extern_id' ist die ID der Desktop-App; ein erneuter
+-- Upload desselben Spiels ersetzt Ereignisse/Spielzuege statt zu verdoppeln.
+-- Die Videodatei liegt unter media/spiele/ ('datei' = reiner Dateiname, NULL
+-- solange nur die Daten hochgeladen sind).
+CREATE TABLE IF NOT EXISTS spiel_analyse (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    extern_id    TEXT    NOT NULL UNIQUE,
+    gegner       TEXT    NOT NULL,
+    datum        TEXT,                                   -- YYYY-MM-DD
+    art          TEXT,
+    datei        TEXT,
+    erstellt_von INTEGER REFERENCES benutzer(id) ON DELETE SET NULL,
+    erstellt_am  TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Ereignisse der EIGENEN Mannschaft: tor, fehlwurf, ballverlust, strafe,
+-- siebenmeter, parade. t = Sekunden im Video.
+CREATE TABLE IF NOT EXISTS spiel_event (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    analyse_id INTEGER NOT NULL REFERENCES spiel_analyse(id) ON DELETE CASCADE,
+    typ        TEXT    NOT NULL,
+    t          REAL    NOT NULL,
+    spieler_id INTEGER REFERENCES spieler(id) ON DELETE SET NULL,
+    assist_id  INTEGER REFERENCES spieler(id) ON DELETE SET NULL,
+    detail     TEXT,
+    szene_key  TEXT                                      -- Kennung der Szene (-> spiel_szene_clip)
+);
+
+-- Spielzuege mit Ampel (gruen = Tor, orange = ok, rot = elementarer Fehler).
+CREATE TABLE IF NOT EXISTS spiel_zug (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    analyse_id INTEGER NOT NULL REFERENCES spiel_analyse(id) ON DELETE CASCADE,
+    name       TEXT    NOT NULL,
+    t_start    REAL    NOT NULL,
+    t_ende     REAL    NOT NULL,
+    ampel      TEXT    NOT NULL,
+    kommentar  TEXT,
+    szene_key  TEXT
+);
+
+-- Kurze Clips je Szene (am PC aus dem Spielvideo geschnitten). Zugeordnet wird ueber
+-- 'szene_key', nicht ueber die Zeilen-ID: Daten-Uploads ersetzen Ereignisse/Spielzuege,
+-- die Clips bleiben davon unberuehrt. 'von'/'bis' = Ausschnitt im Spielvideo (Sekunden),
+-- damit die Desktop-App erkennt, ob ein Clip nach einer Korrektur neu geschnitten werden muss.
+CREATE TABLE IF NOT EXISTS spiel_szene_clip (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    analyse_id  INTEGER NOT NULL REFERENCES spiel_analyse(id) ON DELETE CASCADE,
+    szene_key   TEXT    NOT NULL,
+    datei       TEXT    NOT NULL,                        -- Dateiname in media/szenen/
+    von         REAL    NOT NULL,
+    bis         REAL    NOT NULL,
+    erstellt_am TEXT    NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (analyse_id, szene_key)
+);
+
+CREATE TABLE IF NOT EXISTS spiel_zug_spieler (
+    zug_id     INTEGER NOT NULL REFERENCES spiel_zug(id) ON DELETE CASCADE,
+    spieler_id INTEGER NOT NULL REFERENCES spieler(id)   ON DELETE CASCADE,
+    PRIMARY KEY (zug_id, spieler_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_spiel_event_analyse ON spiel_event(analyse_id);
+CREATE INDEX IF NOT EXISTS idx_spiel_zug_analyse   ON spiel_zug(analyse_id);
+
+-- Nutzung: wer wann die App geoeffnet, welchen Bereich besucht, welches Video
+-- angesehen hat. Nur fuer die Trainer-Seite "Team -> Nutzung". Keine IP, keine
+-- Geraetedaten. 'zeit' ist UTC. 'ziel' ist je nach Typ ein Bereich ("ich/videos")
+-- oder ein Video ("clip:5", "szene:12", "spiel:3"); 'info' haelt den Titel zum
+-- Zeitpunkt des Ansehens, damit er auch nach dem Loeschen des Videos lesbar bleibt.
+CREATE TABLE IF NOT EXISTS nutzung (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    benutzer_id INTEGER NOT NULL REFERENCES benutzer(id) ON DELETE CASCADE,
+    zeit        TEXT    NOT NULL DEFAULT (datetime('now')),
+    typ         TEXT    NOT NULL,                        -- besuch | bereich | video
+    ziel        TEXT,
+    info        TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_nutzung_benutzer ON nutzung(benutzer_id, zeit);
+
+-- Geraete: je Konto und Geraetekombination eine Zeile (grobe Angaben, damit
+-- Fehler zu Android/iOS/Browser-Versionen passen). Keine Kennungen, keine IP,
+-- kein Standort. Bei jedem Besuch wird 'zuletzt' und die App-Version aufgefrischt.
+CREATE TABLE IF NOT EXISTS geraet (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    benutzer_id INTEGER NOT NULL REFERENCES benutzer(id) ON DELETE CASCADE,
+    os          TEXT    NOT NULL DEFAULT '',             -- "Android 13", "iOS 17"
+    browser     TEXT    NOT NULL DEFAULT '',             -- "Chrome 126", "Safari 17"
+    modus       TEXT    NOT NULL DEFAULT '',             -- installiert | Browser | Android-App
+    bildschirm  TEXT    NOT NULL DEFAULT '',             -- "412x915"
+    modell      TEXT    NOT NULL DEFAULT '',             -- nur wenn der Browser es nennt
+    app_version TEXT    NOT NULL DEFAULT '',
+    sw          INTEGER NOT NULL DEFAULT 0,              -- Service Worker aktiv
+    erstmals    TEXT    NOT NULL DEFAULT (datetime('now')),
+    zuletzt     TEXT    NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (benutzer_id, os, browser, modus, bildschirm, modell)
+);
+
+-- Fehlerberichte aus der App (JavaScript-Fehler, Videos die nicht laden).
+-- 'geraet' ist eine Kurzfassung zum Zeitpunkt des Fehlers.
+CREATE TABLE IF NOT EXISTS fehler (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    benutzer_id INTEGER NOT NULL REFERENCES benutzer(id) ON DELETE CASCADE,
+    zeit        TEXT    NOT NULL DEFAULT (datetime('now')),
+    quelle      TEXT,                                    -- script | promise | video
+    meldung     TEXT    NOT NULL,
+    ort         TEXT,                                    -- Bereich, z. B. "ich/videos"
+    app_version TEXT,
+    geraet      TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_fehler_zeit ON fehler(zeit);
 """
 
 
@@ -249,6 +361,8 @@ def _migriere(conn: sqlite3.Connection) -> None:
     # gefuellt (die ersten beiden), damit alte Zeilen und Abfragen gueltig
     # bleiben. Beim Lesen gewinnt 'teams', wenn es gesetzt ist.
     _spalte_ergaenzen(conn, "spiele", "teams", "TEXT")
+    _spalte_ergaenzen(conn, "spiel_event", "szene_key", "TEXT")
+    _spalte_ergaenzen(conn, "spiel_zug", "szene_key", "TEXT")
     # Partieller Unique-Index: derselbe Token kann nur EIN Spiel erzeugen,
     # aber alte Zeilen ohne Token (NULL) kollidieren nicht miteinander.
     conn.execute(
@@ -916,6 +1030,40 @@ def teilnahme_setzen(conn: sqlite3.Connection, training_id: int, spieler_id: int
     conn.commit()
 
 
+# Quellen, die nur SPIEGEL eines Fremdsystems sind. Alles andere ('app',
+# 'trainer') ist eine bewusste Eingabe in dieser App und bleibt unangetastet.
+SPIEGEL_QUELLEN = ("spielerplus", "anytype")
+
+
+def teilnahme_spiegeln(conn: sqlite3.Connection, training_id: int, spieler_id: int,
+                       status: str) -> bool:
+    """Antwort aus einem Fremdsystem (SpielerPlus) uebernehmen - OHNE eine
+    Eingabe aus der App zu ueberschreiben. Liefert False, wenn die Spielerin
+    schon selbst (app) oder durch den Trainer geantwortet hat. Kein Commit:
+    der Aufrufer committet einmal pro Lauf."""
+    cur = conn.execute(
+        "INSERT INTO training_teilnahme (training_id, spieler_id, status, grund, quelle) "
+        "VALUES (?,?,?,NULL,'spielerplus') "
+        "ON CONFLICT(training_id, spieler_id) DO UPDATE SET "
+        "  status = excluded.status, grund = NULL, quelle = 'spielerplus' "
+        "WHERE training_teilnahme.quelle IN ('spielerplus', 'anytype')",
+        (training_id, spieler_id, status),
+    )
+    return cur.rowcount > 0
+
+
+def teilnahme_spiegel_entfernen(conn: sqlite3.Connection, training_id: int,
+                                spieler_id: int) -> bool:
+    """Gespiegelte Antwort entfernen (in SpielerPlus wieder 'offen'). Eingaben
+    aus der App bleiben. Kein Commit."""
+    cur = conn.execute(
+        "DELETE FROM training_teilnahme WHERE training_id = ? AND spieler_id = ? "
+        "AND quelle IN ('spielerplus', 'anytype')",
+        (training_id, spieler_id),
+    )
+    return cur.rowcount > 0
+
+
 def teilnahme_loeschen(conn: sqlite3.Connection, training_id: int,
                        spieler_id: int) -> None:
     """Antwort zuruecksetzen auf 'noch offen' (Trainer-Korrektur). Ohne Zeile
@@ -1293,3 +1441,356 @@ def clip_loeschen(conn: sqlite3.Connection, clip_id: int) -> str | None:
     conn.execute("DELETE FROM video_clip WHERE id = ?", (clip_id,))
     conn.commit()
     return r["datei"]
+
+
+# ------------------------------------------------------------ Spielanalysen ----
+#  Ganzes Spielvideo + Ereignisse/Spielzuege aus "Balu-Spielanalyse".
+
+def analyse_speichern(conn: sqlite3.Connection, extern_id: str, gegner: str,
+                      datum: str | None, art: str | None, events: list[dict],
+                      zuege: list[dict], erstellt_von: int | None) -> int:
+    """Legt die Analyse an oder ersetzt Ereignisse/Spielzuege einer vorhandenen
+    (gleiche extern_id). Das Video bleibt dabei erhalten. Spielerinnen-IDs, die
+    es hier nicht gibt, werden zu NULL bzw. fallen aus der Zuordnung."""
+    gueltig = {r["id"] for r in conn.execute("SELECT id FROM spieler")}
+    sp = lambda x: x if x in gueltig else None          # noqa: E731
+    r = conn.execute("SELECT id FROM spiel_analyse WHERE extern_id = ?", (extern_id,)).fetchone()
+    if r:
+        aid = int(r["id"])
+        conn.execute("UPDATE spiel_analyse SET gegner = ?, datum = ?, art = ? WHERE id = ?",
+                     (gegner, datum, art, aid))
+        conn.execute("DELETE FROM spiel_event WHERE analyse_id = ?", (aid,))
+        conn.execute("DELETE FROM spiel_zug WHERE analyse_id = ?", (aid,))   # Kaskade -> Zuordnung
+    else:
+        cur = conn.execute(
+            "INSERT INTO spiel_analyse (extern_id, gegner, datum, art, erstellt_von) VALUES (?,?,?,?,?)",
+            (extern_id, gegner, datum, art, erstellt_von))
+        aid = int(cur.lastrowid)
+    conn.executemany(
+        "INSERT INTO spiel_event (analyse_id, typ, t, spieler_id, assist_id, detail, szene_key) "
+        "VALUES (?,?,?,?,?,?,?)",
+        [(aid, e["typ"], e["t"], sp(e.get("spieler_id")), sp(e.get("assist_id")), e.get("detail"),
+          e.get("key")) for e in events])
+    for z in zuege:
+        cur = conn.execute(
+            "INSERT INTO spiel_zug (analyse_id, name, t_start, t_ende, ampel, kommentar, szene_key) "
+            "VALUES (?,?,?,?,?,?,?)",
+            (aid, z["name"], z["t_start"], z["t_ende"], z["ampel"], z.get("kommentar") or None,
+             z.get("key")))
+        conn.executemany(
+            "INSERT OR IGNORE INTO spiel_zug_spieler (zug_id, spieler_id) VALUES (?, ?)",
+            [(int(cur.lastrowid), s) for s in z.get("spieler_ids", []) if s in gueltig])
+    conn.commit()
+    return aid
+
+
+def analyse_datei_setzen(conn: sqlite3.Connection, aid: int, datei: str) -> str | None:
+    """Setzt den Videodateinamen und gibt den alten zurueck (zum Aufraeumen)."""
+    r = conn.execute("SELECT datei FROM spiel_analyse WHERE id = ?", (aid,)).fetchone()
+    alt = r["datei"] if r else None
+    conn.execute("UPDATE spiel_analyse SET datei = ? WHERE id = ?", (datei, aid))
+    conn.commit()
+    return alt
+
+
+def analyse_nach_id(conn: sqlite3.Connection, aid: int) -> dict | None:
+    r = conn.execute("SELECT * FROM spiel_analyse WHERE id = ?", (aid,)).fetchone()
+    return dict(r) if r else None
+
+
+def analysen_liste(conn: sqlite3.Connection, spieler_id: int | None = None,
+                   alle: bool = False) -> list[dict]:
+    """Alle Analysen (Trainer) oder nur die, in denen die Spielerin vorkommt.
+    Mit `alle=True` (und spieler_id) kommen ALLE Analysen, dazu je Spiel die
+    Zahl der Ereignisse (`meine_events`) und Spielzuege (`meine_zuege`), an denen
+    die Spielerin beteiligt ist - 0/0 heisst: sie kommt nicht vor."""
+    sql = ("SELECT a.id, a.gegner, a.datum, a.art, a.datei IS NOT NULL AS video_da, "
+           "(SELECT COUNT(*) FROM spiel_event e WHERE e.analyse_id = a.id) AS events, "
+           "(SELECT COUNT(*) FROM spiel_zug z WHERE z.analyse_id = a.id) AS zuege")
+    params: tuple = ()
+    if spieler_id is not None and alle:
+        sql += (", (SELECT COUNT(*) FROM spiel_event e WHERE e.analyse_id = a.id "
+                "AND (e.spieler_id = ?1 OR e.assist_id = ?1)) AS meine_events, "
+                "(SELECT COUNT(*) FROM spiel_zug z JOIN spiel_zug_spieler s ON s.zug_id = z.id "
+                "WHERE z.analyse_id = a.id AND s.spieler_id = ?1) AS meine_zuege")
+        params = (spieler_id,)
+    sql += " FROM spiel_analyse a"
+    if spieler_id is not None and not alle:
+        sql += (" WHERE EXISTS (SELECT 1 FROM spiel_event e WHERE e.analyse_id = a.id "
+                "AND (e.spieler_id = ?1 OR e.assist_id = ?1)) "
+                "OR EXISTS (SELECT 1 FROM spiel_zug z JOIN spiel_zug_spieler s ON s.zug_id = z.id "
+                "WHERE z.analyse_id = a.id AND s.spieler_id = ?1)")
+        params = (spieler_id,)
+    sql += " ORDER BY COALESCE(a.datum, '') DESC, a.id DESC"
+    return [dict(r) | {"video_da": bool(r["video_da"])} for r in conn.execute(sql, params)]
+
+
+def analyse_inhalt(conn: sqlite3.Connection, aid: int,
+                   spieler_id: int | None = None) -> dict:
+    """Ereignisse + Spielzuege einer Analyse; mit spieler_id nur die, an denen
+    die Spielerin beteiligt ist (Torschuetzin/Vorlage bzw. im Spielzug)."""
+    ev_sql = ("SELECT e.id, e.typ, e.t, e.spieler_id, e.assist_id, e.detail, c.id AS clip_id "
+              "FROM spiel_event e LEFT JOIN spiel_szene_clip c "
+              "ON c.analyse_id = e.analyse_id AND c.szene_key = e.szene_key "
+              "WHERE e.analyse_id = ?")
+    ev_par: list = [aid]
+    if spieler_id is not None:
+        ev_sql += " AND (e.spieler_id = ? OR e.assist_id = ?)"
+        ev_par += [spieler_id, spieler_id]
+    events = [dict(r) for r in conn.execute(ev_sql + " ORDER BY e.t", ev_par)]
+
+    zuege = [dict(r) for r in conn.execute(
+        "SELECT z.id, z.name, z.t_start, z.t_ende, z.ampel, z.kommentar, c.id AS clip_id "
+        "FROM spiel_zug z LEFT JOIN spiel_szene_clip c "
+        "ON c.analyse_id = z.analyse_id AND c.szene_key = z.szene_key "
+        "WHERE z.analyse_id = ? ORDER BY z.t_start", (aid,))]
+    zuord: dict[int, list[int]] = {}
+    for r in conn.execute(
+            "SELECT s.zug_id, s.spieler_id FROM spiel_zug_spieler s "
+            "JOIN spiel_zug z ON z.id = s.zug_id WHERE z.analyse_id = ?", (aid,)):
+        zuord.setdefault(r["zug_id"], []).append(r["spieler_id"])
+    for z in zuege:
+        z["spieler_ids"] = zuord.get(z["id"], [])
+    if spieler_id is not None:
+        zuege = [z for z in zuege if spieler_id in z["spieler_ids"]]
+    return {"events": events, "zuege": zuege}
+
+
+def analyse_loeschen(conn: sqlite3.Connection, aid: int) -> tuple[str, list[str]] | None:
+    """Loescht die Analyse (Kaskade). Gibt Videodatei und Clip-Dateien zurueck, damit der
+    Aufrufer sie von der Platte entfernen kann; None, wenn es die Analyse nicht gibt."""
+    r = conn.execute("SELECT datei FROM spiel_analyse WHERE id = ?", (aid,)).fetchone()
+    if not r:
+        return None
+    clips = [x["datei"] for x in conn.execute(
+        "SELECT datei FROM spiel_szene_clip WHERE analyse_id = ?", (aid,))]
+    conn.execute("DELETE FROM spiel_analyse WHERE id = ?", (aid,))     # Kaskade
+    conn.commit()
+    return (r["datei"] or ""), clips
+
+
+# ---- Szenen-Clips ---------------------------------------------------------------
+
+def szene_clips_liste(conn: sqlite3.Connection, aid: int) -> list[dict]:
+    return [dict(r) for r in conn.execute(
+        "SELECT id, szene_key AS key, von, bis FROM spiel_szene_clip "
+        "WHERE analyse_id = ? ORDER BY szene_key", (aid,))]
+
+
+def szene_clip_speichern(conn: sqlite3.Connection, aid: int, key: str, datei: str,
+                         von: float, bis: float) -> str | None:
+    """Legt den Clip an oder ersetzt ihn. Gibt den Namen der ALTEN Datei zurueck (oder None)."""
+    alt = conn.execute("SELECT datei FROM spiel_szene_clip WHERE analyse_id = ? AND szene_key = ?",
+                       (aid, key)).fetchone()
+    conn.execute(
+        "INSERT INTO spiel_szene_clip (analyse_id, szene_key, datei, von, bis) VALUES (?,?,?,?,?) "
+        "ON CONFLICT (analyse_id, szene_key) DO UPDATE SET datei = excluded.datei, "
+        "von = excluded.von, bis = excluded.bis, erstellt_am = datetime('now')",
+        (aid, key, datei, von, bis))
+    conn.commit()
+    return alt["datei"] if alt else None
+
+
+def szene_clip_nach_id(conn: sqlite3.Connection, cid: int) -> dict | None:
+    r = conn.execute("SELECT * FROM spiel_szene_clip WHERE id = ?", (cid,)).fetchone()
+    return dict(r) if r else None
+
+
+def szene_clip_darf(conn: sqlite3.Connection, cid: int, spieler_id: int) -> bool:
+    """Eine Spielerin darf den Clip sehen, wenn sie an mindestens einer Szene mit dieser
+    Kennung beteiligt ist (Spielzug-Mitspielerin bzw. Schuetzin/Vorlage/Betroffene)."""
+    r = conn.execute(
+        "SELECT 1 FROM spiel_szene_clip c WHERE c.id = ?1 AND ("
+        " EXISTS (SELECT 1 FROM spiel_event e WHERE e.analyse_id = c.analyse_id "
+        "         AND e.szene_key = c.szene_key AND (e.spieler_id = ?2 OR e.assist_id = ?2))"
+        " OR EXISTS (SELECT 1 FROM spiel_zug z JOIN spiel_zug_spieler s ON s.zug_id = z.id "
+        "            WHERE z.analyse_id = c.analyse_id AND z.szene_key = c.szene_key "
+        "            AND s.spieler_id = ?2))", (cid, spieler_id)).fetchone()
+    return r is not None
+
+
+def szene_clips_aufraeumen(conn: sqlite3.Connection, aid: int, keys: set[str]) -> list[str]:
+    """Entfernt Clips, deren Szene es nicht mehr gibt. Gibt deren Dateinamen zurueck."""
+    weg = [r for r in conn.execute(
+        "SELECT id, szene_key, datei FROM spiel_szene_clip WHERE analyse_id = ?", (aid,))
+        if r["szene_key"] not in keys]
+    for r in weg:
+        conn.execute("DELETE FROM spiel_szene_clip WHERE id = ?", (r["id"],))
+    conn.commit()
+    return [r["datei"] for r in weg]
+
+
+# ---------------------------------------------------------------- Nutzung ----
+#  Siehe Tabelle 'nutzung'. Gespeichert wird fuer jedes Konto; ausgewertet
+#  werden nur die Spielerinnen-Konten (Trainer testen die App staendig selbst).
+
+NUTZUNG_TYPEN = ("besuch", "bereich", "video")
+NUTZUNG_BESUCH_PAUSE_MIN = 30      # mehrere Besuche innerhalb dieser Zeit zaehlen einmal
+NUTZUNG_MAX_PRO_ANFRAGE = 50
+
+
+def nutzung_speichern(conn: sqlite3.Connection, benutzer_id: int,
+                      ereignisse: list[dict]) -> int:
+    """Speichert Ereignisse ({typ, ziel, info}); Unbekanntes wird verworfen.
+    Ein 'besuch' innerhalb der Pause nach dem letzten Besuch zaehlt nicht
+    (die App meldet beim Zurueckkehren oft kurz hintereinander). Gibt die
+    Anzahl gespeicherter Ereignisse zurueck."""
+    gespeichert = 0
+    besuch_schon_da = bool(conn.execute(
+        "SELECT 1 FROM nutzung WHERE benutzer_id = ? AND typ = 'besuch' "
+        "AND zeit > datetime('now', ?)",
+        (benutzer_id, f"-{NUTZUNG_BESUCH_PAUSE_MIN} minutes")).fetchone())
+    for e in ereignisse[:NUTZUNG_MAX_PRO_ANFRAGE]:
+        typ = e.get("typ")
+        if typ not in NUTZUNG_TYPEN:
+            continue
+        if typ == "besuch":
+            if besuch_schon_da:
+                continue
+            besuch_schon_da = True
+        ziel = (str(e["ziel"])[:60] if e.get("ziel") else None)
+        info = (str(e["info"])[:120] if e.get("info") else None)
+        conn.execute("INSERT INTO nutzung (benutzer_id, typ, ziel, info) VALUES (?, ?, ?, ?)",
+                     (benutzer_id, typ, ziel, info))
+        gespeichert += 1
+    conn.commit()
+    return gespeichert
+
+
+def geraet_speichern(conn: sqlite3.Connection, benutzer_id: int, g: dict) -> None:
+    """Merkt sich ein Geraet des Kontos (oder frischt 'zuletzt'/App-Version auf)."""
+    def t(k: str, n: int) -> str:
+        return str(g.get(k) or "").strip()[:n]
+    conn.execute(
+        "INSERT INTO geraet (benutzer_id, os, browser, modus, bildschirm, modell, app_version, sw) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
+        "ON CONFLICT(benutzer_id, os, browser, modus, bildschirm, modell) "
+        "DO UPDATE SET zuletzt = datetime('now'), app_version = excluded.app_version, "
+        "              sw = excluded.sw",
+        (benutzer_id, t("os", 30), t("browser", 30), t("modus", 20), t("bildschirm", 20),
+         t("modell", 40), t("app_version", 20), 1 if g.get("sw") else 0))
+    conn.commit()
+
+
+FEHLER_MAX_PRO_STUNDE = 20     # Schutz davor, dass eine Fehlerschleife die DB flutet
+
+
+def fehler_speichern(conn: sqlite3.Connection, benutzer_id: int, f: dict) -> bool:
+    """Speichert einen Fehlerbericht; False, wenn leer oder das Stundenlimit erreicht ist."""
+    meldung = str(f.get("meldung") or "").strip()[:300]
+    if not meldung:
+        return False
+    n = conn.execute("SELECT COUNT(*) FROM fehler WHERE benutzer_id = ? "
+                     "AND zeit > datetime('now', '-1 hour')", (benutzer_id,)).fetchone()[0]
+    if n >= FEHLER_MAX_PRO_STUNDE:
+        return False
+
+    def t(k: str, n: int) -> str | None:
+        return (str(f[k]).strip()[:n] or None) if f.get(k) else None
+    conn.execute(
+        "INSERT INTO fehler (benutzer_id, quelle, meldung, ort, app_version, geraet) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (benutzer_id, t("quelle", 20), meldung, t("ort", 60), t("app_version", 20),
+         t("geraet", 120)))
+    conn.commit()
+    return True
+
+
+def _berlin():
+    """Zeitzone fuer die Tageszaehlung; ohne Zeitzonen-Datenbank (z. B. Windows
+    ohne tzdata) UTC - nur die Tagesgrenze verschiebt sich dann um 1-2 Stunden."""
+    try:
+        from zoneinfo import ZoneInfo
+        return ZoneInfo("Europe/Berlin")
+    except Exception:
+        return timezone.utc
+
+
+def nutzung_auswertung(conn: sqlite3.Connection, tage: int = 30) -> dict:
+    """Je Spielerinnen-Konto: zuletzt aktiv, Besuche/aktive Tage/Videos der
+    letzten `tage` Tage, haeufigste Bereiche und angesehene Videos."""
+    jetzt = datetime.now(timezone.utc)
+    grenze = jetzt - timedelta(days=tage)
+    tz = _berlin()
+
+    def lies(z: str) -> datetime:
+        return datetime.strptime(z, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+
+    konten = conn.execute(
+        "SELECT id, name FROM benutzer WHERE rolle = 'spieler' AND aktiv = 1 ORDER BY name"
+    ).fetchall()
+    rows: dict[int, list] = {k["id"]: [] for k in konten}
+    for r in conn.execute("SELECT benutzer_id, zeit, typ, ziel, info FROM nutzung ORDER BY zeit"):
+        if r["benutzer_id"] in rows:
+            rows[r["benutzer_id"]].append(r)
+    erste = conn.execute("SELECT MIN(zeit) AS z FROM nutzung").fetchone()["z"]
+    geraete: dict[int, list] = {k["id"]: [] for k in konten}
+    for g in conn.execute("SELECT * FROM geraet ORDER BY zuletzt DESC"):
+        if g["benutzer_id"] in geraete:
+            geraete[g["benutzer_id"]].append({
+                "os": g["os"], "browser": g["browser"], "modus": g["modus"],
+                "bildschirm": g["bildschirm"], "modell": g["modell"],
+                "app_version": g["app_version"], "sw": bool(g["sw"]),
+                "zuletzt": _utc_z(g["zuletzt"])})
+
+    ausgabe = []
+    for k in konten:
+        ev = rows[k["id"]]
+        neu = [r for r in ev if lies(r["zeit"]) >= grenze]
+        bereiche: dict[str, int] = {}
+        videos: dict[str, dict] = {}
+        for r in neu:
+            if r["typ"] == "bereich" and r["ziel"]:
+                bereiche[r["ziel"]] = bereiche.get(r["ziel"], 0) + 1
+            elif r["typ"] == "video" and r["ziel"]:
+                v = videos.setdefault(r["ziel"], {"ziel": r["ziel"], "titel": r["info"],
+                                                  "anzahl": 0, "zuletzt": r["zeit"]})
+                v["anzahl"] += 1
+                v["zuletzt"] = r["zeit"]
+                if r["info"]:
+                    v["titel"] = r["info"]
+        ausgabe.append({
+            "benutzer_id": k["id"], "name": k["name"],
+            "zuletzt": (ev[-1]["zeit"].replace(" ", "T") + "Z") if ev else None,
+            "besuche": sum(1 for r in neu if r["typ"] == "besuch"),
+            "tage": len({lies(r["zeit"]).astimezone(tz).date() for r in neu}),
+            "videos_gesehen": sum(1 for r in neu if r["typ"] == "video"),
+            "bereiche": [{"ziel": z, "anzahl": n} for z, n in
+                         sorted(bereiche.items(), key=lambda x: -x[1])[:6]],
+            "videos": sorted(
+                [{**v, "zuletzt": v["zuletzt"].replace(" ", "T") + "Z"} for v in videos.values()],
+                key=lambda v: v["zuletzt"], reverse=True)[:10],
+            "geraete": geraete[k["id"]],
+        })
+    return {"tage": tage, "seit": (erste.replace(" ", "T") + "Z") if erste else None,
+            "konten": ausgabe, "fehler": _fehler_gruppiert(conn, grenze)}
+
+
+def _utc_z(z: str | None) -> str | None:
+    return (z.replace(" ", "T") + "Z") if z else None
+
+
+def _fehler_gruppiert(conn: sqlite3.Connection, grenze: datetime) -> list[dict]:
+    """Gleiche Fehlermeldungen zusammengefasst: Anzahl, wer, welche Geraete,
+    welche App-Versionen - die neuesten zuerst."""
+    rows = conn.execute(
+        "SELECT f.zeit, f.quelle, f.meldung, f.ort, f.app_version, f.geraet, b.name "
+        "FROM fehler f JOIN benutzer b ON b.id = f.benutzer_id "
+        "WHERE f.zeit >= ? ORDER BY f.zeit",
+        (grenze.strftime("%Y-%m-%d %H:%M:%S"),)).fetchall()
+    gruppen: dict[str, dict] = {}
+    for r in rows:
+        g = gruppen.setdefault(r["meldung"], {
+            "meldung": r["meldung"], "quelle": r["quelle"], "anzahl": 0, "zuletzt": None,
+            "namen": [], "geraete": [], "versionen": [], "orte": []})
+        g["anzahl"] += 1
+        g["zuletzt"] = r["zeit"]
+        for feld, wert in (("namen", r["name"]), ("geraete", r["geraet"]),
+                           ("versionen", r["app_version"]), ("orte", r["ort"])):
+            if wert and wert not in g[feld]:
+                g[feld].append(wert)
+    aus = sorted(gruppen.values(), key=lambda g: g["zuletzt"], reverse=True)[:30]
+    for g in aus:
+        g["zuletzt"] = _utc_z(g["zuletzt"])
+        g["geraete"] = g["geraete"][:4]
+    return aus

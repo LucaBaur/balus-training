@@ -11,7 +11,7 @@
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="apple-touch-icon" href="/icon-192.png?v=3" />
   <link rel="icon" href="/icon-192.png?v=3" />
-  <link rel="stylesheet" href="/style.css?v=36" />
+  <link rel="stylesheet" href="/style.css?v=45" />
   <title>Balu's Training</title>
 </head>
 <body>
@@ -81,6 +81,11 @@
       <div id="home-schnell" class="home-schnell"></div>
     </section>
 
+    <!-- Liga: Tabelle + Spielplan der Frauen (aus handball4all / bwhv.org) -->
+    <section id="view-liga" class="view hidden">
+      <div id="liga-inhalt"></div>
+    </section>
+
     <!-- Ich: die eigene Seite (Portrait, Positionen, Beteiligung, Laufchallenge) -->
     <section id="view-ich" class="view hidden">
       <div id="ich-inhalt"></div>
@@ -93,12 +98,19 @@
       <div id="videos-liste" class="videos-liste"></div>
     </section>
 
+    <!-- Videoanalyse eines Spiels (Ich -> Videos -> Spiel) -->
+    <section id="view-analyse-detail" class="view hidden">
+      <button id="btn-analyse-zurueck" class="zurueck-btn">← Videos</button>
+      <div id="analyse-detail-inhalt"></div>
+    </section>
+
     <!-- Video-Detail: der Clip im Player -->
     <section id="view-video-detail" class="view hidden">
       <button id="btn-video-zurueck" class="zurueck-btn">← Videos</button>
       <h2 id="vd-titel"></h2>
       <div id="vd-meta" class="vd-meta"></div>
       <video id="vd-player" class="vd-player" controls playsinline preload="metadata"></video>
+      <div id="vd-notiz" class="vd-notiz"></div>
       <div id="vd-aktionen" class="vd-aktionen"></div>
     </section>
 
@@ -139,6 +151,17 @@
     </section>
 
     <!-- Generisches Wiki (Playbook / Gegner / Übungen / Statistik / Saison / Notizen) -->
+    <!-- Nutzung: wer wie oft in der App ist und was sie anschaut (nur Trainer) -->
+    <section id="view-nutzung" class="view hidden">
+      <h2>Nutzung</h2>
+      <div id="nutzung-inhalt"></div>
+    </section>
+
+    <section id="view-statspiele" class="view hidden">
+      <h2>Statistik Spiele</h2>
+      <div id="statspiele-inhalt"></div>
+    </section>
+
     <section id="view-wiki" class="view hidden">
       <h2 id="wiki-titel">Wiki</h2>
       <div id="wiki-neu" class="wiki-neu"></div>
@@ -254,9 +277,9 @@
     <button data-ober="saison"><span class="t-icon">📅</span><span class="t-text">Saison</span></button>
   </nav>
 
-  <script src="/local-db.js?v=2"></script>
+  <script src="/local-db.js?v=3"></script>
   <script src="/sync.js?v=10"></script>
   <script src="/teams-local.js?v=2"></script>
-  <script src="/app.js?v=50"></script>
+  <script src="/app.js?v=63"></script>
 </body>
 </html>

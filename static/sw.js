@@ -2,8 +2,8 @@
 // aus dem Cache geliefert (auch offline / bei schlechtem Netz kein Warten), und
 // im Hintergrund frisch nachgeladen. Neue Versionen kommen ueber CACHE-Bump +
 // controllerchange-Reload (siehe app.js) trotzdem zuverlaessig an.
-const CACHE = "elo-v51";
-const HUELLE = ["/", "/index.html", "/style.css?v=36", "/local-db.js?v=2", "/sync.js?v=10", "/teams-local.js?v=2", "/app.js?v=50", "/tvg-logo.png?v=1", "/manifest.webmanifest", "/portraits/index.json"];
+const CACHE = "elo-v64";
+const HUELLE = ["/", "/index.html", "/style.css?v=45", "/local-db.js?v=3", "/sync.js?v=10", "/teams-local.js?v=2", "/app.js?v=62", "/tvg-logo.png?v=1", "/manifest.webmanifest", "/portraits/index.json"];
 
 // Die Portraits gehoeren zur Huelle, stehen aber nicht fest in der Liste:
 // welche es gibt, sagt /portraits/index.json. So muss hier nichts nachgepflegt

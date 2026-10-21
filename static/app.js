@@ -43,6 +43,7 @@ async function api(pfad, methode = "GET", body = null) {
 const NAV = [
   { key: "home", label: "Home", rollen: ["trainer", "spieler"], unter: [
     { key: "home", label: "Übersicht", view: "view-home", init: ladeHome },
+    { key: "liga", label: "Liga", view: "view-liga", init: ladeLiga },
   ]},
   // "Ich" gibt es fuer jede, die ein Spielerprofil hat - auch fuer Trainerinnen,
   // die selbst mitspielen (dann haengt am Zugang eine spieler_id).
@@ -67,6 +68,7 @@ const NAV = [
     // Auch hier, damit eine Trainerin ohne eigenes Spielerprofil (kein "Ich"-Tab)
     // die Clips verwalten kann. Dieselbe View, die je Rolle die Bedienelemente zeigt.
     { key: "videos", label: "Videos", view: "view-videos", init: ladeVideos },
+    { key: "nutzung", label: "Nutzung", view: "view-nutzung", init: ladeNutzung },
   ]},
   { key: "taktik", label: "Taktik", rollen: ["trainer", "spieler"], unter: [
     { key: "playbook", label: "Playbook", view: "view-wiki",
@@ -77,6 +79,7 @@ const NAV = [
   { key: "saison", label: "Saison", rollen: ["trainer"], unter: [
     { key: "orga", label: "Orga", view: "view-wiki",
       init: () => ladeWiki(["saison", "orga"], "Saison & Orga") },
+    { key: "statspiele", label: "Statistik Spiele", view: "view-statspiele", init: ladeStatistikSpiele },
     { key: "notizen", label: "Notizen", view: "view-wiki",
       init: () => ladeWiki(["notiz", "besprechung"], "Notizen") },
   ]},
@@ -150,6 +153,7 @@ function gehe(oberKey, unterKey) {
     try { unter.init && unter.init(); } catch (_) {}
   }
   verlaufMerken({ typ: "nav", ober: aktOber, unter: aktUnter });
+  nutzungMelden("bereich", aktOber + "/" + aktUnter);
 }
 
 // Unter-Navigation zeichnen; bei nur einem Unterpunkt ausblenden (kein Nutzen).
@@ -243,6 +247,7 @@ async function ansichtWechseln(wert) {
     const pfad = wert ? "/api/ansicht/" + wert : "/api/ansicht/stop";
     const r = await fetch(pfad, { method: "POST" });
     if (!r.ok) throw new Error();
+    await cachesLeeren();                 // die Spielerinnen-Sicht soll keine Trainer-Antworten aus dem Cache zeigen
     location.reload();
   } catch (_) { toast("Ansicht-Wechsel fehlgeschlagen – Verbindung prüfen."); }
 }
@@ -251,6 +256,7 @@ async function ansichtStop() {
   try {
     const r = await fetch("/api/ansicht/stop", { method: "POST" });
     if (!r.ok) throw new Error();
+    await cachesLeeren();
     location.reload();
   } catch (_) { toast("Kein Netz – gleich noch mal versuchen."); }
 }
@@ -285,12 +291,307 @@ function appStarten() {
   const ls = document.getElementById("login-screen");
   if (ls) ls.classList.add("hidden");
   renderBottomNav();
+  besuchMelden();
   // Der Start ist der unterste Verlaufseintrag: von hier schliesst Zurueck
   // die App - so, wie man es von jeder anderen App kennt.
   _ausVerlauf = true;
   try { gehe("home"); } finally { _ausVerlauf = false; }
   try { history.replaceState({ typ: "nav", ober: "home", unter: "home" }, ""); } catch (_) {}
   ladeFertig();
+  setTimeout(pruefeStand, 3000);          // kurz nach dem Start gegenpruefen
+}
+
+// ------------------------------------------------------------ Stand-Check ----
+//  Im Hintergrund pruefen, ob dieses Geraet alles Aktuelle hat: Zugang (Rolle,
+//  Spielerprofil -> "Ich"-Reiter) vom Server und die App-Version (ein neuer
+//  Service Worker laedt die App von selbst neu, siehe controllerchange unten).
+//  Laeuft nach dem Start, beim Zurueckkehren in die App, alle 5 Minuten und
+//  beim Antippen des Sync-Punkts.
+let _standLaeuft = false;
+async function pruefeStand(sichtbar) {
+  if (_standLaeuft || !aktBenutzer) return;
+  _standLaeuft = true;
+  try {
+    const r = await ladeMe();
+    if (r.status === "anon") { toast("Bitte neu anmelden."); zeigeLogin(); return; }
+    if (r.status === "ok") {
+      const alt = aktBenutzer, me = r.me;
+      const geaendert = (alt.spieler_id || null) !== (me.spieler_id || null)
+                     || alt.rolle !== me.rolle;
+      setzeBenutzer(me);
+      if (geaendert) {
+        renderBottomNav();
+        renderHomeOffen();
+        toast("Dein Zugang wurde aktualisiert ✓");
+      } else if (sichtbar) toast("Alles aktuell ✓");
+    }
+    nutzungSenden();
+    const reg = "serviceWorker" in navigator && await navigator.serviceWorker.getRegistration();
+    if (reg) reg.update().catch(() => {});
+  } finally { _standLaeuft = false; }
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden) pruefeStand(); });
+setInterval(pruefeStand, 5 * 60 * 1000);
+
+// ---------------------------------------------------------------- Nutzung ----
+//  Meldet dem Server, wann jemand die App oeffnet, welchen Bereich sie/er
+//  besucht und welches Video angesehen wird (siehe Team -> Nutzung). Die
+//  Ereignisse werden gesammelt und gebuendelt gesendet; schlaegt das fehl
+//  (kein Netz), bleiben sie im localStorage und gehen beim naechsten Mal mit.
+//  Im "Ansicht als"-Modus wird nichts gemeldet.
+let _nutzungQ = [];
+try { _nutzungQ = JSON.parse(localStorage.getItem("nutzung_q") || "[]"); } catch (_) {}
+let _nutzungTimer = null;
+let _nutzungSendet = false;
+let _letzterBesuch = 0;
+
+function nutzungSpeichern() {
+  try { localStorage.setItem("nutzung_q", JSON.stringify(_nutzungQ)); } catch (_) {}
+}
+
+function nutzungMelden(typ, ziel, info) {
+  if (!aktBenutzer || aktBenutzer.ansicht_als) return;
+  _nutzungQ.push({ typ, ziel: ziel || null, info: info || null });
+  if (_nutzungQ.length > 200) _nutzungQ.splice(0, _nutzungQ.length - 200);
+  nutzungSpeichern();
+  clearTimeout(_nutzungTimer);
+  _nutzungTimer = setTimeout(nutzungSenden, 2000);
+}
+
+function besuchMelden() {
+  if (Date.now() - _letzterBesuch < 30 * 60 * 1000) return;   // wie der Server: 30 Min. = ein Besuch
+  _letzterBesuch = Date.now();
+  nutzungMelden("besuch");
+  geraetMelden();
+}
+
+async function nutzungSenden() {
+  if (_nutzungSendet || !_nutzungQ.length || !aktBenutzer || aktBenutzer.ansicht_als) return;
+  _nutzungSendet = true;
+  try {
+    const paket = _nutzungQ.slice(0, 50);
+    const res = await fetch("/api/nutzung", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ereignisse: paket }), keepalive: true,
+    });
+    if (res.ok) {
+      _nutzungQ.splice(0, paket.length);
+      nutzungSpeichern();
+    } else if (res.status === 401) {          // abgemeldet: nichts fremden Konten zuordnen
+      _nutzungQ = [];
+      nutzungSpeichern();
+    }
+  } catch (_) { /* kein Netz: bleibt in der Warteschlange */ }
+  finally { _nutzungSendet = false; }
+  if (_nutzungQ.length >= 50) nutzungSenden();
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) nutzungSenden();       // vor dem Wegwischen noch abschicken
+  else besuchMelden();
+});
+setInterval(nutzungSenden, 60 * 1000);        // Reste nach einem Funkloch nachsenden
+
+// ----------------------------------------------------- Geraet & Fehler ----
+//  Grobe Geraeteangaben (System, Browser, installiert oder nicht, Bildschirm,
+//  Modell falls der Browser es nennt) und Fehlerberichte - damit ein Problem
+//  zu "Android 13 / Chrome 126" passt. Keine IP, kein Standort, keine Kennung.
+//  Fehlertexte gehen nur an den eigenen Server (Team -> Nutzung).
+let _geraet = null;
+
+async function geraetInfo() {
+  if (!_geraet) {
+    const ua = navigator.userAgent || "";
+    const m = (re) => (ua.match(re) || [])[1];
+    const major = (v) => String(v || "").split(/[._]/)[0];
+    const hoch = {};
+    try {
+      if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
+        Object.assign(hoch, await navigator.userAgentData.getHighEntropyValues(["model", "platformVersion"]));
+      }
+    } catch (_) {}
+    // Chrome meldet im User-Agent nur noch "Android 10" - die echte Version steckt in platformVersion.
+    let os = "";
+    if (/Android/.test(ua)) os = "Android " + (major(hoch.platformVersion) || m(/Android (\d+)/) || "");
+    else if (/iPhone|iPad|iPod/.test(ua)) os = "iOS " + major(m(/OS (\d+[_\d]*)/));
+    else if (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) os = "iPadOS";
+    else if (/Windows/.test(ua)) os = "Windows" + (hoch.platformVersion ? (parseInt(major(hoch.platformVersion), 10) >= 13 ? " 11" : " 10") : "");
+    else if (/Mac OS X/.test(ua)) os = "macOS";
+    else if (/Linux/.test(ua)) os = "Linux";
+    let browser = "";
+    for (const [name, re] of [["Edge", /Edg(?:e|A|iOS)?\/(\d+)/], ["Opera", /OPR\/(\d+)/],
+        ["Samsung Internet", /SamsungBrowser\/(\d+)/], ["Chrome", /(?:Chrome|CriOS)\/(\d+)/],
+        ["Firefox", /(?:Firefox|FxiOS)\/(\d+)/], ["Safari", /Version\/(\d+)[^]*Safari/]]) {
+      const v = m(re);
+      if (v) { browser = name + " " + v; break; }
+    }
+    if (/; wv\)/.test(ua)) browser = "WebView " + (m(/Chrome\/(\d+)/) || "");
+    let modus = "Browser";
+    if ((document.referrer || "").startsWith("android-app://")) modus = "Android-App";
+    else if (navigator.standalone === true
+             || (window.matchMedia && matchMedia("(display-mode: standalone)").matches)) modus = "installiert";
+    _geraet = { os: os.trim(), browser: browser.trim(), modus,
+                bildschirm: screen.width + "x" + screen.height, modell: hoch.model || "" };
+  }
+  return { ..._geraet, app_version: APP_VERSION,
+           sw: !!(navigator.serviceWorker && navigator.serviceWorker.controller) };
+}
+
+const geraetKurz = (g) => [g.os, g.browser, g.modus].filter(Boolean).join(" · ");
+
+async function nutzungPost(pfad, daten) {
+  return fetch(pfad, { method: "POST", headers: { "Content-Type": "application/json" },
+                       body: JSON.stringify(daten), keepalive: true });
+}
+
+async function geraetMelden() {
+  if (!aktBenutzer || aktBenutzer.ansicht_als) return;
+  try { await nutzungPost("/api/geraet", await geraetInfo()); } catch (_) {}
+}
+
+// Hoechstens 10 verschiedene Fehler je Sitzung, jeder nur einmal - eine Fehlerschleife
+// soll weder den Akku noch den Server beschaeftigen.
+const _fehlerGemeldet = new Set();
+const FEHLER_IGNORIEREN = /ResizeObserver|Failed to fetch|Load failed|NetworkError|Network request failed|AbortError|^Script error/i;
+
+async function fehlerMelden(quelle, meldung) {
+  meldung = String(meldung || "").slice(0, 300);
+  if (!meldung || FEHLER_IGNORIEREN.test(meldung)) return;       // Netzfehler sind normal, kein Bug
+  if (!aktBenutzer || aktBenutzer.ansicht_als) return;
+  if (_fehlerGemeldet.has(meldung) || _fehlerGemeldet.size >= 10) return;
+  _fehlerGemeldet.add(meldung);
+  try {
+    const g = await geraetInfo();
+    await nutzungPost("/api/fehler", { quelle, meldung, ort: aktOber + "/" + aktUnter,
+                                       app_version: APP_VERSION, geraet: geraetKurz(g) });
+  } catch (_) {}
+}
+
+window.addEventListener("error", (e) => {
+  if (!(e instanceof ErrorEvent)) return;                         // fehlende Bilder/Skripte: kein JS-Fehler
+  const datei = String(e.filename || "").split("/").pop().split("?")[0];
+  fehlerMelden("script", (e.message || "Fehler") + (datei ? " @" + datei + ":" + e.lineno : ""));
+});
+window.addEventListener("unhandledrejection", (e) => {
+  const r = e.reason;
+  fehlerMelden("promise", "Promise: " + (r && r.message ? r.message : String(r)));
+});
+{
+  const vp = document.getElementById("vd-player");
+  if (vp) vp.addEventListener("error", () => {
+    if (!vp.getAttribute("src")) return;                          // Zuruecksetzen beim Schliessen ist kein Fehler
+    const er = vp.error;
+    fehlerMelden("video", "Video nicht abspielbar (Code " + (er ? er.code : "?") + ") "
+                          + vp.getAttribute("src").replace(/^.*\/api\//, "/api/"));
+  });
+}
+
+// Trainer-Seite: Team -> Nutzung.
+let nutzungDaten = null;
+
+function vorZeit(iso) {
+  if (!iso) return "noch nie";
+  const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (min < 2) return "gerade eben";
+  if (min < 60) return "vor " + min + " Min.";
+  const std = Math.round(min / 60);
+  if (std < 24) return "vor " + std + " Std.";
+  const tage = Math.round(std / 24);
+  if (tage === 1) return "gestern";
+  if (tage < 14) return "vor " + tage + " Tagen";
+  return new Date(iso).toLocaleDateString("de-DE");
+}
+
+function nutzungBereichName(key) {
+  const [o, u] = String(key).split("/");
+  const ober = NAV.find((x) => x.key === o);
+  const unter = ober && ober.unter.find((x) => x.key === u);
+  return ober && unter ? ober.label + " → " + unter.label : key;
+}
+
+function nutzungVideoName(v) {
+  const art = { clip: "Szene", szene: "Spielzug", spiel: "Ganzes Spiel", analyse: "Videoanalyse" }[String(v.ziel).split(":")[0]] || "Video";
+  return art + ": " + (v.titel || v.ziel);
+}
+
+async function ladeNutzung() {
+  const el = $("#nutzung-inhalt");
+  if (!nutzungDaten) el.innerHTML = '<p class="hinweis">Lädt …</p>';
+  try { nutzungDaten = await api("/api/nutzung"); }
+  catch (_) {
+    if (!nutzungDaten) {
+      el.innerHTML = '<p class="hinweis">Nutzung konnte nicht geladen werden – dafür brauchst du eine Verbindung.</p>';
+      return;
+    }
+  }
+  renderNutzung();
+}
+
+function nutzungGeraetZeile(g) {
+  const klein = [g.bildschirm.replace("x", "×"), g.modell, g.app_version,
+                 g.sw ? "Service Worker aktiv" : "ohne Service Worker", "zuletzt " + vorZeit(g.zuletzt)]
+    .filter(Boolean).join(" · ");
+  const alt = g.app_version && g.app_version !== APP_VERSION;
+  return `<div class="nk-zeile"><span>${escape([g.os, g.browser, g.modus].filter(Boolean).join(" · "))}`
+       + `<small${alt ? ' class="alt"' : ""}>${escape(klein)}${alt ? " · ältere Version" : ""}</small></span></div>`;
+}
+
+function renderNutzungFehler(fehler, tage) {
+  if (!fehler.length) return `<h3 class="nutz-h">Fehler</h3><p class="hinweis">In den letzten ${tage} Tagen wurde kein Fehler gemeldet ✓</p>`;
+  let html = `<h3 class="nutz-h">Fehler (letzte ${tage} Tage)</h3>`;
+  for (const f of fehler) {
+    const quelle = { script: "Skript", promise: "Skript", video: "Video" }[f.quelle] || "Fehler";
+    html += `<details class="nutz-karte fehler"><summary>
+        <span class="nk-name nk-fehler">${escape(f.meldung)}</span>
+        <span class="nk-zuletzt">${f.anzahl}× · ${escape(vorZeit(f.zuletzt))}</span>
+        <span class="nk-zahlen">${escape(f.namen.join(", "))}${f.geraete.length ? " · " + escape(f.geraete[0]) : ""}</span></summary>
+      <div class="nk-detail">
+        <h4>${escape(quelle)}</h4><div class="nk-zeile"><span>${escape(f.meldung)}</span></div>
+        ${f.orte.length ? "<h4>Bereich</h4>" + f.orte.map((o) => `<div class="nk-zeile"><span>${escape(nutzungBereichName(o))}</span></div>`).join("") : ""}
+        <h4>Geräte</h4>${f.geraete.map((g) => `<div class="nk-zeile"><span>${escape(g)}</span></div>`).join("") || "–"}
+        <h4>App-Version</h4><div class="nk-zeile"><span>${escape(f.versionen.join(", ") || "–")}</span></div>
+      </div></details>`;
+  }
+  return html;
+}
+
+function renderNutzung() {
+  const d = nutzungDaten;
+  const el = $("#nutzung-inhalt");
+  const konten = [...d.konten].sort((a, b) =>
+    (b.zuletzt || "").localeCompare(a.zuletzt || "") || a.name.localeCompare(b.name));
+  const seit = d.seit ? new Date(d.seit).toLocaleDateString("de-DE") : "–";
+  let html = `<p class="hinweis">Zähler der letzten ${d.tage} Tage, nur Spielerinnen. Erfasst seit ${seit}. `
+           + `„Zuletzt aktiv“ zählt auch ältere Besuche.</p>`
+           + renderNutzungFehler(d.fehler || [], d.tage)
+           + '<h3 class="nutz-h">Spielerinnen</h3>';
+  for (const k of konten) {
+    const pl = (n, ein, mehr) => `<b>${n}</b> ${n === 1 ? ein : mehr}`;
+    const g0 = (k.geraete || [])[0];
+    const gerat = g0 ? ` · ${escape([g0.os, g0.browser].filter(Boolean).join(" · "))}`
+                       + (g0.app_version ? ` · <span${g0.app_version !== APP_VERSION ? ' class="alt"' : ""}>${escape(g0.app_version)}</span>` : "")
+                     : "";
+    const zahlen = k.zuletzt
+      ? `${pl(k.tage, "Tag", "Tage")} · ${pl(k.besuche, "Besuch", "Besuche")} · ${pl(k.videos_gesehen, "Video", "Videos")}${gerat}`
+      : "noch nicht in der App";
+    let detail = "";
+    if ((k.geraete || []).length) detail += "<h4>Geräte</h4>" + k.geraete.map(nutzungGeraetZeile).join("");
+    if (k.bereiche.length) {
+      detail += '<h4>Meistbesucht</h4>' + k.bereiche.map((b) =>
+        `<div class="nk-zeile"><span>${escape(nutzungBereichName(b.ziel))}</span><b>${b.anzahl}×</b></div>`).join("");
+    }
+    if (k.videos.length) {
+      detail += '<h4>Videos angesehen</h4>' + k.videos.map((v) =>
+        `<div class="nk-zeile"><span>${escape(nutzungVideoName(v))}<small>zuletzt ${escape(vorZeit(v.zuletzt))}</small></span><b>${v.anzahl}×</b></div>`).join("");
+    }
+    if (!detail) detail = '<p class="hinweis">In den letzten ' + d.tage + ' Tagen nichts aufgerufen.</p>';
+    html += `<details class="nutz-karte${k.zuletzt ? "" : " nie"}">
+      <summary><span class="nk-name">${escape(k.name)}</span>
+        <span class="nk-zuletzt" title="${k.zuletzt ? escape(new Date(k.zuletzt).toLocaleString("de-DE")) : ""}">${escape(vorZeit(k.zuletzt))}</span>
+        <span class="nk-zahlen">${zahlen}</span></summary>
+      <div class="nk-detail">${detail}</div></details>`;
+  }
+  el.innerHTML = html;
 }
 
 async function pruefeAnmeldung() {
@@ -325,7 +626,10 @@ async function login() {
       fehler.textContent = msg;
       return;
     }
-    setzeBenutzer(await res.json());
+    const me = await res.json();
+    const vorher = benutzerHint();
+    if (vorher && vorher.name !== me.name) await cachesLeeren();   // anderes Konto: nichts von vorher zeigen
+    setzeBenutzer(me);
     $("#login-pin").value = "";
     appStarten();
     Sync.pingServer().catch(() => {});     // Daten sofort laden
@@ -338,8 +642,15 @@ async function login() {
 
 async function logout() {
   try { await fetch("/api/logout", { method: "POST" }); } catch (_) {}
-  try { localStorage.removeItem("benutzer"); } catch (_) {}
+  try { localStorage.removeItem("benutzer"); localStorage.removeItem("nutzung_q"); } catch (_) {}
+  await cachesLeeren();
   location.reload();
+}
+
+// Gespiegelte Server-Daten (IndexedDB) verwerfen, damit ein anderes Konto auf demselben
+// Geraet nie kurz den Zwischenspeicher des vorherigen sieht (siehe LocalDB.leereCaches).
+async function cachesLeeren() {
+  try { await LocalDB.leereCaches(); } catch (_) {}
 }
 
 $("#login-btn").addEventListener("click", login);
@@ -435,7 +746,21 @@ function renderErinnern(d) {
   const el = document.getElementById("td-erinnern");
   if (!el) return;
   if (aktRolle !== "trainer") { el.innerHTML = ""; return; }
-  el.innerHTML = '<button id="btn-erinnern">🔔 Erinnerung an Offene senden</button>';
+  el.innerHTML = '<button id="btn-erinnern">🔔 Erinnerung an Offene senden</button>' +
+    (istSpiel(d) ? "" : ' <button id="btn-spabgleich">⟳ Aus SpielerPlus aktualisieren</button>');
+  const sp = document.getElementById("btn-spabgleich");
+  if (sp) sp.addEventListener("click", async () => {
+    sp.disabled = true;
+    try {
+      const r = await api("/api/spielerplus-abgleich", "POST");
+      toast(r.text);
+      await Sync.frischHolen("/api/trainings/" + d.id).catch(() => {});
+      Sync.frischHolen("/api/trainings").catch(() => {});
+      Sync.frischHolen("/api/naechstes-training").catch(() => {});
+      oeffneTraining(d.id);
+    } catch (e) { toast("Fehler: " + e.message); }
+    finally { sp.disabled = false; }
+  });
   document.getElementById("btn-erinnern").addEventListener("click", async () => {
     const b = document.getElementById("btn-erinnern");
     b.disabled = true;
@@ -500,8 +825,14 @@ async function renderHomeSpiele() {
     .slice(0, 3);
 
   if (!spiele.length) {
-    el.innerHTML = '<div class="hs-kopf">Nächste Spiele</div>' +
-                   '<p class="hinweis">Noch kein Test- oder Ligaspiel eingetragen.</p>';
+    // Noch nichts selbst eingetragen: die naechsten Spiele aus dem Verbands-Spielplan.
+    const aus = await ligaNaechste(3);
+    el.innerHTML = '<div class="hs-kopf">Nächste Spiele</div>';
+    if (!aus.length) {
+      el.innerHTML += '<p class="hinweis">Noch kein Test- oder Ligaspiel eingetragen.</p>';
+      return;
+    }
+    for (const sp of aus) el.appendChild(ligaHomeKarte(sp));
     return;
   }
 
@@ -528,13 +859,123 @@ async function renderHomeSpiele() {
   }
 }
 
+// =================================================================== Liga ====
+//  Tabelle und Spielplan der Frauen (Bezirksoberliga) aus handball4all, dem Dienst
+//  hinter bwhv.org. Der Server holt und puffert sie (liga.py); hier nur Anzeige.
+//  Erreichbar unter Home -> Liga; die Startseite zeigt daraus die naechsten Spiele,
+//  solange keine eigenen Test-/Ligaspiele eingetragen sind.
+let ligaDaten = null;
+const LIGA_QUELLE = "https://www.bwhv.org/spielbetrieb/ergebnisse/tabellen#/league?ogId=216&lId=166266&tId=1495111";
+
+async function ligaHolen() {
+  try { const frisch = await Sync.frischHolen("/api/liga"); if (frisch) ligaDaten = frisch; } catch (_) {}
+  if (!ligaDaten) { try { ligaDaten = await Sync.spiegelRoh("/api/liga"); } catch (_) {} }
+  return ligaDaten;
+}
+
+async function ligaNaechste(n) {
+  const d = await ligaHolen();
+  const heute = new Date().toISOString().slice(0, 10);
+  return d ? d.spiele.filter((x) => x.status !== "gespielt" && (x.datum || "") >= heute).slice(0, n) : [];
+}
+
+const ligaOrt = (sp) => [sp.halle, sp.ort].filter(Boolean).join(", ");
+
+function ligaHomeKarte(sp) {
+  const t = datumTeile(sp.datum);
+  const karte = document.createElement("button");
+  karte.className = "hs-spiel ligaspiel" + (sp.eigen_heim ? "" : " auswaerts");
+  karte.innerHTML =
+    `<span class="hs-datum"><b>${t.wt}</b><span>${escape(t.tag)}</span></span>
+     <span class="hs-mitte">
+       <span class="hs-titel">${escape(sp.heim)} – ${escape(sp.gast)}</span>
+       <span class="hs-meta">Ligaspiel · ${sp.eigen_heim ? "daheim" : "auswärts"}${ligaOrt(sp) ? " · " + escape(ligaOrt(sp)) : ""}</span>
+     </span>
+     <span class="hs-zeit"><b>${escape(sp.zeit)}</b><small>Anwurf</small></span>`;
+  karte.addEventListener("click", () => gehe("home", "liga"));
+  return karte;
+}
+
+async function ladeLiga() {
+  const el = $("#liga-inhalt");
+  if (!ligaDaten) {                                  // sofort etwas zeigen: letzter Stand aus dem Speicher
+    try { ligaDaten = await Sync.spiegelRoh("/api/liga"); } catch (_) {}
+  }
+  if (ligaDaten) renderLiga(); else el.innerHTML = '<p class="hinweis">Lädt…</p>';
+  const frisch = await Sync.frischHolen("/api/liga");
+  if (frisch) { ligaDaten = frisch; renderLiga(); }
+  else if (!ligaDaten) {
+    el.innerHTML = '<p class="hinweis">Die Tabelle konnte nicht geladen werden – bitte später noch einmal versuchen.</p>';
+  }
+}
+
+function ligaSpielHtml(sp) {
+  const datum = sp.datum
+    ? new Date(sp.datum + "T12:00:00").toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" })
+    : "";
+  const eigen = (name) => /^TV Gerhausen/.test(name) ? ' class="eigen"' : "";
+  const ergebnis = sp.status === "offen"
+    ? "–:–" : `${sp.tore_heim} : ${sp.tore_gast}`;
+  const meta = [ligaOrt(sp), sp.halbzeit ? "Halbzeit " + sp.halbzeit : "", sp.bemerkung].filter(Boolean).join(" · ");
+  const route = sp.status !== "gespielt" && !sp.eigen_heim && sp.strasse
+    ? ` · <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${sp.strasse}, ${sp.plz || ""} ${sp.ort || ""}`)}" target="_blank" rel="noopener">Route</a>`
+    : "";
+  const live = sp.status === "live" ? '<span class="ls-live">LIVE</span>' : "";
+  return `<div class="liga-spiel ${sp.status === "gespielt" ? sp.ergebnis || "" : ""}">
+    <div class="ls-kopf"><span>${escape(datum)} · ${escape(sp.zeit)}</span>${live}
+      <span class="ls-ort">${sp.eigen_heim ? "daheim" : "auswärts"}</span></div>
+    <div class="ls-teams"><span${eigen(sp.heim)}>${escape(sp.heim)}</span>
+      <b class="ls-erg">${ergebnis}</b><span${eigen(sp.gast)}>${escape(sp.gast)}</span></div>
+    ${meta || route ? `<div class="ls-meta">${escape(meta)}${route}</div>` : ""}</div>`;
+}
+
+function renderLiga() {
+  const d = ligaDaten;
+  const el = $("#liga-inhalt");
+  // "Frauen Bezirksoberliga - Hallenrunde 2026/2027": den Ligennamen aus der Rundenzeile nehmen, er steht schon in der Ueberschrift
+  const runde = (d.runde || "").replace(d.liga || "", "").replace(/^[\s\-–]+/, "");
+  const kopf = [d.region, runde].filter(Boolean).join(" · ");
+  let html = `<h2>${escape(d.liga || "Liga")}</h2>${kopf ? `<p class="hinweis">${escape(kopf)}</p>` : ""}`;
+
+  html += '<h3 class="videos-h">Tabelle</h3><div class="liga-scroll"><table class="liga-tab"><thead><tr>'
+        + '<th>#</th><th>Mannschaft</th><th>Sp</th><th>S</th><th>U</th><th>N</th><th>Tore</th><th>Pkt</th></tr></thead><tbody>'
+        + d.tabelle.map((r) => `<tr class="${r.eigen ? "eigen" : ""}"><td>${r.platz != null ? r.platz : ""}</td>`
+          + `<td>${escape(r.team)}</td><td>${r.spiele}</td><td>${r.s}</td><td>${r.u}</td><td>${r.n}</td>`
+          + `<td>${r.tore_plus}:${r.tore_minus}</td><td><b>${r.punkte_plus}:${r.punkte_minus}</b></td></tr>`).join("")
+        + "</tbody></table></div>";
+  const fuss = [d.stand ? "Stand: " + d.stand : "", ...(d.hinweise || [])].filter(Boolean).map(escape).join(" · ");
+  html += `<p class="ls-fuss">${fuss}${d.veraltet ? " · <b>Verbandsseite gerade nicht erreichbar, es gilt der letzte bekannte Stand.</b>" : ""}</p>`;
+
+  const heute = new Date().toISOString().slice(0, 10);
+  const offen = d.spiele.filter((x) => x.status !== "gespielt");
+  const gespielt = d.spiele.filter((x) => x.status === "gespielt").reverse();
+  const naechste = offen.filter((x) => (x.datum || "") >= heute);
+  html += '<h3 class="videos-h">Nächste Spiele</h3>';
+  html += naechste.length ? naechste.slice(0, 4).map(ligaSpielHtml).join("") : '<p class="hinweis">Keine offenen Spiele mehr.</p>';
+  if (naechste.length > 4) {
+    html += `<details class="liga-mehr"><summary>Alle weiteren Spiele (${naechste.length - 4})</summary>`
+          + naechste.slice(4).map(ligaSpielHtml).join("") + "</details>";
+  }
+  if (gespielt.length) html += '<h3 class="videos-h">Ergebnisse</h3>' + gespielt.map(ligaSpielHtml).join("");
+  html += `<p class="ls-fuss">Quelle: <a href="${LIGA_QUELLE}" target="_blank" rel="noopener">Baden-Württembergischer Handball-Verband</a> (handball4all)</p>`;
+  el.innerHTML = html;
+}
+
 // „Worauf wartet das Team noch von MIR?" - alle kommenden Termine ohne eigene
 // Antwort, jeder direkt hier beantwortbar. Wer ein Spielerprofil hat, sieht
 // die Box (auch Trainerinnen, die selbst mitspielen).
 async function renderHomeOffen() {
   const el = $("#home-offen");
   if (!el) return;
-  if (!(aktBenutzer && aktBenutzer.spieler_id)) { el.innerHTML = ""; return; }
+  if (!(aktBenutzer && aktBenutzer.spieler_id)) {
+    // Spielerin ohne Profil: ohne Hinweis fehlen "Ich" und "Videos" kommentarlos.
+    el.innerHTML = aktRolle === "spieler"
+      ? '<p class="hinweis">Dein Zugang ist noch keinem Spielerprofil zugeordnet – '
+        + 'deshalb fehlen „Ich“ und „Videos“. Tippe oben rechts auf „synchron“ zum '
+        + 'Aktualisieren. Hilft das nicht, melde dich beim Trainer.</p>'
+      : "";
+    return;
+  }
 
   let liste = [];
   try { liste = await Sync.apiOffline("/api/trainings"); } catch (_) { el.innerHTML = ""; return; }
@@ -2254,6 +2695,7 @@ let detailSpiele = [];         // geladene Spiele der gewaehlten Spielerin
 let detailStats = null;        // Kennzahlen der gewaehlten Spielerin
 let detailTraining = null;     // Trainings-Anwesenheit der gewaehlten Spielerin
 let detailLC = null;           // Laufchallenge-Ergebnis der gewaehlten Spielerin
+let detailAnalyse = [];        // Spielanalysen (Statistik + Zeitstempel) der gewaehlten Spielerin
 let aktuellesSpiel = null;     // im Spiel-Detail geoeffnetes Spiel
 // Wohin „zurück" aus dem Spieler-Detail führt (Rangliste oder Kader).
 let detailZurueck = () => { ladeRangliste(); zeigeView("view-rangliste"); };
@@ -2272,6 +2714,7 @@ async function oeffneSpielerDetail(p, herkunft) {
     detailStats = d.stats;
     detailTraining = d.training || null;
     detailLC = d.laufchallenge || null;
+    detailAnalyse = await ladeAnalysen(p.id);
     // Zurück-Ziel je nach Herkunft (Rangliste bzw. Kader).
     if (herkunft === "kader") {
       $("#btn-detail-zurueck").textContent = "← Kader";
@@ -2355,7 +2798,7 @@ function renderProfil() {
   const spark = eloSparkline();
   const sparkBlock = spark
     ? `<div class="profil-elo"><div class="pe-kopf">ELO-Verlauf</div>${spark}</div>` : "";
-  el.innerHTML = kopfHtml + training + lauf + sparkBlock;
+  el.innerHTML = kopfHtml + training + lauf + analyseBlockHtml(detailAnalyse, sp.id) + sparkBlock;
 }
 
 // ------------------------------------------------------------------ Ich ----
@@ -2364,6 +2807,7 @@ function renderProfil() {
 // demselben Endpunkt wie das Spieler-Detail - der Server laesst Spielerinnen
 // dort ausdruecklich das EIGENE Profil sehen (und nur das).
 let ichDaten = null;
+let ichAnalyse = [];
 
 async function ladeIch() {
   const el = $("#ich-inhalt");
@@ -2376,6 +2820,7 @@ async function ladeIch() {
   if (!ichDaten) el.innerHTML = '<p class="hinweis">Lädt…</p>';
   try {
     ichDaten = await Sync.apiOffline("/api/spieler/" + sid + "/spiele");
+    ichAnalyse = await ladeAnalysen(sid);
     renderIch();
   } catch (_) {
     if (!ichDaten) {
@@ -2432,8 +2877,243 @@ function renderIch() {
       <p class="hinweis">Für dich ist noch kein Ergebnis eingetragen.</p></section>`;
   }
 
+  html += statistikBlockHtml(ichAnalyse);
   el.innerHTML = html;
+  el.querySelectorAll("[data-spiel]").forEach((b) => b.addEventListener("click", () => {
+    gehe("ich", "videos");
+    oeffneAnalyseDetail(+b.dataset.spiel);
+  }));
 }
+
+// ========================================================= Spielanalysen ==
+//  Ganzes Spielvideo + Zeitstempel (Tore, Wuerfe, Fehler, Spielzuege mit Ampel),
+//  erfasst am PC in "Balu-Spielanalyse". Hier nur Anzeige: Statistik und die
+//  Szenen der Spielerin; ein Tipp springt im Spielvideo zur Stelle. Spielerinnen
+//  sehen nur Eigenes (der Server filtert) und keine Trainer-Kommentare.
+const ANALYSE_EVENT = {
+  tor: "Tor", fehlwurf: "Fehlwurf", ballverlust: "Ballverlust",
+  strafe: "Zeitstrafe", siebenmeter: "7-Meter", parade: "Parade",
+};
+const ANALYSE_AMPEL = { gruen: "Tor", orange: "Okay", rot: "Fehler" };
+
+async function ladeAnalysen(sid) {
+  try { return await Sync.apiOffline("/api/spieler/" + sid + "/analyse"); }
+  catch (_) { return []; }
+}
+
+function analyseZeit(t) {
+  t = Math.max(0, Math.floor(t));
+  const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
+  return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(s).padStart(2, "0");
+}
+
+// Ein Spiel: Kacheln, Spielzug-Ampel und die Szenenliste. `ohneTitel` fuer die
+// Detailansicht, die den Gegner schon als Ueberschrift hat.
+function analyseSpielHtml(a, sid, ohneTitel) {
+  const st = a.stats;
+  const kacheln = [
+    [st.tore, "Tore"], [st.fehlwuerfe, "Fehlwürfe"], [st.ballverluste, "Ballverluste"],
+    [st.paraden, "Paraden"], [st.vorlagen, "Vorlagen"], [st.strafen, "Strafen/7m"],
+  ].filter(([n]) => n > 0)
+   .map(([n, l]) => `<span class="an-kachel"><b>${n}</b>${l}</span>`).join("");
+  const ampel = st.zuege
+    ? `<div class="an-ampel">${st.zuege} Spielzüge:
+        <span class="an-p gruen">${st.gruen}</span><span class="an-p orange">${st.orange}</span><span class="an-p rot">${st.rot}</span></div>`
+    : "";
+  const szenen = [
+    ...a.events.map((e) => ({
+      t: e.t, farbe: e.typ === "tor" ? "gruen" : e.typ === "fehlwurf" ? "orange" : e.typ === "ballverlust" ? "rot" : "grau",
+      text: ANALYSE_EVENT[e.typ] + (e.detail ? " · " + e.detail : "") + (e.assist_id && e.spieler_id !== sid ? " (Vorlage)" : ""),
+      clip: e.clip_id,
+    })),
+    ...a.zuege.map((z) => ({
+      t: z.t_start, bis: z.t_ende, farbe: z.ampel, text: "Spielzug " + z.name + " – " + ANALYSE_AMPEL[z.ampel],
+      kommentar: z.kommentar, clip: z.clip_id,
+    })),
+  ].sort((x, y) => x.t - y.t);
+  const spielbar = a.video_da || szenen.some((x) => x.clip);
+  const zeilen = !spielbar
+    ? '<p class="hinweis">Das Video ist noch nicht hochgeladen.</p>'
+    : !szenen.length
+      ? '<p class="hinweis">Für dich wurden in diesem Spiel keine Szenen erfasst.</p>'
+      : szenen.map((x) => `<button class="an-szene" data-analyse="${a.id}" data-t="${x.t}" data-titel="${escape("TVG – " + a.gegner)}" data-text="${escape(x.text)}" data-farbe="${escape(x.farbe)}"
+          data-kommentar="${escape(x.kommentar || "")}" data-bis="${x.bis != null ? x.bis : ""}"
+          data-clip="${x.clip || ""}" data-voll="${a.video_da ? 1 : ""}">
+          <span class="an-punkt ${x.farbe}"></span>
+          <span class="an-text">${escape(x.text)}${x.kommentar ? `<small>${escape(x.kommentar)}</small>` : ""}</span>
+          <span class="an-zeit">${analyseZeit(x.t)}</span></button>`).join("");
+  const titel = ohneTitel ? ""
+    : `<div class="an-titel">TVG – ${escape(a.gegner)}${a.datum ? `<small>${escape(datumKurz(a.datum))}</small>` : ""}</div>`;
+  return `<div class="an-spiel">${titel}<div class="an-kacheln">${kacheln}</div>${ampel}<div class="an-szenen">${zeilen}</div></div>`;
+}
+
+// Mehrere Spiele untereinander - so sieht der Trainer sie im Spielerdetail.
+function analyseBlockHtml(liste, sid, alsKarte) {
+  if (!liste || !liste.length) return "";
+  const spiele = liste.map((a) => analyseSpielHtml(a, sid)).join("");
+  const kopf = '<div class="ik-kopf">🎬 Spielanalyse</div>';
+  return alsKarte
+    ? `<section class="ich-karte">${kopf}${spiele}</section>`
+    : `<div class="profil-analyse">${kopf}${spiele}</div>`;
+}
+
+// "Mein Profil": nur die Zahlen - je Spiel eine Zeile, darunter die Summe. Die Szenen
+// und Videos stehen unter Ich -> Videos; ein Tipp auf ein Spiel fuehrt dorthin.
+const STAT_FELDER = [["tore", "Tore"], ["fehlwuerfe", "Fehlwürfe"], ["ballverluste", "Ballverluste"],
+                     ["paraden", "Paraden"], ["vorlagen", "Vorlagen"], ["strafen", "Strafen/7m"]];
+
+function statKacheln(st) {
+  return STAT_FELDER.filter(([k]) => st[k] > 0)
+    .map(([k, l]) => `<span class="an-kachel"><b>${st[k]}</b>${l}</span>`).join("")
+    || '<span class="hinweis">keine Aktionen erfasst</span>';
+}
+
+function statistikBlockHtml(liste) {
+  const kopf = '<div class="ik-kopf">🎬 Meine Spielstatistik</div>';
+  if (!liste || !liste.length) {
+    return `<section class="ich-karte">${kopf}<p class="hinweis">Für dich wurden noch keine Spielaktionen erfasst.</p></section>`;
+  }
+  const summe = { zuege: 0, gruen: 0, orange: 0, rot: 0 };
+  for (const [k] of STAT_FELDER) summe[k] = 0;
+  const zeilen = liste.map((a) => {
+    for (const k of Object.keys(summe)) summe[k] += a.stats[k] || 0;
+    const ampel = a.stats.zuege
+      ? `<div class="an-ampel">${a.stats.zuege} Spielzüge:
+          <span class="an-p gruen">${a.stats.gruen}</span><span class="an-p orange">${a.stats.orange}</span><span class="an-p rot">${a.stats.rot}</span></div>`
+      : "";
+    return `<button class="stat-zeile" data-spiel="${a.id}">
+      <span class="sz-titel">TVG – ${escape(a.gegner)}${a.datum ? `<small>${escape(datumKurz(a.datum))}</small>` : ""}</span>
+      <div class="an-kacheln">${statKacheln(a.stats)}</div>${ampel}</button>`;
+  }).join("");
+  const ampelSumme = summe.zuege
+    ? `<div class="an-ampel">${summe.zuege} Spielzüge:
+        <span class="an-p gruen">${summe.gruen}</span><span class="an-p orange">${summe.orange}</span><span class="an-p rot">${summe.rot}</span></div>`
+    : "";
+  const spiele = liste.length === 1 ? "1 Spiel" : liste.length + " Spiele";
+  return `<section class="ich-karte" id="ich-statistik">${kopf}${zeilen}
+    <div class="stat-summe"><span class="sz-titel">Insgesamt<small>${spiele}</small></span>
+      <div class="an-kacheln">${statKacheln(summe)}</div>${ampelSumme}</div></section>`;
+}
+
+// ---- Videoanalyse eines Spiels (Ich -> Videos -> Spiel) ----------------------
+//  Dieselbe Szenenliste wie frueher im Profil; ein Tipp auf eine Szene oeffnet den
+//  Clip, "Ganzes Spiel ansehen" das komplette Spielvideo. Wer im Spiel nicht
+//  vorkommt, sieht statt der Szenen einen Hinweis, kann aber das ganze Spiel ansehen.
+let aktAnalyse = null;
+
+async function oeffneAnalyseDetail(aid) {
+  const el = $("#analyse-detail-inhalt");
+  el.innerHTML = '<p class="hinweis">Lädt…</p>';
+  zeigeView("view-analyse-detail");
+  let a;
+  try { a = await api("/api/analysen/" + aid); }           // direkt vom Server: soll nie einen fremden Cache-Stand zeigen
+  catch (_) {
+    el.innerHTML = '<p class="hinweis">Die Videoanalyse konnte nicht geladen werden – dafür brauchst du eine Verbindung.</p>';
+    return;
+  }
+  aktAnalyse = a;
+  nutzungMelden("video", "analyse:" + a.id, a.gegner);
+  const meta = [a.datum ? datumKurz(a.datum) : "", a.art].filter(Boolean).join(" · ");
+  el.innerHTML = `<h2>Videoanalyse gegen ${escape(a.gegner)}</h2>
+    ${meta ? `<div class="vd-meta">${escape(meta)}</div>` : ""}
+    ${a.video_da ? '<button id="analyse-ganzes" class="primaer gross">▶ Ganzes Spiel ansehen</button>' : ""}
+    <h3 class="videos-h">Deine Szenen</h3>
+    ${analyseSpielHtml(a, eigeneSpielerId(), true)}`;
+  const ganzes = $("#analyse-ganzes");
+  if (ganzes) ganzes.addEventListener("click", () => oeffneAnalyseVideo(a.id, 0, "TVG – " + a.gegner, null));
+}
+
+$("#btn-analyse-zurueck").addEventListener("click", () => gehe("ich", "videos"));
+
+let analyseZurueckView = null;
+
+function zeigeSzenenNotiz(info) {
+  const box = $("#vd-notiz");
+  box.className = "vd-notiz" + (info && info.farbe ? " " + info.farbe : "");
+  box.replaceChildren();
+  if (!info) return;
+  const titel = document.createElement("div");
+  titel.className = "vn-titel";
+  titel.textContent = info.text;
+  box.appendChild(titel);
+  if (info.zeit) {
+    const meta = document.createElement("div");
+    meta.className = "vn-meta";
+    meta.textContent = info.zeit;
+    box.appendChild(meta);
+  }
+  if (info.kommentar) {
+    const label = document.createElement("span");
+    label.className = "vn-label";
+    label.textContent = "Kommentar vom Trainer";
+    const text = document.createElement("p");
+    text.className = "vn-kommentar";
+    text.textContent = info.kommentar;           // textContent: Freitext wird nie als HTML gelesen
+    box.append(label, text);
+  }
+  if (info.voll) {                                   // aus dem Clip ins ganze Spiel wechseln
+    const knopf = document.createElement("button");
+    knopf.className = "plan-edit-btn vn-voll";
+    knopf.textContent = "Im ganzen Spiel ab hier";
+    knopf.addEventListener("click", info.voll);
+    box.appendChild(knopf);
+  }
+}
+
+// Von wo kam man ins Video? (Beim Wechsel Clip -> ganzes Spiel bleibt das urspruengliche Ziel.)
+function merkeZurueckView() {
+  const aktiv = document.querySelector(".view:not(.hidden)");
+  if (aktiv && aktiv.id !== "view-video-detail") analyseZurueckView = aktiv.id;
+}
+
+function oeffneSzenenClip(cid, titel, info) {
+  nutzungMelden("video", "szene:" + cid, titel);
+  merkeZurueckView();
+  $("#vd-titel").textContent = titel;
+  $("#vd-meta").textContent = "Szene";
+  $("#vd-aktionen").innerHTML = "";
+  zeigeSzenenNotiz(info);
+  $("#btn-video-zurueck").textContent = "← Zurück";
+  const player = $("#vd-player");
+  player.addEventListener("loadedmetadata", () => { player.play().catch(() => {}); }, { once: true });
+  player.src = "/api/szenen/" + cid + "/video";
+  player.load();
+  zeigeView("view-video-detail");
+}
+
+function oeffneAnalyseVideo(aid, t, titel, info) {
+  nutzungMelden("video", "spiel:" + aid, titel);
+  merkeZurueckView();
+  $("#vd-titel").textContent = titel;
+  $("#vd-meta").textContent = "ab " + analyseZeit(t);
+  $("#vd-aktionen").innerHTML = "";
+  zeigeSzenenNotiz(info);
+  $("#btn-video-zurueck").textContent = "← Zurück";
+  const player = $("#vd-player");
+  const start = Math.max(0, t - 3);                // etwas Anlauf vor der Szene
+  player.addEventListener("loadedmetadata", () => { player.currentTime = start; player.play().catch(() => {}); },
+    { once: true });
+  player.src = "/api/analysen/" + aid + "/video";
+  player.load();
+  zeigeView("view-video-detail");
+}
+
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-analyse]");
+  if (!b) return;
+  const bis = b.dataset.bis !== "" ? +b.dataset.bis : null;
+  const aid = +b.dataset.analyse, t = +b.dataset.t, titel = b.dataset.titel;
+  const info = {
+    text: b.dataset.text, farbe: b.dataset.farbe, kommentar: b.dataset.kommentar,
+    zeit: bis != null ? analyseZeit(t) + " – " + analyseZeit(bis) : "bei " + analyseZeit(t),
+  };
+  if (b.dataset.clip) {                       // kurzer Clip: laedt in Sekunden, auch ueber Funnel/Handy
+    if (b.dataset.voll) info.voll = () => oeffneAnalyseVideo(aid, t, titel, { ...info, voll: null });
+    oeffneSzenenClip(+b.dataset.clip, titel, info);
+  } else {
+    oeffneAnalyseVideo(aid, t, titel, info);  // kein Clip vorhanden: ganzes Spiel an der Stelle
+  }
+});
 
 // ============================================================ Szenen-Videos ==
 //  Einzelne Spielszenen, geschnitten und beschriftet am PC (Projekt
@@ -2441,6 +3121,7 @@ function renderIch() {
 //  die Trainerin sieht alle, kann sie umhaengen und loeschen. Der Upload
 //  passiert im Schnittwerkzeug, nicht hier. Online-only (Streaming braucht Netz).
 let videoClips = null;
+let videoSpiele = null;     // nur Spielerinnen: alle Spielanalysen (Ich -> Videos)
 let videoKader = null;      // nur Trainerin: Kader fuer die Zuordnung
 let aktVideo = null;
 
@@ -2449,6 +3130,9 @@ async function ladeVideos() {
   if (!videoClips) el.innerHTML = '<p class="hinweis">Lädt…</p>';
   try {
     videoClips = await api("/api/clips");
+    if (aktRolle !== "trainer") {
+      try { videoSpiele = await api("/api/analysen"); } catch (_) { if (!videoSpiele) videoSpiele = []; }
+    }
     if (aktRolle === "trainer" && !videoKader) {
       try { videoKader = await api("/api/spieler"); } catch (_) { videoKader = []; }
     }
@@ -2464,7 +3148,8 @@ async function ladeVideos() {
 function renderVideos() {
   const el = $("#videos-liste");
   const clips = videoClips || [];
-  if (!clips.length) {
+  const spiele = aktRolle === "trainer" ? [] : (videoSpiele || []);
+  if (!clips.length && !spiele.length) {
     el.innerHTML = aktRolle === "trainer"
       ? '<p class="hinweis">Noch keine Clips. Szenen werden am PC mit „Balu-Videoschnitt" ' +
         'geschnitten und hochgeladen.</p>'
@@ -2472,7 +3157,36 @@ function renderVideos() {
     return;
   }
   el.innerHTML = "";
-  for (const c of clips) el.appendChild(videoKarte(c));
+  if (spiele.length) {
+    const h = document.createElement("h3");
+    h.className = "videos-h";
+    h.textContent = "Spiele";
+    el.appendChild(h);
+    for (const a of spiele) el.appendChild(spielKarte(a));
+  }
+  if (clips.length) {
+    if (spiele.length) {
+      const h = document.createElement("h3");
+      h.className = "videos-h";
+      h.textContent = "Einzelne Szenen";
+      el.appendChild(h);
+    }
+    for (const c of clips) el.appendChild(videoKarte(c));
+  }
+}
+
+// Ein Spiel mit Videoanalyse: Gegner, Datum, wie viele Szenen es fuer die Spielerin gibt.
+function spielKarte(a) {
+  const karte = document.createElement("button");
+  karte.className = "video-karte";
+  const meta = [a.datum ? datumKurz(a.datum) : "", a.art].filter(Boolean).join(" · ");
+  const n = (a.meine_events || 0) + (a.meine_zuege || 0);
+  const szenen = n ? n + (n === 1 ? " Szene für dich" : " Szenen für dich") : "keine Szenen für dich";
+  karte.innerHTML = `<span class="vk-titel">${escape(a.gegner)}</span>`
+    + (meta ? `<span class="vk-meta">${escape(meta)}</span>` : "")
+    + `<span class="vk-notiz">Videoanalyse · ${escape(szenen)}${a.video_da ? "" : " · Video folgt"}</span>`;
+  karte.addEventListener("click", () => oeffneAnalyseDetail(a.id));
+  return karte;
 }
 
 function videoKarte(c) {
@@ -2494,7 +3208,11 @@ function videoKarte(c) {
 }
 
 function oeffneVideo(c) {
+  nutzungMelden("video", "clip:" + c.id, c.titel);
   aktVideo = c;
+  analyseZurueckView = null;
+  zeigeSzenenNotiz(null);
+  $("#btn-video-zurueck").textContent = "← Videos";
   $("#vd-titel").textContent = c.titel;
   const player = $("#vd-player");
   player.src = "/api/clips/" + c.id + "/video";
@@ -2580,6 +3298,13 @@ function videoZuordnenDialog(c) {
 
 $("#btn-video-zurueck").addEventListener("click", () => {
   stoppeVideoPlayer();
+  if (analyseZurueckView) {                 // kam aus einem Spielerprofil
+    const v = analyseZurueckView;
+    analyseZurueckView = null;
+    $("#btn-video-zurueck").textContent = "← Videos";
+    zeigeView(v);
+    return;
+  }
   gehe(aktOber, "videos");
 });
 
@@ -2699,6 +3424,7 @@ async function detailNeuLaden(spielId) {
   detailStats = d.stats;
   detailTraining = d.training || null;
   detailLC = d.laufchallenge || null;
+  detailAnalyse = await ladeAnalysen(detailSpieler.id);
   renderSpielerDetail();
   const idx = spielId == null ? -1 : detailSpiele.findIndex((s) => s.spiel_id === spielId);
   if (idx >= 0) oeffneSpielDetail(idx);
@@ -3186,6 +3912,144 @@ function toast(text) {
   toastTimer = setTimeout(() => el.classList.add("hidden"), 2600);
 }
 
+// ================================================= Statistik Spiele (Saison) ==
+//  Auswertung einer hochgeladenen Spielanalyse (Balu-Spielanalyse) fuer den
+//  Trainer. Wurf = Tor + Fehlwurf; Angriff = Wurf + Ballverlust.
+//  Positionen: aus position_angriff, pro Spieler/Spiel ueberschreibbar.
+const STAT_POS_UEBER = [   // [Namensanfang, Gruppe] – gilt fuer alle Spiele dieser Saison-Statistik
+  ["helen", "Rückraum"], ["franzi o", "Außen"],
+];
+const STAT_POS_GRUPPEN = ["Rückraum", "Außen", "Kreis", "Tor"];
+let statSpiele = [];
+let statAktId = null;
+
+function statPosition(s) {
+  const n = (s.name || "").toLowerCase();
+  const u = STAT_POS_UEBER.find(([p]) => n.startsWith(p));
+  if (u) return u[1];
+  const p = (s.position_angriff || "").toLowerCase();
+  if (s.position === "Tor" || p.includes("tor")) return "Tor";
+  if (p.includes("kreis")) return "Kreis";
+  if (p.includes("außen") || p.includes("aussen")) return "Außen";
+  if (p) return "Rückraum";   // Halblinks / Mitte / Halbrechts / Rückraum
+  return "Ohne Position";
+}
+
+const statQuote = (z, n) => (n > 0 ? Math.round((z / n) * 100) + " %" : "–");
+
+function berechneSpielStatistik(a, spieler) {
+  const proId = new Map();
+  const zeile = (id) => {
+    if (!proId.has(id)) {
+      const s = spieler.find((x) => x.id === id) || { id, name: "Spielerin " + id };
+      proId.set(id, { id, name: s.name, pos: statPosition(s), tore: 0, fehl: 0, bv: 0, paraden: 0 });
+    }
+    return proId.get(id);
+  };
+  const ges = { tore: 0, fehl: 0, bv: 0 };
+  for (const e of a.events) {
+    if (e.spieler_id == null) continue;
+    if (e.typ === "tor") { zeile(e.spieler_id).tore++; ges.tore++; }
+    else if (e.typ === "fehlwurf") { zeile(e.spieler_id).fehl++; ges.fehl++; }
+    else if (e.typ === "ballverlust") { zeile(e.spieler_id).bv++; ges.bv++; }
+    else if (e.typ === "parade") zeile(e.spieler_id).paraden++;
+  }
+  const spielzuege = new Map();
+  for (const z of a.zuege) {
+    const r = spielzuege.get(z.name) || { name: z.name, gruen: 0, orange: 0, rot: 0 };
+    r[z.ampel]++;
+    spielzuege.set(z.name, r);
+  }
+  const spielerListe = [...proId.values()].sort((x, y) => (y.tore + y.fehl) - (x.tore + x.fehl) || x.name.localeCompare(y.name));
+  const pos = STAT_POS_GRUPPEN.concat(["Ohne Position"]).map((g) => {
+    const m = spielerListe.filter((s) => s.pos === g);
+    const sum = (k) => m.reduce((n, s) => n + s[k], 0);
+    return { name: g, tore: sum("tore"), fehl: sum("fehl"), bv: sum("bv"), paraden: sum("paraden"), n: m.length };
+  }).filter((p) => p.n > 0);
+  return { ges, spielzuege: [...spielzuege.values()].sort((x, y) => (y.gruen + y.orange + y.rot) - (x.gruen + x.orange + x.rot)),
+           spieler: spielerListe, pos };
+}
+
+function statTabelle(kopf, zeilen) {
+  return `<div class="stat-scroll"><table class="stat-tab"><thead><tr>${kopf.map((k, i) => `<th${i ? ' class="r"' : ""}>${k}</th>`).join("")}</tr></thead>
+    <tbody>${zeilen.map((z) => `<tr>${z.map((c, i) => `<td${i ? ' class="r"' : ""}>${c}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+}
+
+function statWurfZeilen(liste, mitParaden) {
+  return liste.map((s) => {
+    const w = s.tore + s.fehl;
+    const z = [escape(s.name), w, s.tore, s.fehl, statQuote(s.tore, w), s.bv];
+    if (mitParaden) z.push(s.paraden);
+    return z;
+  });
+}
+
+function renderStatistikSpiel(a, spieler) {
+  const st = berechneSpielStatistik(a, spieler);
+  const wuerfe = st.ges.tore + st.ges.fehl;
+  const angriffe = wuerfe + st.ges.bv;
+  const zg = st.spielzuege.reduce((n, r) => (n.g += r.gruen, n.o += r.orange, n.r += r.rot, n), { g: 0, o: 0, r: 0 });
+  const zn = zg.g + zg.o + zg.r;
+  const kachel = (zahl, text) => `<span class="an-kachel"><b>${zahl}</b>${text}</span>`;
+  const feld = st.spieler.filter((s) => s.pos !== "Tor");
+  const tor = st.spieler.filter((s) => s.pos === "Tor");
+  const kopf = ["", "Würfe", "Tore", "Fehlwürfe", "Wurfeff.", "Ballverl."];
+  const ampelZellen = (g, o, r, n) => [`<span class="an-p gruen">${statQuote(g, n)}</span>`,
+    `<span class="an-p orange">${statQuote(o, n)}</span>`, `<span class="an-p rot">${statQuote(r, n)}</span>`];
+  return `
+    <h3>Gesamt</h3>
+    <div class="an-kacheln">
+      ${kachel(statQuote(st.ges.tore, angriffe), "Angriffseffektivität")}
+      ${kachel(statQuote(st.ges.tore, wuerfe), "Wurfeffektivität")}
+      ${kachel(angriffe, "Angriffe")}${kachel(wuerfe, "Würfe")}${kachel(st.ges.tore, "Tore")}${kachel(st.ges.bv, "Ballverluste")}
+    </div>
+    <p class="hinweis">Angriffseffektivität = Tore ÷ (Würfe + Ballverluste). Wurfeffektivität = Tore ÷ Würfe.</p>
+    <h3>Spielzüge</h3>
+    ${zn ? statTabelle(["Spielzug", "Anz.", "Gut", "Mittel", "Schlecht"],
+      [["<b>Alle</b>", zn, ...ampelZellen(zg.g, zg.o, zg.r, zn)],
+       ...st.spielzuege.map((r) => { const n = r.gruen + r.orange + r.rot;
+         return [escape(r.name), n, ...ampelZellen(r.gruen, r.orange, r.rot, n)]; })])
+      : '<p class="hinweis">Keine Spielzüge erfasst.</p>'}
+    <p class="hinweis">Gut = Tor (grün), Mittel = okay (orange), Schlecht = Fehler (rot).</p>
+    <h3>Spielerinnen</h3>
+    ${statTabelle(kopf, statWurfZeilen(feld))}
+    ${tor.length ? `<h3>Torhüterinnen</h3>${statTabelle(["", "Paraden", "Ballverl."], tor.map((s) => [escape(s.name), s.paraden, s.bv]))}` : ""}
+    <h3>Nach Positionen</h3>
+    ${statTabelle(kopf, statWurfZeilen(st.pos.filter((p) => p.name !== "Tor").map((p) => ({ ...p, name: p.name + " (" + p.n + ")" }))))}
+    <p class="hinweis">Helen = Rückraum, Franzi O. = Außen. Alle anderen nach ihrer Angriffsposition im Kader (Halblinks/Mitte/Halbrechts = Rückraum).</p>`;
+}
+
+async function ladeStatistikSpiele() {
+  const el = $("#statspiele-inhalt");
+  el.innerHTML = '<p class="hinweis">Lädt …</p>';
+  try {
+    statSpiele = await Sync.apiOffline("/api/analysen");
+    if (!spielerAlle.length) await ladeSpieler();
+  } catch (_) {
+    el.innerHTML = '<p class="hinweis">Spiele konnten nicht geladen werden.</p>';
+    return;
+  }
+  if (!statSpiele.length) { el.innerHTML = '<p class="hinweis">Noch kein Spiel hochgeladen.</p>'; return; }
+  if (!statSpiele.some((s) => s.id === statAktId)) {
+    statAktId = (statSpiele.find((s) => /oberkochen/i.test(s.gegner)) || statSpiele[0]).id;
+  }
+  await zeigeStatistikSpiel();
+}
+
+async function zeigeStatistikSpiel() {
+  const el = $("#statspiele-inhalt");
+  const chips = statSpiele.map((s) => `<button class="chip-btn${s.id === statAktId ? " aktiv" : ""}" data-sid="${s.id}">${escape(s.gegner)}</button>`).join("");
+  let a;
+  try { a = await Sync.apiOffline("/api/analysen/" + statAktId); }
+  catch (_) { el.innerHTML = '<p class="hinweis">Spiel konnte nicht geladen werden.</p>'; return; }
+  const meta = [a.datum ? a.datum.split("-").reverse().join(".") : "", a.art].filter(Boolean).join(" · ");
+  el.innerHTML = `<div class="stat-chips">${chips}</div><p class="hinweis">${escape(a.gegner)}${meta ? " · " + escape(meta) : ""}</p>`
+    + renderStatistikSpiel(a, spielerAlle);
+  el.querySelectorAll("[data-sid]").forEach((b) => b.addEventListener("click", () => {
+    statAktId = Number(b.dataset.sid); zeigeStatistikSpiel();
+  }));
+}
+
 function escape(s) {
   return String(s).replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
@@ -3459,7 +4323,7 @@ $("#btn-mic").addEventListener("click", async () => {
 // Sichtbare Versionsnummer im Kopf — was drin ist, steht in CHANGELOG.md.
 // Bei jeder Aenderung: hier hochzaehlen, Eintrag im CHANGELOG, sw.js CACHE
 // bumpen und die ?v= der geaenderten Dateien in index.html.
-const APP_VERSION = "v0.46.0";
+const APP_VERSION = "v0.55.0";
 const versionEl = document.getElementById("version");
 if (versionEl) versionEl.textContent = APP_VERSION;
 
@@ -3494,6 +4358,7 @@ document.addEventListener("outbox:offen", (e) => { _offen = e.detail.offen; male
 const _punkt = document.getElementById("server-punkt");
 if (_punkt) _punkt.addEventListener("click", async () => {
   toast("Synchronisiere…");
+  pruefeStand(true);
   const ok = await Sync.jetztSynchronisieren();
   const offen = await Sync.anzahlOffen();
   if (offen === 0) toast(ok ? "Alles synchron ✓" : "Verbunden ✓");

@@ -103,6 +103,21 @@ async function loesche(store, key) {
   });
 }
 
+// Alle gespiegelten Server-Daten verwerfen - NICHT die Outbox (noch nicht gesendete
+// Aenderungen). Beim Wechsel des Kontos noetig: der Cache ist nur nach Pfad abgelegt
+// und wird zuerst angezeigt; sonst saehe eine Spielerin kurz die Antwort, die der
+// Trainer auf demselben Geraet zuletzt geholt hat (z. B. alle Szenen eines Spiels).
+async function leereCaches() {
+  for (const store of ["responses", "spieler", "spiele", "rangliste", "trainings"]) {
+    const os = await _tx(store, "readwrite");
+    await new Promise((resolve, reject) => {
+      const r = os.clear();
+      r.onsuccess = () => resolve();
+      r.onerror = () => reject(r.error);
+    });
+  }
+}
+
 // ------------------------------------------------------------------- Outbox ----
 //  Ein offener Schreibvorgang: { token, pfad, methode, body, ts }.
 //  token = Idempotenz-Schluessel (bei Spielen bereits vorhanden) → der Server
@@ -125,6 +140,7 @@ window.LocalDB = {
   getAlle,
   ersetzeAlle,
   loesche,
+  leereCaches,
   outboxHinzu,
   outboxAlle,
   outboxEntfernen,
