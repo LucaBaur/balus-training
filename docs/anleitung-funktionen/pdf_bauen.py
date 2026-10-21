@@ -88,6 +88,7 @@ def handy(name: str) -> Path:
 c = None
 seite = 0
 GESAMT = 0
+SEITEN_DATEN: list[dict] = []     # dieselben Inhalte fürs README (siehe readme_schreiben)
 
 
 def neue_seite():
@@ -129,6 +130,7 @@ def absatz(text: str, x: float, y: float, breite: float, stil=body) -> float:
 
 def bildseite(titel: str, wer: str, einleitung: str, bilder: list[tuple[str, str, str]]):
     """Eine Seite: Einleitung oben, darunter 2 oder 3 Handys mit Nummer, Titel und Text."""
+    SEITEN_DATEN.append({"titel": titel, "wer": wer, "intro": einleitung, "bilder": bilder})
     neue_seite()
     kopf(titel, wer)
     # Block (Einleitung + Handys + Bildtexte) senkrecht in die freie Fläche setzen
@@ -161,6 +163,7 @@ def bildseite(titel: str, wer: str, einleitung: str, bilder: list[tuple[str, str
 
 
 def textseite(titel: str, wer: str, bloecke: list[tuple[str, str]]):
+    SEITEN_DATEN.append({"titel": titel, "wer": wer, "bloecke": bloecke})
     neue_seite()
     kopf(titel, wer)
     y = H - 34 * mm
@@ -357,6 +360,60 @@ def baue():
     ])
 
 
+# ------------------------------------------------------------------- README
+README = HIER.parents[1] / "README.md"
+HANDY_DIR = HIER / "handy"
+START, ENDE = "<!-- ANLEITUNG-START -->", "<!-- ANLEITUNG-ENDE -->"
+
+
+def _md(text: str) -> str:
+    """Die kleinen HTML-Auszeichnungen aus den PDF-Texten in Markdown umwandeln."""
+    return (text.replace("<b>", "**").replace("</b>", "**").replace("&amp;", "&")
+                .replace("<br/>", " "))
+
+
+def readme_schreiben():
+    """Schreibt die Anleitung (gleiche Texte und Bilder wie die PDF) zwischen die Marker im README."""
+    HANDY_DIR.mkdir(exist_ok=True)
+    zeilen = [START, "",
+              "Alle Bilder zeigen eine Testinstanz mit erfundenen Namen. Dieselbe Anleitung gibt es "
+              "als [PDF](docs/anleitung-funktionen/Anleitung-Funktionen.pdf). Sie wird mit "
+              "`py docs/anleitung-funktionen/pdf_bauen.py` neu gebaut, dabei wird auch dieser "
+              "Abschnitt erzeugt.", ""]
+    for sd in SEITEN_DATEN:
+        zeilen += [f"### {sd['titel']}", "", f"*Für: {sd['wer']}*", ""]
+        if "bloecke" in sd:
+            for ueber, text in sd["bloecke"]:
+                zeilen += [f"**{ueber}** {_md(text)}", ""]
+            continue
+        zeilen += [_md(sd["intro"]), ""]
+        n = len(sd["bilder"])
+        kopfzeile, trenner, text = [], [], []
+        for nr, (name, titel, beschreibung) in enumerate(sd["bilder"], 1):
+            klein = HANDY_DIR / f"{name}.jpg"
+            im = Image.open(handy(name))
+            im.thumbnail((420, 900))
+            im.save(klein, quality=84, optimize=True)
+            kopfzeile.append(f'<img src="docs/anleitung-funktionen/handy/{name}.jpg" width="230" alt="{titel}">')
+            trenner.append(":---:")
+            text.append(f"**{nr}. {titel}**<br>{_md(beschreibung)}")
+        zeilen += ["| " + " | ".join(kopfzeile) + " |", "|" + "|".join(trenner) + "|",
+                   "| " + " | ".join(text) + " |", ""]
+    zeilen.append(ENDE)
+    abschnitt = "\n".join(zeilen)
+
+    inhalt = README.read_text(encoding="utf-8")
+    if START in inhalt and ENDE in inhalt:
+        a, b = inhalt.index(START), inhalt.index(ENDE) + len(ENDE)
+        inhalt = inhalt[:a] + abschnitt + inhalt[b:]
+    else:
+        # Erstmalig: als eigener Abschnitt vor "## SpielerPlus-Brücke" einfügen
+        anker = "## SpielerPlus-Brücke"
+        assert anker in inhalt, "Anker im README nicht gefunden"
+        inhalt = inhalt.replace(anker, "## Anleitung in Bildern\n\n" + abschnitt + "\n\n" + anker, 1)
+    README.write_text(inhalt, encoding="utf-8")
+
+
 def lauf(ziel) -> int:
     """Eine komplette Runde. Die erste zählt nur die Seiten (für 'Seite x von y')."""
     global c, seite
@@ -373,5 +430,7 @@ def lauf(ziel) -> int:
 if __name__ == "__main__":
     import io
     GESAMT = lauf(io.BytesIO())
+    SEITEN_DATEN.clear()
     lauf(str(OUT))
+    readme_schreiben()
     print(f"{OUT.name}: {seite} Seiten, {OUT.stat().st_size / 1e6:.1f} MB")
