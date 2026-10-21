@@ -50,12 +50,13 @@ Spiel für alle).
 - **Trainingsplan als Blöcke** (Dauer optional, Übungen aus der Sammlung übernehmbar),
   nur für Trainer sichtbar.
 - **Coach-Chat:** aus Text oder Sprachnachricht einen Planvorschlag erzeugen.
+- **Aufstellung auf dem Spielfeld** (zwei Ansichten, Positionen der Spielerinnen).
 - **Automatische Termine:** Montag und Donnerstag legt der Server die Trainings der
   nächsten 14 Tage selbst an (`trainings_termine.py`).
 - **Zu-/Absagen aus SpielerPlus:** siehe unten.
 
 **Team** – Kader mit Positionen, faire Teams für 2 bis 4 Mannschaften (ELO, Torhüterinnen
-verteilt), Ergebnis eintragen und rückgängig machen, Aufstellung auf dem Spielfeld,
+verteilt), Ergebnis eintragen und rückgängig machen,
 Nutzungs- und Fehlerübersicht (Geräte, App-Versionen).
 
 **Taktik** – Playbook/Wiki als Seitenbaum (Spielzüge, Überzahl, Unterzahl, Abwehr),
