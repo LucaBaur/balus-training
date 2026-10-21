@@ -54,8 +54,8 @@ Spielstatistik; *Videos* mit der Videoanalyse der Spiele und einzelnen Szenen-Cl
   Sammlung übernehmbar, nur für Trainer sichtbar) und der Knopf „Aus SpielerPlus aktualisieren“.
 - *Aufstellung:* alle Zusagen auf ihrer Position im Spielfeld (Training oder Spiel,
   Portraits oder Namen).
-- *Einteilung* (Trainer): Anwesende anhaken, faire Teams für 2 bis 4 Mannschaften bilden,
-  Ergebnis eintragen (ELO).
+- *Einteilung* (Trainer): Zusagen eines Termins übernehmen (oder Anwesende anhaken), faire
+  Teams für 2 bis 4 Mannschaften bilden, Ergebnis eintragen (ELO).
 - *Übungen* (Trainer): Übungssammlung. *Coach* (Trainer): aus Text oder Sprachnachricht
   einen Planvorschlag erzeugen.
 - **Automatische Termine:** Montag und Donnerstag legt der Server die Trainings der
@@ -133,7 +133,7 @@ Aus den Zusagen entsteht die Aufstellung auf dem Spielfeld. Für Trainingsspiele
 
 | <img src="docs/anleitung-funktionen/handy/10-aufstellung.jpg" width="230" alt="Aufstellung"> | <img src="docs/anleitung-funktionen/handy/11-einteilung.jpg" width="230" alt="Wer ist da?"> | <img src="docs/anleitung-funktionen/handy/12-teams.jpg" width="230" alt="Teams bilden"> |
 |:---:|:---:|:---:|
-| **1. Aufstellung**<br>Alle Zusagen stehen auf ihrer Position. So siehst du sofort, wo es dünn wird. Oben wechselst du zwischen Training und Spiel und zwischen Portraits und Namen. | **2. Wer ist da?**<br>Hake die Anwesenden an. Die ELO-Werte siehst nur du als Trainer. | **3. Teams bilden**<br>Mit 2, 3 oder 4 Teams. Die Spielstärke wird gleich verteilt, Torhüterinnen werden aufgeteilt. Antippen schiebt eine Spielerin ins nächste Team. |
+| **1. Aufstellung**<br>Alle Zusagen stehen auf ihrer Position. So siehst du sofort, wo es dünn wird. Oben wechselst du zwischen Training und Spiel und zwischen Portraits und Namen. | **2. Wer ist da?**<br>Wähle oben einen Termin, dann sind die Spielerinnen mit Zusage schon angehakt. Du kannst von Hand ändern. Die ELO-Werte siehst nur du als Trainer. | **3. Teams bilden**<br>Mit 2, 3 oder 4 Teams. Die Spielstärke wird gleich verteilt, Torhüterinnen werden aufgeteilt. Antippen schiebt eine Spielerin ins nächste Team. |
 
 ### Ergebnis, Übungen und Coach
 

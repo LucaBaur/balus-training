@@ -121,7 +121,7 @@ async function prefetchAlles(force) {
   try {
     const rang = await frischHolen("/api/rangliste");
     await frischHolen("/api/spieler");
-    await frischHolen("/api/anytype/trainings");
+    await frischHolen("/api/einteilung/trainings");
     // Phase-3-Inhalte (native): Home, Trainings-Liste + -Details, Wiki-Kategorien
     // inkl. der Seiten-Details (damit offline nichts erst angeklickt werden muss).
     await frischHolen("/api/naechstes-training");

@@ -155,8 +155,8 @@ def trainer(browser):
     @szene("einteilung")
     def _():
         ober(page, "training"); unter(page, "Einteilung"); page.wait_for_timeout(800)
-        for i in range(12):
-            page.locator("#view-anwesenheit input[type=checkbox]").nth(i).check()
+        page.select_option("#training-auswahl", index=1)      # Zusagen des nächsten Trainings übernehmen
+        page.wait_for_timeout(600)
         page.evaluate("window.scrollTo(0, 0)")
         foto(page, "11-einteilung", 400)
         page.click("#btn-generieren"); page.wait_for_timeout(900)

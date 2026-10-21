@@ -2437,9 +2437,9 @@ async function ladeTrainings() {
   const sel = $("#training-auswahl");
   sel.innerHTML = '<option value="">— manuell auswählen —</option>';
   try {
-    trainingsListe = await Sync.apiOffline("/api/anytype/trainings");
+    trainingsListe = await Sync.apiOffline("/api/einteilung/trainings");
   } catch (e) {
-    trainingsListe = [];          // Anytype nicht erreichbar -> nur manuell
+    trainingsListe = [];          // Server/Cache nicht erreichbar -> nur manuell
     return;
   }
   for (const t of trainingsListe) {
@@ -2451,7 +2451,7 @@ async function ladeTrainings() {
 }
 
 $("#training-auswahl").addEventListener("change", (e) => {
-  const t = trainingsListe.find((x) => x.id === e.target.value);
+  const t = trainingsListe.find((x) => String(x.id) === e.target.value);
   if (!t) return;
   anwesend.clear();
   t.spieler_ids.forEach((id) => anwesend.add(id));
@@ -4323,7 +4323,7 @@ $("#btn-mic").addEventListener("click", async () => {
 // Sichtbare Versionsnummer im Kopf — was drin ist, steht in CHANGELOG.md.
 // Bei jeder Aenderung: hier hochzaehlen, Eintrag im CHANGELOG, sw.js CACHE
 // bumpen und die ?v= der geaenderten Dateien in index.html.
-const APP_VERSION = "v0.55.1";
+const APP_VERSION = "v0.56.0";
 const versionEl = document.getElementById("version");
 if (versionEl) versionEl.textContent = APP_VERSION;
 

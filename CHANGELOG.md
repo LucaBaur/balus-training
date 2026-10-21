@@ -19,6 +19,21 @@ Zahl, Fehlerbehebungen und Design-Feinschliff die letzte.
 
 ---
 
+## v0.56.0 — 2026-10-21
+
+**Team-Einteilung: „Training übernehmen“ nimmt jetzt die Zusagen aus der App.** Bisher holte die
+Auswahl oben unter Training → Einteilung die Zusagen aus Anytype. Jetzt kommen sie aus den
+Zu- und Absagen in der App selbst, also auch das, was der Server morgens aus SpielerPlus
+holt und was Spielerinnen oder du eingetragen haben. Du wählst den Termin, die Anwesenden
+sind angehakt, und du kannst direkt die Teams bilden. Es erscheinen die Trainings von gestern
+bis in drei Wochen. Spielerinnen, die nicht mehr im Kader sind, werden nicht übernommen, die
+App sagt dir, wie viele es waren.
+
+Damit braucht die Einteilung kein Anytype mehr. Der alte Abruf `/api/anytype/trainings` ist
+entfernt (die Knöpfe „Aus Anytype importieren“ und „ELOs → Anytype“ im Kader bleiben).
+
+---
+
 ## v0.55.1 — 2026-10-21
 
 **Fehler behoben: Nach dem Anmelden stand oben rechts „offline“, obwohl alles lief.** Beim

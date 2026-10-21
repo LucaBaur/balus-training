@@ -272,7 +272,8 @@ def baue():
               "teilt die App die Anwesenden in möglichst gleich starke Teams.",
               [("10-aufstellung", "Aufstellung", "Alle Zusagen stehen auf ihrer Position. So siehst du sofort, "
                 "wo es dünn wird. Oben wechselst du zwischen Training und Spiel und zwischen Portraits und Namen."),
-               ("11-einteilung", "Wer ist da?", "Hake die Anwesenden an. Die ELO-Werte siehst nur du als Trainer."),
+               ("11-einteilung", "Wer ist da?", "Wähle oben einen Termin, dann sind die Spielerinnen mit Zusage schon "
+                "angehakt. Du kannst von Hand ändern. Die ELO-Werte siehst nur du als Trainer."),
                ("12-teams", "Teams bilden", "Mit 2, 3 oder 4 Teams. Die Spielstärke wird gleich verteilt, "
                 "Torhüterinnen werden aufgeteilt. Antippen schiebt eine Spielerin ins nächste Team.")])
 

@@ -395,27 +395,14 @@ def _training_label(datum_iso: str) -> str:
     return f"{praefix} {d.strftime('%d.%m.')}"
 
 
-@app.get("/api/anytype/trainings")
-def api_anytype_trainings(conn=Depends(hole_conn), _t=Depends(require_trainer)):
-    try:
-        import anytype_sync
-        at = anytype_sync.get_client()
-        trainings = anytype_sync.lade_trainings(at)
-    except Exception as e:
-        raise HTTPException(502, f"Anytype-Trainings fehlgeschlagen: {e}")
-    karte = {p["anytype_id"]: p["id"]
-             for p in db.aktive_spieler(conn) if p.get("anytype_id")}
+@app.get("/api/einteilung/trainings")
+def api_einteilung_trainings(conn=Depends(hole_conn), _t=Depends(require_trainer)):
+    """Trainings der naechsten Tage mit den Zusagen aus der App-Datenbank. Die Team-
+    Einteilung uebernimmt daraus die Anwesenden (frueher aus Anytype geholt)."""
     result = []
-    for t in trainings:
-        ids = [karte[a] for a in t["anwesend_anytype"] if a in karte]
-        result.append({
-            "id": t["id"],
-            "name": t["name"],
-            "datum": t["datum"],
-            "label": _training_label(t["datum"]),
-            "spieler_ids": ids,
-            "anwesend_gesamt": len(t["anwesend_anytype"]),
-        })
+    for t in db.einteilung_trainings(conn):
+        t["label"] = _training_label(t["datum"])
+        result.append(t)
     return result
 
 

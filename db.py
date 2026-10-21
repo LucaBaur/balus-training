@@ -1064,6 +1064,31 @@ def teilnahme_spiegel_entfernen(conn: sqlite3.Connection, training_id: int,
     return cur.rowcount > 0
 
 
+def einteilung_trainings(conn: sqlite3.Connection, tage_zurueck: int = 1,
+                         tage_vor: int = 21, heute: date | None = None) -> list[dict]:
+    """Trainings um heute herum samt den Zusagen - Grundlage fuer "Training uebernehmen"
+    in der Team-Einteilung. Nur art='training' (Spiele werden nicht eingeteilt).
+
+    `spieler_ids` sind die zugesagten AKTIVEN Spielerinnen (die allein lassen sich
+    einteilen); `anwesend_gesamt` zaehlt alle Zusagen, damit die App "n nicht im
+    Kader" melden kann."""
+    heute = heute or date.today()
+    von = (heute - timedelta(days=tage_zurueck)).isoformat()
+    bis = (heute + timedelta(days=tage_vor)).isoformat()
+    out = []
+    for t in conn.execute(
+            "SELECT id, datum, titel FROM trainings "
+            "WHERE art = 'training' AND datum BETWEEN ? AND ? ORDER BY datum, id", (von, bis)):
+        zu = conn.execute(
+            "SELECT tt.spieler_id, s.aktiv FROM training_teilnahme tt "
+            "JOIN spieler s ON s.id = tt.spieler_id "
+            "WHERE tt.training_id = ? AND tt.status = 'anwesend' ORDER BY s.name", (t["id"],)).fetchall()
+        out.append({"id": t["id"], "datum": t["datum"], "name": t["titel"],
+                    "spieler_ids": [r["spieler_id"] for r in zu if r["aktiv"]],
+                    "anwesend_gesamt": len(zu)})
+    return out
+
+
 def teilnahme_loeschen(conn: sqlite3.Connection, training_id: int,
                        spieler_id: int) -> None:
     """Antwort zuruecksetzen auf 'noch offen' (Trainer-Korrektur). Ohne Zeile
