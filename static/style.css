@@ -1216,6 +1216,18 @@ button:active { transform: scale(.98); }
 .nk-dauer { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .nk-offen { color: var(--warn); }
 
+/* ↻ Aktualisieren (Nutzung, Videos) */
+.aktual-leiste { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; flex-wrap: wrap; }
+.aktual-leiste.hidden { display: none; }
+.aktual-knopf {
+  border: 1px solid var(--linie); background: var(--karte); color: var(--tvg);
+  border-radius: 999px; padding: 6px 13px; font: inherit; font-size: 0.88rem; font-weight: 600; cursor: pointer;
+}
+.aktual-knopf:disabled { opacity: .6; cursor: default; }
+.aktual-knopf.laeuft { animation: aktual-puls 1s ease-in-out infinite; }
+.aktual-text { color: var(--grau); font-size: 0.82rem; }
+@keyframes aktual-puls { 50% { opacity: .45; } }
+
 /* Team -> Videos (Trainer): Spielzug-Uebersicht */
 .videos-liste > .su-voll { grid-column: 1 / -1; }   /* .videos-liste ist breit ein 2-Spalten-Raster */
 .su-leiste, .su-chips { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin: 0 0 8px; }

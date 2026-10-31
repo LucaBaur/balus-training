@@ -11,7 +11,7 @@
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="apple-touch-icon" href="/icon-192.png?v=3" />
   <link rel="icon" href="/icon-192.png?v=3" />
-  <link rel="stylesheet" href="/style.css?v=48" />
+  <link rel="stylesheet" href="/style.css?v=49" />
   <title>Balu's Training</title>
 </head>
 <body>
@@ -95,6 +95,11 @@
          Trainerin alle (mit Zuordnen/Löschen). -->
     <section id="view-videos" class="view hidden">
       <h2>Videos</h2>
+      <!-- ↻ nur für den Trainer (app.js blendet es ein): lädt diese Ansicht frisch vom Server -->
+      <div class="aktual-leiste hidden" id="aktual-leiste-videos">
+        <button type="button" class="aktual-knopf" data-aktualisieren>↻ Aktualisieren</button>
+        <span class="aktual-text" id="aktual-videos"></span>
+      </div>
       <div id="videos-liste" class="videos-liste"></div>
     </section>
 
@@ -155,6 +160,10 @@
     <!-- Nutzung: wer wie oft in der App ist und was sie anschaut (nur Trainer) -->
     <section id="view-nutzung" class="view hidden">
       <h2>Nutzung</h2>
+      <div class="aktual-leiste" id="aktual-leiste-nutzung">
+        <button type="button" class="aktual-knopf" data-aktualisieren>↻ Aktualisieren</button>
+        <span class="aktual-text" id="aktual-nutzung"></span>
+      </div>
       <div id="nutzung-inhalt"></div>
     </section>
 
@@ -283,6 +292,6 @@
   <script src="/local-db.js?v=3"></script>
   <script src="/sync.js?v=11"></script>
   <script src="/teams-local.js?v=2"></script>
-  <script src="/app.js?v=71"></script>
+  <script src="/app.js?v=73"></script>
 </body>
 </html>

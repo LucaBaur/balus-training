@@ -828,7 +828,7 @@ def api_seiten(kategorie: str | None = None, conn=Depends(hole_conn),
 @app.get("/api/seiten/{sid}")
 def api_seite(sid: int, conn=Depends(hole_conn), benutzer=Depends(require_user)):
     d = db.seite_detail(conn, sid)
-    if d is None:
+    if d is None or d.get("kategorie") == db.SEITEN_ARCHIV:      # archiviert = fuer die App geloescht
         raise HTTPException(404, "Seite nicht gefunden")
     if benutzer["rolle"] != "trainer" and d.get("kategorie") != "playbook":
         raise HTTPException(403, "Nur das Playbook ist für Spielerinnen sichtbar")
@@ -873,7 +873,8 @@ def api_seite_aendern(sid: int, a: SeiteAendern, conn=Depends(hole_conn),
     titel = a.titel.strip() if a.titel is not None else None
     if titel == "":
         raise HTTPException(400, "Titel darf nicht leer sein")
-    if db.seite_detail(conn, sid) is None:
+    d = db.seite_detail(conn, sid)
+    if d is None or d.get("kategorie") == db.SEITEN_ARCHIV:
         raise HTTPException(404, "Seite nicht gefunden")
     db.seite_speichern(conn, sid, markdown=a.markdown, titel=titel)
     return {"ok": True}

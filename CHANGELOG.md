@@ -19,6 +19,29 @@ Zahl, Fehlerbehebungen und Design-Feinschliff die letzte.
 
 ---
 
+## v0.62.0 — 2026-10-31
+
+**↻ Aktualisieren auf Nutzung und Videos (Trainer).** Ein Knopf lädt die angezeigte Seite frisch vom
+Server. Daneben steht, wie aktuell der Stand ist („aktualisiert vor 2 Min.“). Ohne Verbindung steht dort
+„offline – Stand von 14:28“, damit alte Daten nicht wie frische aussehen. Auch ein Tipp auf den
+Statuspunkt oben rechts lädt jetzt die gerade angezeigte Seite neu (er hat bisher nur Änderungen
+gesendet und die App-Version geprüft). Es wird nur diese eine Seite geholt, kein Komplett-Abgleich.
+Hinweis: Die Geräte der Spielerinnen melden ihre Nutzung gebündelt, im Schnitt innerhalb einer Minute.
+Der Stand ist also nie ganz live.
+
+---
+
+## v0.61.0 — 2026-10-31
+
+**Spielzüge im Playbook werden beim Löschen archiviert.** Bisher verschwand die ganze Seite. Jetzt
+(Knopf „Archivieren“) werden Text und Ansicht entfernt, der **Name bleibt** erhalten. Aus dem Playbook ist
+der Spielzug für alle weg, auch aus der Auswahl in Balu-Spielanalyse. Alte Spiele zeigen ihn weiter mit
+seinem Namen an, weil der Name dort mitgespeichert ist. Der Trainer sieht die archivierten Namen unter
+der Kategorie „archiv“. Unterseiten einer archivierten Gruppe bleiben erhalten. Andere Seiten (Gegner,
+Notizen …) werden wie bisher gelöscht. Spielerinnen können weiterhin nichts löschen.
+
+---
+
 ## v0.60.0 — 2026-10-31
 
 **Team → Videos zeigt jetzt alle Spielzüge, nach Spiel gegliedert.** Bisher standen dort nur die selbst

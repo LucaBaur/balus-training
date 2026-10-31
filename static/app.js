@@ -451,6 +451,17 @@ function szenenStatus(szene, spielerName) {
   const g = (szene.gesehen || []).find((x) => x.name === spielerName);
   return !g ? "offen" : g.gespielt > 0 ? "komplett" : "angetippt";
 }
+// Anzeige neben dem ↻-Knopf. Ohne Verbindung wird der Stand ausdruecklich als solcher benannt,
+// damit alte Daten nie wie frische aussehen. `ts` und `jetzt` in Millisekunden.
+function aktualisiertText(ts, jetzt, online) {
+  const uhr = (t) => new Date(t).toTimeString().slice(0, 5);          // HH:MM, Ortszeit
+  if (ts == null) return online ? "noch nicht geladen" : "offline – noch nicht geladen";
+  if (!online) return "offline – Stand von " + uhr(ts);
+  const min = Math.floor(Math.max(0, jetzt - ts) / 60000);
+  if (min < 1) return "gerade aktualisiert";
+  if (min < 60) return "aktualisiert vor " + min + " Min.";
+  return "Stand von " + uhr(ts);
+}
 // ---- Ende Nutzung-Hilfen ----
 
 // ---------------------------------------------------------------- Nutzung ----
@@ -657,15 +668,52 @@ function nutzungBereichName(key) {
   return ober && unter ? ober.label + " → " + unter.label : key;
 }
 
+// ---- ↻ Aktualisieren: Nutzung und Videos (Trainer) frisch vom Server holen ----
+//  Der Zeitstempel gilt nur fuer ERFOLGREICHES Laden; schlaegt es fehl, steht dort weiter der alte Stand.
+const _geladenAm = { nutzung: null, videos: null };
+
+function zeigeAktualisiert() {
+  for (const art of Object.keys(_geladenAm)) {
+    const el = document.getElementById("aktual-" + art);
+    if (el) el.textContent = aktualisiertText(_geladenAm[art], Date.now(), Sync.serverOnline);
+  }
+}
+function merkeGeladen(art) { _geladenAm[art] = Date.now(); zeigeAktualisiert(); }
+setInterval(zeigeAktualisiert, 30 * 1000);        // "vor 2 Min." weiterlaufen lassen
+document.addEventListener("server:status", zeigeAktualisiert);       // online <-> offline sofort anzeigen
+
+async function aktualisiereAnsicht() {
+  const sichtbar = document.querySelector(".view:not(.hidden)");
+  const id = sichtbar && sichtbar.id;
+  const knoepfe = document.querySelectorAll(".aktual-knopf");
+  knoepfe.forEach((b) => { b.disabled = true; b.classList.add("laeuft"); });
+  try {
+    await Sync.pingServer();                       // ehrlich zeigen, ob der Server erreichbar ist
+    if (!Sync.serverOnline) { toast("Offline – es bleibt der letzte Stand."); zeigeAktualisiert(); return; }
+    if (id === "view-nutzung") await ladeNutzung();
+    else if (id === "view-videos") await ladeVideos();
+    else if (id === "view-rangliste") await ladeRangliste();
+    else if (id === "view-anwesenheit") await ladeSpieler();
+    else {                                         // andere Seiten: ihr normaler Lader (Bereich/Unterpunkt)
+      const ober = NAV.find((o) => o.key === aktOber);
+      const unter = ober && ober.unter.find((u) => u.key === aktUnter);
+      if (unter && unter.view === id && unter.init) await unter.init();
+    }
+    zeigeAktualisiert();
+  } finally { knoepfe.forEach((b) => { b.disabled = false; b.classList.remove("laeuft"); }); }
+}
+document.addEventListener("click", (e) => { if (e.target.closest("[data-aktualisieren]")) aktualisiereAnsicht(); });
+
 async function ladeNutzung() {
   const el = $("#nutzung-inhalt");
   if (!nutzungDaten) el.innerHTML = '<p class="hinweis">Lädt …</p>';
-  try { nutzungDaten = await api("/api/nutzung"); }
+  try { nutzungDaten = await api("/api/nutzung"); merkeGeladen("nutzung"); }
   catch (_) {
     if (!nutzungDaten) {
       el.innerHTML = '<p class="hinweis">Nutzung konnte nicht geladen werden – dafür brauchst du eine Verbindung.</p>';
       return;
     }
+    zeigeAktualisiert();                           // alter Stand: die Anzeige nennt ihn beim Namen
   }
   renderNutzung();
 }
@@ -2414,7 +2462,7 @@ function renderSeite() {
   bearbeiten.addEventListener("click", startSeiteEdit);
   const loeschen = document.createElement("button");
   loeschen.className = "plan-edit-btn gefahr";
-  loeschen.textContent = "🗑 Löschen";
+  loeschen.textContent = s.kategorie === "playbook" ? "🗄 Archivieren" : "🗑 Löschen";   // Spielzuege werden nur archiviert
   loeschen.addEventListener("click", loescheSeite);
   akt.appendChild(bearbeiten); akt.appendChild(loeschen);
 }
@@ -2482,13 +2530,18 @@ async function patchSeiteCache(s) {
 
 async function loescheSeite() {
   const s = aktSeite;
-  if (!confirm(`„${s.titel}“ wirklich löschen? Unterseiten bleiben erhalten.`)) return;
-  if (!Sync.serverOnline) { toast("Löschen geht nur online."); return; }
+  const archiv = s.kategorie === "playbook";      // Spielzug: Name bleibt, Text und Ansicht werden entfernt
+  const frage = archiv
+    ? `„${s.titel}“ archivieren? Text und Ansicht werden entfernt, der Name bleibt (alte Spiele zeigen den `
+      + "Spielzug weiter an). Unterseiten bleiben erhalten."
+    : `„${s.titel}“ wirklich löschen? Unterseiten bleiben erhalten.`;
+  if (!confirm(frage)) return;
+  if (!Sync.serverOnline) { toast((archiv ? "Archivieren" : "Löschen") + " geht nur online."); return; }
   try {
     await api("/api/seiten/" + s.id + "/loeschen", "POST", {});
     try { await LocalDB.loesche("responses", "/api/seiten/" + s.id); } catch (_) {}
     await Sync.frischHolen("/api/seiten?kategorie=" + encodeURIComponent(s.kategorie));
-    toast("Seite gelöscht ✓");
+    toast(archiv ? "Spielzug archiviert ✓" : "Seite gelöscht ✓");
     gehe(aktOber, aktUnter);
   } catch (e) { toast("Fehler: " + e.message); }
 }
@@ -3303,6 +3356,8 @@ async function ladeVideos() {
     if (aktRolle === "trainer") {                      // alle Spielzuege je Spiel; ohne Netz bleibt der letzte Stand
       try { szenenDaten = await api("/api/szenen-uebersicht"); } catch (_) { /* alter Stand oder leer */ }
     }
+    $("#aktual-leiste-videos").classList.toggle("hidden", aktRolle !== "trainer");   // ↻ nur fuer den Trainer
+    merkeGeladen("videos");
     renderVideos();
     scrollNachRenderAnwenden();
   } catch (_) {
@@ -4745,7 +4800,7 @@ $("#btn-mic").addEventListener("click", async () => {
 // Sichtbare Versionsnummer im Kopf — was drin ist, steht in CHANGELOG.md.
 // Bei jeder Aenderung: hier hochzaehlen, Eintrag im CHANGELOG, sw.js CACHE
 // bumpen und die ?v= der geaenderten Dateien in index.html.
-const APP_VERSION = "v0.60.0";
+const APP_VERSION = "v0.62.0";
 const versionEl = document.getElementById("version");
 if (versionEl) versionEl.textContent = APP_VERSION;
 
@@ -4786,6 +4841,7 @@ if (_punkt) _punkt.addEventListener("click", async () => {
   toast("Synchronisiere…");
   pruefeStand(true);
   const ok = await Sync.jetztSynchronisieren();
+  if (ok) aktualisiereAnsicht();                    // auch die angezeigte Seite frisch vom Server holen
   const offen = await Sync.anzahlOffen();
   if (offen === 0) toast(ok ? "Alles synchron ✓" : "Verbunden ✓");
   else if (!ok) toast("Server nicht erreichbar – " + offen + " offen.");

@@ -16,9 +16,9 @@ vm.runInContext(src.slice(start, ende)
   + "\nthis.nutzungVideoLabel = nutzungVideoLabel; this.gruppiereNachSpiel = gruppiereNachSpiel;"
   + "\nthis.anzahlDauer = anzahlDauer; this.filtereSzenen = filtereSzenen;"
   + "\nthis.namenMitZahl = namenMitZahl; this.gruppiereNachName = gruppiereNachName;"
-  + "\nthis.szenenStatus = szenenStatus;", ctx);
+  + "\nthis.szenenStatus = szenenStatus; this.aktualisiertText = aktualisiertText;", ctx);
 const { dauerText, verweilSegment, nutzungVideoLabel, gruppiereNachSpiel, anzahlDauer,
-        filtereSzenen, namenMitZahl, gruppiereNachName, szenenStatus } = ctx;
+        filtereSzenen, namenMitZahl, gruppiereNachName, szenenStatus, aktualisiertText } = ctx;
 
 let fehler = 0;
 function check(name, ist, soll) {
@@ -125,6 +125,21 @@ check("Status: komplett angeschaut", szenenStatus(szenen[1], "Anna"), "komplett"
 check("Status: nur angetippt", szenenStatus(szenen[3], "Anna"), "angetippt");
 check("Status: nie geoeffnet", szenenStatus(szenen[1], "Bea"), "offen");
 check("Status: kein Video", szenenStatus(szenen[4], "Anna"), "kein_video");
+
+// ---------------------------------------------------- aktualisiertText ----
+//  "Zuletzt aktualisiert"-Anzeige neben dem ↻-Knopf. Offline darf nie so aussehen wie frisch.
+const jetzt = new Date("2026-10-31T14:30:00").getTime();
+const vor = (sek) => jetzt - sek * 1000;
+check("Aktualisiert: noch nie geladen", aktualisiertText(null, jetzt, true), "noch nicht geladen");
+check("Aktualisiert: gerade eben", aktualisiertText(vor(10), jetzt, true), "gerade aktualisiert");
+check("Aktualisiert: knapp unter einer Minute", aktualisiertText(vor(59), jetzt, true), "gerade aktualisiert");
+check("Aktualisiert: vor 1 Min.", aktualisiertText(vor(60), jetzt, true), "aktualisiert vor 1 Min.");
+check("Aktualisiert: vor 12 Min.", aktualisiertText(vor(12 * 60 + 20), jetzt, true), "aktualisiert vor 12 Min.");
+check("Aktualisiert: ab einer Stunde Uhrzeit", aktualisiertText(vor(3600), jetzt, true), "Stand von 13:30");
+check("Aktualisiert: Uhrzeit mit fuehrender Null", aktualisiertText(new Date("2026-10-31T09:05:00").getTime(), jetzt, true), "Stand von 09:05");
+check("Aktualisiert: offline nennt die Uhrzeit des letzten Stands", aktualisiertText(vor(120), jetzt, false), "offline – Stand von 14:28");
+check("Aktualisiert: offline und nie geladen", aktualisiertText(null, jetzt, false), "offline – noch nicht geladen");
+check("Aktualisiert: Zeitstempel in der Zukunft (Uhr falsch) wird wie 'gerade' behandelt", aktualisiertText(jetzt + 5000, jetzt, true), "gerade aktualisiert");
 
 if (fehler) { console.error("\n" + fehler + " Test(s) fehlgeschlagen"); process.exit(1); }
 console.log("\nAlle Tests bestanden");

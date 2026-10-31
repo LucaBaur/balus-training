@@ -1138,8 +1138,9 @@ def seiten_liste(conn: sqlite3.Connection, kategorie: str | None = None) -> list
     if kategorie:
         rows = conn.execute(basis + "WHERE kategorie = ? ORDER BY sortierung, titel",
                             (kategorie,)).fetchall()
-    else:
-        rows = conn.execute(basis + "ORDER BY kategorie, sortierung, titel").fetchall()
+    else:                                       # ohne Kategorie: ohne Archiv
+        rows = conn.execute(basis + "WHERE kategorie IS NOT ? ORDER BY kategorie, sortierung, titel",
+                            (SEITEN_ARCHIV,)).fetchall()
     return [dict(r) for r in rows]
 
 
@@ -1183,12 +1184,29 @@ def seite_speichern(conn: sqlite3.Connection, sid: int, markdown: str | None = N
     return cur.rowcount > 0
 
 
+SEITEN_ARCHIV = "archiv"      # Kategorie fuer archivierte Seiten (die App zeigt sie nirgends an)
+
+
 def seite_loeschen(conn: sqlite3.Connection, sid: int) -> bool:
-    """Seite loeschen. Unterseiten bleiben erhalten und ruecken eine Ebene hoch
-    (parent_id -> NULL per ON DELETE SET NULL)."""
-    cur = conn.execute("DELETE FROM seiten WHERE id = ?", (sid,))
+    """Seite loeschen. Unterseiten bleiben erhalten und ruecken eine Ebene hoch.
+
+    Playbook-Seiten (Spielzuege) werden nur ARCHIVIERT: Text und Ansicht verschwinden, der
+    Name bleibt. So bleibt ein Spielzug, der in alten Spielen gespielt wurde, auch im
+    Katalog nachvollziehbar (in den Spielen selbst steht der Name ohnehin als Kopie).
+    Alle anderen Kategorien werden wirklich geloescht. Wiederholen ist harmlos (Outbox)."""
+    r = conn.execute("SELECT kategorie FROM seiten WHERE id = ?", (sid,)).fetchone()
+    if r is None:
+        return False
+    if r["kategorie"] == SEITEN_ARCHIV:
+        return True
+    conn.execute("UPDATE seiten SET parent_id = NULL WHERE parent_id = ?", (sid,))
+    if r["kategorie"] == "playbook":
+        conn.execute("UPDATE seiten SET kategorie = ?, markdown = NULL, tags = NULL, parent_id = NULL, "
+                     "aktualisiert = datetime('now') WHERE id = ?", (SEITEN_ARCHIV, sid))
+    else:
+        conn.execute("DELETE FROM seiten WHERE id = ?", (sid,))
     conn.commit()
-    return cur.rowcount > 0
+    return True
 
 
 def training_plan_setzen(conn: sqlite3.Connection, tid: int, markdown: str) -> bool:
