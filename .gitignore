@@ -31,3 +31,6 @@ desktop.ini
 .DS_Store
 *.swp
 liga_cache.json
+
+# Server-Zugang fuer deploy.sh (Vorlage: deploy.env.example)
+deploy.env

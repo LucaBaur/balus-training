@@ -281,11 +281,29 @@ CREATE TABLE IF NOT EXISTS nutzung (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     benutzer_id INTEGER NOT NULL REFERENCES benutzer(id) ON DELETE CASCADE,
     zeit        TEXT    NOT NULL DEFAULT (datetime('now')),
-    typ         TEXT    NOT NULL,                        -- besuch | bereich | video
+    typ         TEXT    NOT NULL,                        -- besuch | bereich | video | gespielt | verweil
     ziel        TEXT,
-    info        TEXT
+    info        TEXT,
+    dauer_s     INTEGER                                  -- nur bei 'verweil': Sekunden auf 'ziel'
 );
 CREATE INDEX IF NOT EXISTS idx_nutzung_benutzer ON nutzung(benutzer_id, zeit);
+
+-- Fragen und Kommentare zu einem Video. 'ziel' wie in 'nutzung' ("clip:5", "szene:12",
+-- "spiel:3"). Sichtbarkeit: nur_trainer = 0 -> alle, die das Video sehen duerfen;
+-- nur_trainer = 1 -> Trainer + 'privat_fuer' (die Spielerin, der der private Faden gehoert;
+-- Antworten des Trainers erben beides vom Ursprungs-Kommentar). Antworten haengen immer am
+-- Ursprungs-Kommentar ('antwort_auf'), es gibt nur eine Ebene.
+CREATE TABLE IF NOT EXISTS video_kommentar (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    ziel        TEXT    NOT NULL,
+    benutzer_id INTEGER NOT NULL REFERENCES benutzer(id) ON DELETE CASCADE,
+    text        TEXT    NOT NULL,
+    antwort_auf INTEGER REFERENCES video_kommentar(id) ON DELETE CASCADE,
+    nur_trainer INTEGER NOT NULL DEFAULT 0,
+    privat_fuer INTEGER REFERENCES benutzer(id) ON DELETE CASCADE,
+    erstellt_am TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_vkomm_ziel ON video_kommentar(ziel, id);
 
 -- Geraete: je Konto und Geraetekombination eine Zeile (grobe Angaben, damit
 -- Fehler zu Android/iOS/Browser-Versionen passen). Keine Kennungen, keine IP,
@@ -352,6 +370,7 @@ def _spalte_ergaenzen(conn: sqlite3.Connection, tabelle: str, spalte: str,
 
 def _migriere(conn: sqlite3.Connection) -> None:
     """Schema-Anpassungen fuer bestehende Datenbanken (idempotent)."""
+    _spalte_ergaenzen(conn, "nutzung", "dauer_s", "INTEGER")
     spalten = {r["name"] for r in conn.execute("PRAGMA table_info(spiele)")}
     if "token" not in spalten:
         conn.execute("ALTER TABLE spiele ADD COLUMN token TEXT")
@@ -1649,7 +1668,8 @@ def szene_clips_aufraeumen(conn: sqlite3.Connection, aid: int, keys: set[str]) -
 #  Siehe Tabelle 'nutzung'. Gespeichert wird fuer jedes Konto; ausgewertet
 #  werden nur die Spielerinnen-Konten (Trainer testen die App staendig selbst).
 
-NUTZUNG_TYPEN = ("besuch", "bereich", "video")
+NUTZUNG_TYPEN = ("besuch", "bereich", "video", "gespielt", "verweil")   # gespielt = Video zu >= 60 % angesehen
+NUTZUNG_MAX_DAUER_S = 30 * 60      # laenger am Stueck ist ein vergessener Tab, keine Nutzung
 NUTZUNG_BESUCH_PAUSE_MIN = 30      # mehrere Besuche innerhalb dieser Zeit zaehlen einmal
 NUTZUNG_MAX_PRO_ANFRAGE = 50
 
@@ -1675,8 +1695,14 @@ def nutzung_speichern(conn: sqlite3.Connection, benutzer_id: int,
             besuch_schon_da = True
         ziel = (str(e["ziel"])[:60] if e.get("ziel") else None)
         info = (str(e["info"])[:120] if e.get("info") else None)
-        conn.execute("INSERT INTO nutzung (benutzer_id, typ, ziel, info) VALUES (?, ?, ?, ?)",
-                     (benutzer_id, typ, ziel, info))
+        dauer = None
+        if typ == "verweil":                  # ohne Ziel oder mit unplausibler Dauer wertlos
+            dauer = e.get("dauer_s")
+            dauer = int(round(dauer)) if isinstance(dauer, (int, float)) else None
+            if not ziel or dauer is None or not 1 <= dauer <= NUTZUNG_MAX_DAUER_S:
+                continue
+        conn.execute("INSERT INTO nutzung (benutzer_id, typ, ziel, info, dauer_s) VALUES (?, ?, ?, ?, ?)",
+                     (benutzer_id, typ, ziel, info, dauer))
         gespeichert += 1
     conn.commit()
     return gespeichert
@@ -1742,10 +1768,10 @@ def nutzung_auswertung(conn: sqlite3.Connection, tage: int = 30) -> dict:
         return datetime.strptime(z, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
 
     konten = conn.execute(
-        "SELECT id, name FROM benutzer WHERE rolle = 'spieler' AND aktiv = 1 ORDER BY name"
+        "SELECT id, name, spieler_id FROM benutzer WHERE rolle = 'spieler' AND aktiv = 1 ORDER BY name"
     ).fetchall()
     rows: dict[int, list] = {k["id"]: [] for k in konten}
-    for r in conn.execute("SELECT benutzer_id, zeit, typ, ziel, info FROM nutzung ORDER BY zeit"):
+    for r in conn.execute("SELECT benutzer_id, zeit, typ, ziel, info, dauer_s FROM nutzung ORDER BY zeit"):
         if r["benutzer_id"] in rows:
             rows[r["benutzer_id"]].append(r)
     erste = conn.execute("SELECT MIN(zeit) AS z FROM nutzung").fetchone()["z"]
@@ -1759,36 +1785,227 @@ def nutzung_auswertung(conn: sqlite3.Connection, tage: int = 30) -> dict:
                 "zuletzt": _utc_z(g["zuletzt"])})
 
     ausgabe = []
+    pro_video: dict[str, dict] = {}      # ziel -> {titel, gesehen: {benutzer_id: {...}}}
     for k in konten:
         ev = rows[k["id"]]
         neu = [r for r in ev if lies(r["zeit"]) >= grenze]
         bereiche: dict[str, int] = {}
         videos: dict[str, dict] = {}
+        sekunden: dict[str, int] = {}       # ziel -> Summe der 'verweil'-Ereignisse
         for r in neu:
-            if r["typ"] == "bereich" and r["ziel"]:
+            if r["typ"] == "verweil" and r["ziel"] and r["dauer_s"]:
+                sekunden[r["ziel"]] = sekunden.get(r["ziel"], 0) + r["dauer_s"]
+            elif r["typ"] == "bereich" and r["ziel"]:
                 bereiche[r["ziel"]] = bereiche.get(r["ziel"], 0) + 1
-            elif r["typ"] == "video" and r["ziel"]:
+            elif r["typ"] in ("video", "gespielt") and r["ziel"]:
                 v = videos.setdefault(r["ziel"], {"ziel": r["ziel"], "titel": r["info"],
-                                                  "anzahl": 0, "zuletzt": r["zeit"]})
-                v["anzahl"] += 1
+                                                  "anzahl": 0, "gespielt": 0, "zuletzt": r["zeit"]})
+                v["anzahl" if r["typ"] == "video" else "gespielt"] += 1
                 v["zuletzt"] = r["zeit"]
                 if r["info"]:
                     v["titel"] = r["info"]
+        for ziel, v in videos.items():
+            p = pro_video.setdefault(ziel, {"titel": v["titel"], "gesehen": {}})
+            p["titel"] = v["titel"] or p["titel"]
+            p["gesehen"][k["id"]] = {"benutzer_id": k["id"], "name": k["name"],
+                                     "anzahl": v["anzahl"], "gespielt": v["gespielt"],
+                                     "zuletzt": _utc_z(v["zuletzt"])}
         ausgabe.append({
             "benutzer_id": k["id"], "name": k["name"],
             "zuletzt": (ev[-1]["zeit"].replace(" ", "T") + "Z") if ev else None,
             "besuche": sum(1 for r in neu if r["typ"] == "besuch"),
             "tage": len({lies(r["zeit"]).astimezone(tz).date() for r in neu}),
             "videos_gesehen": sum(1 for r in neu if r["typ"] == "video"),
-            "bereiche": [{"ziel": z, "anzahl": n} for z, n in
+            "sekunden_gesamt": sum(sekunden.values()),
+            "bereiche": [{"ziel": z, "anzahl": n, "sekunden": sekunden.get(z, 0)} for z, n in
                          sorted(bereiche.items(), key=lambda x: -x[1])[:6]],
             "videos": sorted(
-                [{**v, "zuletzt": v["zuletzt"].replace(" ", "T") + "Z"} for v in videos.values()],
+                [{**v, "zuletzt": v["zuletzt"].replace(" ", "T") + "Z",
+                  "sekunden": sekunden.get(v["ziel"], 0),
+                  **_ziel_beschreibung(conn, v["ziel"], v["titel"])} for v in videos.values()],
                 key=lambda v: v["zuletzt"], reverse=True)[:10],
             "geraete": geraete[k["id"]],
         })
     return {"tage": tage, "seit": (erste.replace(" ", "T") + "Z") if erste else None,
-            "konten": ausgabe, "fehler": _fehler_gruppiert(conn, grenze)}
+            "konten": ausgabe, "fehler": _fehler_gruppiert(conn, grenze),
+            "video_ansicht": _video_ansicht(conn, konten, pro_video)}
+
+
+NUTZUNG_EREIGNIS_NAMEN = {"tor": "Tor", "fehlwurf": "Fehlwurf", "ballverlust": "Ballverlust",
+                          "strafe": "Zeitstrafe", "siebenmeter": "7-Meter", "parade": "Parade"}
+
+
+def _spielzeit(t: float) -> str:
+    """Sekunden im Video als m:ss bzw. h:mm:ss (wie analyseZeit in app.js)."""
+    t = max(0, int(t))
+    h, m, s = t // 3600, t % 3600 // 60, t % 60
+    return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+
+
+def _spiel_name(gegner: str, datum: str | None) -> str:
+    """'TVG – Gegner · 14.09.' - das Datum trennt zwei Spiele gegen denselben Gegner."""
+    tag = f" · {datum[8:10]}.{datum[5:7]}." if datum and len(datum) >= 10 else ""
+    return f"TVG – {gegner}{tag}"
+
+
+def _ziel_beschreibung(conn: sqlite3.Connection, ziel: str, titel: str | None) -> dict:
+    """Menschenlesbare Angaben zu einem Video-Ziel: label, spiel, ampel, zeit.
+    Fuer 'szene:<id>' wird Spielzug bzw. Ereignis ueber die Szene-Kennung aufgeloest -
+    der gespeicherte Titel ist dort fuer alle Szenen eines Spiels derselbe. Ist die
+    Szene geloescht, bleibt der gespeicherte Titel."""
+    art, _, nr = ziel.partition(":")
+    leer = {"label": titel or ziel, "spiel": None, "ampel": None, "zeit": None, "t": None}
+    if not nr.isdigit():
+        return leer
+    if art == "spiel":
+        a = conn.execute("SELECT gegner, datum FROM spiel_analyse WHERE id = ?", (int(nr),)).fetchone()
+        return {**leer, "label": "Ganzes Spiel", "spiel": _spiel_name(a["gegner"], a["datum"])} if a else leer
+    if art != "szene":
+        return leer
+    c = conn.execute(
+        "SELECT c.analyse_id, c.szene_key, a.gegner, a.datum FROM spiel_szene_clip c "
+        "JOIN spiel_analyse a ON a.id = c.analyse_id WHERE c.id = ?", (int(nr),)).fetchone()
+    if not c:
+        return leer
+    res = {**leer, "label": titel or "Szene", "spiel": _spiel_name(c["gegner"], c["datum"])}
+    z = conn.execute("SELECT name, ampel, t_start, t_ende FROM spiel_zug "
+                     "WHERE analyse_id = ? AND szene_key = ? ORDER BY t_start LIMIT 1",
+                     (c["analyse_id"], c["szene_key"])).fetchone()
+    if z:
+        return {**res, "label": "Spielzug " + z["name"], "ampel": z["ampel"], "t": z["t_start"],
+                "zeit": f"{_spielzeit(z['t_start'])}–{_spielzeit(z['t_ende'])}"}
+    e = conn.execute("SELECT typ, t, detail FROM spiel_event "
+                     "WHERE analyse_id = ? AND szene_key = ? ORDER BY t LIMIT 1",
+                     (c["analyse_id"], c["szene_key"])).fetchone()
+    if e:
+        name = NUTZUNG_EREIGNIS_NAMEN.get(e["typ"], e["typ"])
+        return {**res, "label": name + (" · " + e["detail"] if e["detail"] else ""),
+                "zeit": _spielzeit(e["t"]), "t": e["t"]}
+    return res
+
+
+def _sollen_sehen(conn: sqlite3.Connection, ziel: str, konten) -> set[int] | None:
+    """Benutzer-IDs der Konten, fuer die das Video gedacht ist - oder None, wenn
+    sich das nicht sagen laesst (z. B. die Detailseite einer Analyse)."""
+    art, _, nr = ziel.partition(":")
+    if not nr.isdigit():
+        return None
+    if art == "spiel":                                   # ganzes Spiel: fuer die ganze Mannschaft
+        return {k["id"] for k in konten}
+    if art == "clip":
+        zugeordnet = {r[0] for r in conn.execute(
+            "SELECT spieler_id FROM video_clip_spieler WHERE clip_id = ?", (int(nr),))}
+        return {k["id"] for k in konten if k["spieler_id"] in zugeordnet}
+    if art == "szene":
+        return {k["id"] for k in konten
+                if k["spieler_id"] and szene_clip_darf(conn, int(nr), k["spieler_id"])}
+    return None
+
+
+def _video_ansicht(conn: sqlite3.Connection, konten, pro_video: dict[str, dict]) -> list[dict]:
+    """Videozentrierte Sicht: je Video, wer es gesehen hat (und wie oft) und wer es
+    sehen sollte, aber nicht hat. Clips und Spiele erscheinen auch dann, wenn sie noch
+    niemand geoeffnet hat - gerade das ist die interessante Information."""
+    for r in conn.execute("SELECT id, titel FROM video_clip"):
+        pro_video.setdefault(f"clip:{r['id']}", {"titel": r["titel"], "gesehen": {}})
+    for r in conn.execute("SELECT id, gegner FROM spiel_analyse WHERE datei IS NOT NULL"):
+        pro_video.setdefault(f"spiel:{r['id']}", {"titel": "TVG – " + r["gegner"], "gesehen": {}})
+    for r in conn.execute("SELECT id FROM spiel_szene_clip"):      # auch ungeoeffnete Spielzuege zeigen
+        pro_video.setdefault(f"szene:{r['id']}", {"titel": None, "gesehen": {}})
+    namen = {k["id"]: k["name"] for k in konten}
+    kommentare = dict(conn.execute("SELECT ziel, COUNT(*) FROM video_kommentar "
+                                   "WHERE antwort_auf IS NULL GROUP BY ziel").fetchall())
+    ausgabe = []
+    for ziel, p in pro_video.items():
+        if ziel.startswith("analyse:"):          # Detailseite, kein eigenes Video
+            continue
+        sollen = _sollen_sehen(conn, ziel, konten)
+        gesehen = sorted(p["gesehen"].values(), key=lambda g: g["zuletzt"], reverse=True)
+        fehlt = None if sollen is None else sorted(
+            namen[b] for b in sollen if b not in p["gesehen"])
+        ausgabe.append({"ziel": ziel, "titel": p["titel"], "gesehen": gesehen, "fehlt": fehlt,
+                        "kommentare": kommentare.get(ziel, 0),
+                        **_ziel_beschreibung(conn, ziel, p["titel"])})
+    # Videos mit offenen Zuordnungen zuerst, dann nach letzter Ansicht
+    ausgabe.sort(key=lambda v: (v["gesehen"][0]["zuletzt"] if v["gesehen"] else ""), reverse=True)
+    ausgabe.sort(key=lambda v: not v["fehlt"])
+    return ausgabe
+
+
+# ------------------------------------------------------- Video-Kommentare ----
+#  Siehe Tabelle 'video_kommentar'. Ob jemand das Video ueberhaupt sehen darf,
+#  prueft der Aufrufer (app.py) - hier geht es nur um die Sichtbarkeit je Kommentar.
+
+KOMMENTAR_MAX_ZEICHEN = 1000
+KOMMENTAR_MAX_PRO_STUNDE = 30
+
+
+def _kommentar_sichtbar(k, benutzer: dict) -> bool:
+    return (benutzer["rolle"] == "trainer" or not k["nur_trainer"]
+            or k["privat_fuer"] == benutzer["id"])
+
+
+def kommentare_fuer(conn: sqlite3.Connection, ziel: str, benutzer: dict) -> list[dict]:
+    rows = conn.execute(
+        "SELECT k.id, k.benutzer_id, k.text, k.antwort_auf, k.nur_trainer, k.privat_fuer, "
+        "       k.erstellt_am, b.name, b.rolle "
+        "FROM video_kommentar k JOIN benutzer b ON b.id = k.benutzer_id "
+        "WHERE k.ziel = ? ORDER BY k.id", (ziel,)).fetchall()
+    return [{"id": k["id"], "name": k["name"], "trainer": k["rolle"] == "trainer",
+             "eigene": k["benutzer_id"] == benutzer["id"], "text": k["text"],
+             "antwort_auf": k["antwort_auf"], "nur_trainer": bool(k["nur_trainer"]),
+             "zeit": _utc_z(k["erstellt_am"])}
+            for k in rows if _kommentar_sichtbar(k, benutzer)]
+
+
+def kommentar_anlegen(conn: sqlite3.Connection, ziel: str, benutzer: dict, text: str,
+                      nur_trainer: bool, antwort_auf: int | None) -> dict:
+    """Legt einen Kommentar an. Wirft ValueError mit lesbarer Meldung, wenn er nicht
+    zulaessig ist. Gibt {id, nur_trainer, eltern_benutzer} zurueck (fuer die Benachrichtigung)."""
+    text = (text or "").strip()[:KOMMENTAR_MAX_ZEICHEN]
+    if not text:
+        raise ValueError("Der Kommentar ist leer.")
+    n = conn.execute("SELECT COUNT(*) FROM video_kommentar WHERE benutzer_id = ? "
+                     "AND erstellt_am > datetime('now', '-1 hour')", (benutzer["id"],)).fetchone()[0]
+    if n >= KOMMENTAR_MAX_PRO_STUNDE:
+        raise ValueError("Zu viele Kommentare in kurzer Zeit – bitte kurz warten.")
+    ist_trainer = benutzer["rolle"] == "trainer"
+    privat_fuer = None
+    eltern_benutzer = None
+    if antwort_auf is not None:
+        p = conn.execute("SELECT * FROM video_kommentar WHERE id = ?", (antwort_auf,)).fetchone()
+        if p is None or p["ziel"] != ziel or not _kommentar_sichtbar(p, benutzer):
+            raise ValueError("Auf diesen Kommentar kann nicht geantwortet werden.")
+        eltern_benutzer = p["benutzer_id"]
+        antwort_auf = p["antwort_auf"] or p["id"]          # immer an den Ursprung haengen
+        if p["nur_trainer"]:                                # privater Faden bleibt privat
+            nur_trainer, privat_fuer = True, p["privat_fuer"]
+        elif nur_trainer and not ist_trainer:
+            privat_fuer = benutzer["id"]
+    elif nur_trainer and not ist_trainer:
+        privat_fuer = benutzer["id"]
+    cur = conn.execute(
+        "INSERT INTO video_kommentar (ziel, benutzer_id, text, antwort_auf, nur_trainer, privat_fuer) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (ziel, benutzer["id"], text, antwort_auf, 1 if nur_trainer else 0, privat_fuer))
+    conn.commit()
+    return {"id": int(cur.lastrowid), "nur_trainer": bool(nur_trainer),
+            "eltern_benutzer": eltern_benutzer}
+
+
+def kommentar_loeschen(conn: sqlite3.Connection, kid: int, benutzer: dict) -> bool:
+    """Eigene Kommentare darf jede(r) loeschen, alle der Trainer. Antworten fallen mit weg."""
+    r = conn.execute("SELECT benutzer_id FROM video_kommentar WHERE id = ?", (kid,)).fetchone()
+    if r is None or not (benutzer["rolle"] == "trainer" or r["benutzer_id"] == benutzer["id"]):
+        return False
+    conn.execute("DELETE FROM video_kommentar WHERE id = ?", (kid,))
+    conn.commit()
+    return True
+
+
+def trainer_benutzer_ids(conn: sqlite3.Connection) -> list[int]:
+    return [r["id"] for r in conn.execute(
+        "SELECT id FROM benutzer WHERE rolle = 'trainer' AND aktiv = 1")]
 
 
 def _utc_z(z: str | None) -> str | None:

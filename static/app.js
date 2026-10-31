@@ -122,14 +122,43 @@ function navView() {
 window.addEventListener("popstate", (e) => {
   const z = e.state;
   _ausVerlauf = true;
-  try { gehe(z && z.ober, z && z.unter); } finally { _ausVerlauf = false; }
+  try { mitScrollRueckkehr(() => gehe(z && z.ober, z && z.unter)); } finally { _ausVerlauf = false; }
 });
 
+// ---- Scroll-Position beim Zurueckgehen ---------------------------------------
+//  Wer aus einer Liste (z. B. Videos) in eine Detailansicht geht und zurueckkehrt,
+//  soll wieder an der alten Stelle landen. zeigeView() merkt sich beim Verlassen
+//  die Scrollhoehe je View; nur bei einer Rueckkehr (Zurueck-Knopf, Android-Zurueck,
+//  iOS-Wischgeste) wird sie wieder eingestellt, ein Klick im Menue startet oben.
+let _rueckkehr = false;          // true, solange eine Rueckkehr laeuft
+let _scrollNachRender = null;    // Ziel, falls die Liste erst nach dem Laden wieder voll hoch ist
+const scrollMerk = {};           // view-id -> letzte Scrollhoehe
+
+function mitScrollRueckkehr(fn) {
+  _rueckkehr = true;
+  try { fn(); } finally { _rueckkehr = false; }
+}
+
+// Nach asynchronem Neuzeichnen einer Liste erneut einstellen (vorher war sie evtl. zu kurz).
+function scrollNachRenderAnwenden() {
+  if (_scrollNachRender == null) return;
+  window.scrollTo(0, _scrollNachRender);
+  _scrollNachRender = null;
+}
+
 function zeigeView(id) {
+  const sichtbar = document.querySelector(".view:not(.hidden)");
+  if (sichtbar) scrollMerk[sichtbar.id] = window.scrollY;
   document.querySelectorAll(".view").forEach((v) => v.classList.add("hidden"));
   const el = $("#" + id);
   if (el) el.classList.remove("hidden");
-  window.scrollTo(0, 0);
+  // Video verlassen (Zurueck-Knopf, nicht ueber gehe): die Zeit zaehlt wieder dem Bereich
+  if (id !== "view-video-detail" && _segment && /^[a-z]+:\d+$/.test(_segment.ziel)) {
+    segmentStarten(aktOber + "/" + aktUnter);
+  }
+  const ziel = _rueckkehr ? (scrollMerk[id] || 0) : 0;
+  _scrollNachRender = ziel || null;
+  window.scrollTo(0, ziel);
   // Detail geoeffnet (nicht ueber die Navigation, nicht zurueck zur Liste)
   // -> Verlaufseintrag, damit Zurueck wieder auf der Liste landet.
   if (!_ausVerlauf && !_inGehe && id !== navView()) {
@@ -333,6 +362,55 @@ async function pruefeStand(sichtbar) {
 document.addEventListener("visibilitychange", () => { if (!document.hidden) pruefeStand(); });
 setInterval(pruefeStand, 5 * 60 * 1000);
 
+// ---- Nutzung-Hilfen (rein, getestet in tests/nutzung_ui.test.mjs) ----
+//  Keine Zugriffe auf DOM oder globalen Zustand - der Test laedt genau diesen Abschnitt.
+
+// Sekunden als "4 Min." / "1 Std. 12 Min."; nichts gemessen -> Gedankenstrich.
+function dauerText(sek) {
+  if (!sek || sek < 1) return "–";
+  if (sek < 60) return "<1 Min.";
+  const min = Math.floor(sek / 60), h = Math.floor(min / 60), m = min % 60;
+  if (!h) return min + " Min.";
+  return h + " Std." + (m ? " " + m + " Min." : "");
+}
+
+// "2× · 4 Min."; ohne gemessene Dauer nur "2×" (kein Gedankenstrich-Rauschen in der Zeile).
+function anzahlDauer(anzahl, sek) {
+  return anzahl + "×" + (sek ? " · " + dauerText(sek) : "");
+}
+
+// Ganze Sekunden zwischen zwei Zeitstempeln (ms); 0 = zu kurz/ungueltig, nicht melden.
+// Die Grenze entspricht dem Server (30 Min.): laenger am Stueck ist ein vergessener Tab.
+function verweilSegment(startMs, endeMs, grenzeS = 1800) {
+  if (!Number.isFinite(startMs) || !Number.isFinite(endeMs) || endeMs <= startMs) return 0;
+  return Math.min(Math.round((endeMs - startMs) / 1000), grenzeS);
+}
+
+// Anzeigename eines Videos. Der Server loest Spielzuege auf (label/zeit); fehlt das
+// (aeltere Daten, geloeschte Szene), bleibt es beim gespeicherten Titel mit Art davor.
+function nutzungVideoLabel(v) {
+  const aufgeloest = v.label && v.label !== v.titel;
+  if (aufgeloest) return v.label + (v.zeit ? " · " + v.zeit : "");
+  const art = { clip: "Szene", szene: "Spielzug", spiel: "Ganzes Spiel", analyse: "Videoanalyse" }[String(v.ziel).split(":")[0]] || "Video";
+  return art + ": " + (v.titel || v.ziel);
+}
+
+// Videos je Spiel buendeln (Reihenfolge = erstes Auftreten); Videos ohne Spiel kommen in "Weitere Videos".
+// Innerhalb eines Spiels nach Spielzeit (t) sortiert, das ganze Spiel (ohne t) zuerst; Array.sort ist stabil,
+// Eintraege ohne t bleiben also in Eingabereihenfolge.
+function gruppiereNachSpiel(videos) {
+  const gruppen = new Map();
+  for (const v of videos) {
+    const name = v.spiel || "Weitere Videos";
+    if (!gruppen.has(name)) gruppen.set(name, []);
+    gruppen.get(name).push(v);
+  }
+  return [...gruppen].map(([spiel, items]) => ({
+    spiel, items: items.slice().sort((a, b) => (a.t == null ? -1 : a.t) - (b.t == null ? -1 : b.t)),
+  }));
+}
+// ---- Ende Nutzung-Hilfen ----
+
 // ---------------------------------------------------------------- Nutzung ----
 //  Meldet dem Server, wann jemand die App oeffnet, welchen Bereich sie/er
 //  besucht und welches Video angesehen wird (siehe Team -> Nutzung). Die
@@ -349,9 +427,30 @@ function nutzungSpeichern() {
   try { localStorage.setItem("nutzung_q", JSON.stringify(_nutzungQ)); } catch (_) {}
 }
 
-function nutzungMelden(typ, ziel, info) {
-  if (!aktBenutzer || aktBenutzer.ansicht_als) return;
-  _nutzungQ.push({ typ, ziel: ziel || null, info: info || null });
+//  Verweildauer: Ein Segment laeuft, solange ein Bereich oder Video offen und die App
+//  im Vordergrund ist. Es endet beim naechsten Wechsel oder wenn die App in den
+//  Hintergrund geht und wird als Ereignis "verweil" in dieselbe Warteschlange gelegt.
+let _segment = null;            // { ziel, start } - laeuft gerade
+let _segmentPause = null;       // Ziel, das beim Zurueckkehren weiterlaeuft
+
+function segmentBeenden() {
+  if (!_segment) return;
+  const s = verweilSegment(_segment.start, Date.now());
+  const ziel = _segment.ziel;
+  _segment = null;
+  if (s) nutzungMelden("verweil", ziel, null, s);
+}
+
+function segmentStarten(ziel) {
+  segmentBeenden();
+  _segmentPause = null;
+  _segment = ziel ? { ziel, start: Date.now() } : null;
+}
+
+function nutzungMelden(typ, ziel, info, dauer_s) {
+  if (!aktBenutzer || aktBenutzer.ansicht_als) { _segment = null; return; }
+  if (typ === "bereich" || typ === "video") segmentStarten(ziel);
+  _nutzungQ.push({ typ, ziel: ziel || null, info: info || null, ...(dauer_s ? { dauer_s } : {}) });
   if (_nutzungQ.length > 200) _nutzungQ.splice(0, _nutzungQ.length - 200);
   nutzungSpeichern();
   clearTimeout(_nutzungTimer);
@@ -387,8 +486,15 @@ async function nutzungSenden() {
 }
 
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden) nutzungSenden();       // vor dem Wegwischen noch abschicken
-  else besuchMelden();
+  if (document.hidden) {
+    _segmentPause = _segment && _segment.ziel;   // Hintergrund zaehlt nicht als Verweildauer
+    segmentBeenden();
+    nutzungSenden();                             // vor dem Wegwischen noch abschicken
+  } else {
+    if (_segmentPause) _segment = { ziel: _segmentPause, start: Date.now() };
+    _segmentPause = null;
+    besuchMelden();
+  }
 });
 setInterval(nutzungSenden, 60 * 1000);        // Reste nach einem Funkloch nachsenden
 
@@ -509,11 +615,6 @@ function nutzungBereichName(key) {
   return ober && unter ? ober.label + " → " + unter.label : key;
 }
 
-function nutzungVideoName(v) {
-  const art = { clip: "Szene", szene: "Spielzug", spiel: "Ganzes Spiel", analyse: "Videoanalyse" }[String(v.ziel).split(":")[0]] || "Video";
-  return art + ": " + (v.titel || v.ziel);
-}
-
 async function ladeNutzung() {
   const el = $("#nutzung-inhalt");
   if (!nutzungDaten) el.innerHTML = '<p class="hinweis">Lädt …</p>';
@@ -555,6 +656,69 @@ function renderNutzungFehler(fehler, tage) {
   return html;
 }
 
+// Ampelpunkt vor einem Spielzug (Klassen wie in der Spieleransicht: gruen | orange | rot).
+function nutzungPunkt(ampel) {
+  return `<span class="an-punkt ${ampel ? escape(ampel) : "leer"}"></span>`;   // "leer" haelt die Spalte frei
+}
+
+// Spielzug-/Videosicht: je Spiel eine Karte, darin eine Zeile pro Spielzug mit
+// "gesehen von" und "noch offen". Spielzuege eines Spiels sind so unterscheidbar.
+function renderNutzungVideos(videos, tage) {
+  if (!videos.length) return "";
+  let html = `<h3 class="nutz-h">Spielzüge &amp; Videos (letzte ${tage} Tage)</h3>`;
+  for (const gruppe of gruppiereNachSpiel(videos)) {
+    const offen = gruppe.items.reduce((n, v) => n + (v.fehlt ? v.fehlt.length : 0), 0);
+    const zeilen = gruppe.items.map((v) => {
+      const gesehen = v.gesehen.map((g) =>
+        `${escape(g.name)} ${g.anzahl}×${g.gespielt ? " ✓" : ""}`).join(", ");
+      const fehlt = v.fehlt && v.fehlt.length ? `<span class="nk-offen">Offen: ${escape(v.fehlt.join(", "))}</span>` : "";
+      const zahl = v.fehlt == null ? `${v.gesehen.length} gesehen`
+        : `${v.gesehen.length} von ${v.gesehen.length + v.fehlt.length}`;   // fehlt enthaelt nur, wer NICHT gesehen hat
+      return `<div class="nk-zeile"><span class="nk-titel">${nutzungPunkt(v.ampel)}<span>${escape(nutzungVideoLabel(v))}`
+        + `<small>${gesehen ? "Gesehen: " + gesehen : "Noch niemand"}${v.kommentare ? ` · 💬 ${v.kommentare}` : ""}</small>`
+        + `${fehlt ? "<small>" + fehlt + "</small>" : ""}</span></span><b class="nk-dauer">${zahl}</b></div>`;
+    }).join("");
+    html += `<details class="nutz-karte${offen ? " nie" : ""}">
+      <summary><span class="nk-name">${escape(gruppe.spiel)}</span>
+        <span class="nk-zahlen">${gruppe.items.length} ${gruppe.items.length === 1 ? "Eintrag" : "Einträge"}${offen ? ` · <b>${offen}</b> offen` : ""}</span></summary>
+      <div class="nk-detail">${zeilen}</div></details>`;
+  }
+  return html;
+}
+
+// Eine Spielerin: wo sie war und wie lange, danach welche Spielzuege sie gesehen hat.
+function renderNutzungSpielerin(k, tage) {
+  const pl = (n, ein, mehr) => `<b>${n}</b> ${n === 1 ? ein : mehr}`;
+  const g0 = (k.geraete || [])[0];
+  const gerat = g0 ? ` · ${escape([g0.os, g0.browser].filter(Boolean).join(" · "))}`
+                     + (g0.app_version ? ` · <span${g0.app_version !== APP_VERSION ? ' class="alt"' : ""}>${escape(g0.app_version)}</span>` : "")
+                   : "";
+  const zahlen = k.zuletzt
+    ? `${pl(k.tage, "Tag", "Tage")} · ${pl(k.besuche, "Besuch", "Besuche")} · <b>${escape(dauerText(k.sekunden_gesamt))}</b>${gerat}`
+    : "noch nicht in der App";
+  let detail = "";
+  if (k.bereiche.length) {
+    detail += '<h4>Wo sie war</h4>' + k.bereiche.map((b) =>
+      `<div class="nk-zeile"><span>${escape(nutzungBereichName(b.ziel))}<small>${b.anzahl}× geöffnet</small></span>`
+      + `<b class="nk-dauer">${escape(dauerText(b.sekunden))}</b></div>`).join("");
+  }
+  for (const gruppe of gruppiereNachSpiel(k.videos)) {
+    detail += `<h4>${escape(gruppe.spiel)}</h4>` + gruppe.items.map((v) =>
+      `<div class="nk-zeile"><span class="nk-titel">${nutzungPunkt(v.ampel)}<span>${escape(nutzungVideoLabel(v))}`
+      + `<small>${v.gespielt ? "komplett angeschaut · " : ""}zuletzt ${escape(vorZeit(v.zuletzt))}</small></span></span>`
+      + `<b class="nk-dauer">${escape(anzahlDauer(v.anzahl, v.sekunden))}</b></div>`).join("");
+  }
+  if ((k.geraete || []).length) detail += "<h4>Geräte</h4>" + k.geraete.map(nutzungGeraetZeile).join("");
+  if (!k.bereiche.length && !k.videos.length) {
+    detail = '<p class="hinweis">In den letzten ' + tage + ' Tagen nichts aufgerufen.</p>' + detail;
+  }
+  return `<details class="nutz-karte${k.zuletzt ? "" : " nie"}">
+    <summary><span class="nk-name">${escape(k.name)}</span>
+      <span class="nk-zuletzt" title="${k.zuletzt ? escape(new Date(k.zuletzt).toLocaleString("de-DE")) : ""}">${escape(vorZeit(k.zuletzt))}</span>
+      <span class="nk-zahlen">${zahlen}</span></summary>
+    <div class="nk-detail">${detail}</div></details>`;
+}
+
 function renderNutzung() {
   const d = nutzungDaten;
   const el = $("#nutzung-inhalt");
@@ -562,35 +726,12 @@ function renderNutzung() {
     (b.zuletzt || "").localeCompare(a.zuletzt || "") || a.name.localeCompare(b.name));
   const seit = d.seit ? new Date(d.seit).toLocaleDateString("de-DE") : "–";
   let html = `<p class="hinweis">Zähler der letzten ${d.tage} Tage, nur Spielerinnen. Erfasst seit ${seit}. `
-           + `„Zuletzt aktiv“ zählt auch ältere Besuche.</p>`
-           + renderNutzungFehler(d.fehler || [], d.tage)
-           + '<h3 class="nutz-h">Spielerinnen</h3>';
-  for (const k of konten) {
-    const pl = (n, ein, mehr) => `<b>${n}</b> ${n === 1 ? ein : mehr}`;
-    const g0 = (k.geraete || [])[0];
-    const gerat = g0 ? ` · ${escape([g0.os, g0.browser].filter(Boolean).join(" · "))}`
-                       + (g0.app_version ? ` · <span${g0.app_version !== APP_VERSION ? ' class="alt"' : ""}>${escape(g0.app_version)}</span>` : "")
-                     : "";
-    const zahlen = k.zuletzt
-      ? `${pl(k.tage, "Tag", "Tage")} · ${pl(k.besuche, "Besuch", "Besuche")} · ${pl(k.videos_gesehen, "Video", "Videos")}${gerat}`
-      : "noch nicht in der App";
-    let detail = "";
-    if ((k.geraete || []).length) detail += "<h4>Geräte</h4>" + k.geraete.map(nutzungGeraetZeile).join("");
-    if (k.bereiche.length) {
-      detail += '<h4>Meistbesucht</h4>' + k.bereiche.map((b) =>
-        `<div class="nk-zeile"><span>${escape(nutzungBereichName(b.ziel))}</span><b>${b.anzahl}×</b></div>`).join("");
-    }
-    if (k.videos.length) {
-      detail += '<h4>Videos angesehen</h4>' + k.videos.map((v) =>
-        `<div class="nk-zeile"><span>${escape(nutzungVideoName(v))}<small>zuletzt ${escape(vorZeit(v.zuletzt))}</small></span><b>${v.anzahl}×</b></div>`).join("");
-    }
-    if (!detail) detail = '<p class="hinweis">In den letzten ' + d.tage + ' Tagen nichts aufgerufen.</p>';
-    html += `<details class="nutz-karte${k.zuletzt ? "" : " nie"}">
-      <summary><span class="nk-name">${escape(k.name)}</span>
-        <span class="nk-zuletzt" title="${k.zuletzt ? escape(new Date(k.zuletzt).toLocaleString("de-DE")) : ""}">${escape(vorZeit(k.zuletzt))}</span>
-        <span class="nk-zahlen">${zahlen}</span></summary>
-      <div class="nk-detail">${detail}</div></details>`;
-  }
+           + `„Zuletzt aktiv“ zählt auch ältere Besuche. Die Dauer wird erst seit Version 0.59 gemessen `
+           + `(nur bei geöffneter App, höchstens 30 Min. am Stück); davor steht „–“. ✓ = komplett angeschaut.</p>`
+           + '<h3 class="nutz-h">Spielerinnen</h3>'
+           + konten.map((k) => renderNutzungSpielerin(k, d.tage)).join("")
+           + renderNutzungVideos(d.video_ansicht || [], d.tage)
+           + renderNutzungFehler(d.fehler || [], d.tage);
   el.innerHTML = html;
 }
 
@@ -3023,7 +3164,7 @@ async function oeffneAnalyseDetail(aid) {
   if (ganzes) ganzes.addEventListener("click", () => oeffneAnalyseVideo(a.id, 0, "TVG – " + a.gegner, null));
 }
 
-$("#btn-analyse-zurueck").addEventListener("click", () => gehe("ich", "videos"));
+$("#btn-analyse-zurueck").addEventListener("click", () => mitScrollRueckkehr(() => gehe("ich", "videos")));
 
 let analyseZurueckView = null;
 
@@ -3068,6 +3209,8 @@ function merkeZurueckView() {
 
 function oeffneSzenenClip(cid, titel, info) {
   nutzungMelden("video", "szene:" + cid, titel);
+  wiedergabeBeobachten("szene:" + cid, titel);
+  ladeKommentare("szene:" + cid);
   merkeZurueckView();
   $("#vd-titel").textContent = titel;
   $("#vd-meta").textContent = "Szene";
@@ -3083,6 +3226,8 @@ function oeffneSzenenClip(cid, titel, info) {
 
 function oeffneAnalyseVideo(aid, t, titel, info) {
   nutzungMelden("video", "spiel:" + aid, titel);
+  wiedergabeBeobachten(null);                      // ganzes Spiel: kein 60-%-Massstab
+  ladeKommentare("spiel:" + aid);
   merkeZurueckView();
   $("#vd-titel").textContent = titel;
   $("#vd-meta").textContent = "ab " + analyseZeit(t);
@@ -3137,6 +3282,7 @@ async function ladeVideos() {
       try { videoKader = await api("/api/spieler"); } catch (_) { videoKader = []; }
     }
     renderVideos();
+    scrollNachRenderAnwenden();
   } catch (_) {
     if (!videoClips) {
       el.innerHTML = '<p class="hinweis">Videos konnten nicht geladen werden – ' +
@@ -3172,6 +3318,12 @@ function renderVideos() {
       el.appendChild(h);
     }
     for (const c of clips) el.appendChild(videoKarte(c));
+  }
+  if (aktRolle !== "trainer") {                       // Transparenz: Spielerinnen wissen, dass mitgezaehlt wird
+    const p = document.createElement("p");
+    p.className = "hinweis";
+    p.textContent = "Dein Trainer sieht, welche Videos du angeschaut hast.";
+    el.appendChild(p);
   }
 }
 
@@ -3209,6 +3361,8 @@ function videoKarte(c) {
 
 function oeffneVideo(c) {
   nutzungMelden("video", "clip:" + c.id, c.titel);
+  wiedergabeBeobachten("clip:" + c.id, c.titel);
+  ladeKommentare("clip:" + c.id);
   aktVideo = c;
   analyseZurueckView = null;
   zeigeSzenenNotiz(null);
@@ -3225,9 +3379,146 @@ function oeffneVideo(c) {
   zeigeView("view-video-detail");
 }
 
+// Echte Wiedergabe: "geoeffnet" (video) sagt nur, dass der Player aufging. Hier zaehlt die
+// tatsaechlich abgespielte Zeit; ab 60 % der Laenge geht EIN Ereignis "gespielt" raus.
+// Vorspringen zaehlt nicht mit (nur kleine Zeitspruenge zwischen zwei timeupdate-Events).
+// Nur fuer kurze Clips; beim ganzen Spiel (spiel:) waere 60 % der falsche Massstab.
+let _wiedergabe = null;       // { ziel, titel, gesehen (s), letzte (s), gemeldet }
+
+function wiedergabeBeobachten(ziel, titel) {
+  _wiedergabe = ziel ? { ziel, titel, gesehen: 0, letzte: null, gemeldet: false } : null;
+}
+
+(function () {
+  const p = $("#vd-player");
+  if (!p) return;
+  p.addEventListener("timeupdate", () => {
+    const w = _wiedergabe;
+    if (!w || w.gemeldet || p.paused || !(p.duration > 0)) return;
+    const d = p.currentTime - (w.letzte ?? p.currentTime);
+    w.letzte = p.currentTime;
+    if (d > 0 && d < 1.5) w.gesehen += d;
+    if (w.gesehen >= 0.6 * p.duration) {
+      w.gemeldet = true;
+      nutzungMelden("gespielt", w.ziel, w.titel);
+    }
+  });
+  p.addEventListener("seeking", () => { if (_wiedergabe) _wiedergabe.letzte = null; });
+})();
+
+// ---- Fragen & Kommentare unter dem Video -------------------------------------
+//  Sichtbar fuer alle, die das Video sehen duerfen. "Nur fuer Trainer" macht einen
+//  Kommentar privat (Trainer + Verfasserin); Antworten in einem privaten Faden bleiben
+//  privat (das erzwingt der Server, nicht dieses UI). Online-only wie das Video selbst.
+let _kommentarZiel = null;
+let _kommentarListe = [];
+let _kommentarAntwortAuf = null;       // id des Kommentars, auf den gerade geantwortet wird
+
+async function ladeKommentare(ziel) {
+  _kommentarZiel = ziel;
+  _kommentarAntwortAuf = null;
+  _kommentarListe = [];
+  if (!ziel) { $("#vd-kommentare").innerHTML = ""; return; }
+  renderKommentare();
+  try {
+    const liste = await api("/api/kommentare?ziel=" + encodeURIComponent(ziel));
+    if (_kommentarZiel === ziel) { _kommentarListe = liste; renderKommentare(); }   // nicht in ein anderes Video rendern
+  } catch (_) { /* ohne Netz: Eingabe bleibt leer sichtbar, Senden meldet den Fehler */ }
+}
+
+function kommentarFehlertext(e) {
+  try { return JSON.parse(e.message).detail || e.message; } catch (_) { return e.message; }
+}
+
+function renderKommentare() {
+  const box = $("#vd-kommentare");
+  if (!_kommentarZiel) { box.innerHTML = ""; return; }
+  const trainer = aktRolle === "trainer";
+  const entwurf = box.querySelector("#km-text") ? box.querySelector("#km-text").value : "";
+  const privatGewaehlt = box.querySelector("#km-privat") ? box.querySelector("#km-privat").checked : false;
+  const antworten = {};
+  for (const k of _kommentarListe) if (k.antwort_auf) (antworten[k.antwort_auf] = antworten[k.antwort_auf] || []).push(k);
+  const eintrag = (k, istAntwort) => `<div class="km${istAntwort ? " km-antwort" : ""}${k.nur_trainer ? " km-privat" : ""}" data-km-id="${k.id}">
+      <div class="km-kopf"><b>${escape(k.name)}</b>${k.trainer ? '<span class="km-badge">Trainer</span>' : ""}`
+    + `${k.nur_trainer ? '<span class="km-lock">🔒 nur Trainer</span>' : ""}<small>${escape(vorZeit(k.zeit))}</small></div>
+      <p class="km-text">${escape(k.text)}</p>
+      <div class="km-knoepfe">${istAntwort ? "" : `<button type="button" data-km-antwort="${k.id}">Antworten</button>`}`
+    + `${k.eigene || trainer ? `<button type="button" data-km-loeschen="${k.id}">Löschen</button>` : ""}</div></div>`;
+  const oben = _kommentarListe.filter((k) => !k.antwort_auf);
+  const liste = oben.length
+    ? oben.map((k) => eintrag(k, false) + (antworten[k.id] || []).map((a) => eintrag(a, true)).join("")).join("")
+    : '<p class="hinweis">Noch keine Fragen oder Kommentare.</p>';
+  const ziel = _kommentarAntwortAuf && _kommentarListe.find((k) => k.id === _kommentarAntwortAuf);
+  const erzwungenPrivat = !!(ziel && ziel.nur_trainer);
+  box.innerHTML = `<h3 class="videos-h">Fragen &amp; Kommentare</h3>
+    <div class="km-liste">${liste}</div>
+    <div class="km-neu">
+      ${ziel ? `<div class="km-an">Antwort an ${escape(ziel.name)} <button type="button" data-km-abbruch>✕</button></div>` : ""}
+      <textarea id="km-text" rows="3" maxlength="1000" placeholder="${trainer ? "Kommentar oder Antwort …" : "Frage oder Kommentar zu diesem Video …"}"></textarea>
+      ${trainer ? "" : `<label class="km-privatwahl"><input type="checkbox" id="km-privat"${erzwungenPrivat || privatGewaehlt ? " checked" : ""}${erzwungenPrivat ? " disabled" : ""}> 🔒 Nur für Trainer sichtbar</label>`}
+      <button type="button" id="km-senden" class="primaer">Senden</button>
+    </div>`;
+  $("#km-text").value = entwurf;                       // Entwurf bleibt beim Neuzeichnen erhalten
+}
+
+async function sendeKommentar() {
+  const feld = $("#km-text");
+  const text = feld.value.trim();
+  if (!text) return;
+  const knopf = $("#km-senden");
+  knopf.disabled = true;
+  knopf.textContent = "Sendet …";              // bei schlechtem Netz dauert es: sichtbar machen, dass etwas laeuft
+  const privat = $("#km-privat");
+  try {
+    _kommentarListe = await api("/api/kommentare", "POST", {
+      ziel: _kommentarZiel, text, nur_trainer: privat ? privat.checked : false,
+      antwort_auf: _kommentarAntwortAuf,
+    });
+    const neueId = Math.max(0, ..._kommentarListe.filter((k) => k.eigene).map((k) => k.id));
+    _kommentarAntwortAuf = null;
+    feld.value = "";
+    if (privat) privat.checked = false;
+    renderKommentare();
+    // Rueckmeldung: Tastatur zu, Bestaetigung, zum neuen Kommentar scrollen. Er steht UEBER dem
+    // Eingabefeld und liegt sonst (vor allem bei offener Tastatur) ausserhalb des Sichtbaren.
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    toast("Kommentar gesendet ✓");
+    const neu = $("#vd-kommentare").querySelector(`[data-km-id="${neueId}"]`);
+    if (neu) neu.scrollIntoView({ block: "center", behavior: "smooth" });
+  } catch (e) {
+    toast("Konnte nicht senden: " + kommentarFehlertext(e));
+    knopf.disabled = false;
+    knopf.textContent = "Senden";
+  }
+}
+
+$("#vd-kommentare").addEventListener("click", async (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  if (b.id === "km-senden") { sendeKommentar(); return; }
+  if (b.dataset.kmAbbruch !== undefined) { _kommentarAntwortAuf = null; renderKommentare(); return; }
+  if (b.dataset.kmAntwort) {
+    _kommentarAntwortAuf = +b.dataset.kmAntwort;
+    renderKommentare();
+    $("#km-text").focus();
+    return;
+  }
+  if (b.dataset.kmLoeschen) {
+    if (b.dataset.scharf !== "1") { b.dataset.scharf = "1"; b.textContent = "Wirklich löschen?"; return; }
+    try {
+      await api("/api/kommentare/" + b.dataset.kmLoeschen + "/loeschen", "POST");
+      _kommentarListe = _kommentarListe.filter((k) => k.id !== +b.dataset.kmLoeschen
+                                                       && k.antwort_auf !== +b.dataset.kmLoeschen);
+      renderKommentare();
+    } catch (err) { toast("Konnte nicht löschen: " + kommentarFehlertext(err)); }
+  }
+});
+
 function stoppeVideoPlayer() {
   const p = $("#vd-player");
   if (!p) return;
+  wiedergabeBeobachten(null);
+  ladeKommentare(null);
   p.pause();
   p.removeAttribute("src");
   p.load();
@@ -3302,10 +3593,10 @@ $("#btn-video-zurueck").addEventListener("click", () => {
     const v = analyseZurueckView;
     analyseZurueckView = null;
     $("#btn-video-zurueck").textContent = "← Videos";
-    zeigeView(v);
+    mitScrollRueckkehr(() => zeigeView(v));
     return;
   }
-  gehe(aktOber, "videos");
+  mitScrollRueckkehr(() => gehe(aktOber, "videos"));
 });
 
 function renderStats() {
@@ -4323,7 +4614,7 @@ $("#btn-mic").addEventListener("click", async () => {
 // Sichtbare Versionsnummer im Kopf — was drin ist, steht in CHANGELOG.md.
 // Bei jeder Aenderung: hier hochzaehlen, Eintrag im CHANGELOG, sw.js CACHE
 // bumpen und die ?v= der geaenderten Dateien in index.html.
-const APP_VERSION = "v0.56.0";
+const APP_VERSION = "v0.59.0";
 const versionEl = document.getElementById("version");
 if (versionEl) versionEl.textContent = APP_VERSION;
 

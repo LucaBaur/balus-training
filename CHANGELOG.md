@@ -19,6 +19,95 @@ Zahl, Fehlerbehebungen und Design-Feinschliff die letzte.
 
 ---
 
+## v0.59.0 — 2026-10-31
+
+**Team → Nutzung ist übersichtlicher.** Oben stehen jetzt die Spielerinnen: pro Person, wie oft sie in
+der App war, wie lange insgesamt und in welchem Bereich wie lange. Darunter folgen die Spielzüge und
+Videos, nach Spiel gruppiert („TVG – Gegner · 14.09.“). Die Fehlerliste steht jetzt ganz unten.
+
+**Spielzüge sind unterscheidbar.** Bisher hieß jeder Spielzug eines Spiels „Spielzug: TVG – Gegner“. Jetzt
+steht dort der Name des Spielzugs mit Ampelpunkt und der Zeit im Spiel (z. B. „Spielzug Kreuz · 12:03–12:20“),
+bei Ereignissen die Art (z. B. „Tor · Rückraum · 5:00“). Das gilt auch rückwirkend für schon gespeicherte
+Ansichten, weil der Server den Namen über die Szene nachschlägt. Auch Spielzüge, die noch niemand
+geöffnet hat, erscheinen mit „Offen: …“.
+
+**Verweildauer.** Die App misst jetzt, wie lange ein Bereich oder Video geöffnet war. Zeit im Hintergrund
+zählt nicht, ein einzelner Abschnitt zählt höchstens 30 Minuten. Für die Zeit vor diesem Stand gibt es
+keine Dauer; dort steht „–“.
+
+---
+
+## v0.58.1 — 2026-10-27
+
+**Kommentare: Du siehst jetzt, dass dein Kommentar angekommen ist.** Bisher leerte sich nach „Senden“
+nur das Eingabefeld, der neue Kommentar erschien darüber und lag bei geöffneter Tastatur außerhalb
+des Sichtbaren, so dass es aussah, als wäre nichts passiert. Jetzt zeigt der Knopf während des
+Sendens „Sendet …“, danach erscheint „Kommentar gesendet ✓“, die Tastatur schließt sich und die Seite
+scrollt zu deinem neuen Kommentar.
+
+**Kurze Meldungen („Gespeichert ✓“, Fehlermeldungen) waren fast überall unsichtbar.** Das Meldungsfeld
+lag versehentlich im Bereich Team → Einteilung und war deshalb nur dort zu sehen. In allen anderen
+Bereichen der App kamen solche Meldungen nie an. Jetzt erscheinen sie überall. Das betrifft auch
+Fehlermeldungen, die vorher still verschwanden.
+
+**Server-Log für Benachrichtigungen bei Kommentaren.** Ob eine Push-Nachricht losgeschickt wurde und
+an wen, steht jetzt im Log des Servers. Fehler dabei werden nicht mehr verschluckt.
+
+---
+
+## v0.58.0 — 2026-10-27
+
+**Fragen und Kommentare unter jedem Video.** Unter dem Player gibt es jetzt den Bereich „Fragen &
+Kommentare“, bei einzelnen Szenen, Clips und beim ganzen Spiel. Wer das Video sehen darf, kann
+etwas schreiben, und alle, die das Video sehen dürfen, lesen mit. Auf einen Kommentar kann man
+antworten, eigene Kommentare lassen sich löschen (der Trainer darf alle löschen).
+
+**Schalter „Nur für Trainer sichtbar“.** Wer eine Frage nicht vor allen stellen möchte, setzt den
+Haken. Der Kommentar sehen dann nur die Trainer und die Verfasserin selbst. Antwortet der Trainer
+darauf, bleibt auch die Antwort privat, ohne dass er etwas einstellen muss.
+
+**Benachrichtigung.** Schreibt eine Spielerin etwas, bekommen die Trainer eine Push-Nachricht.
+Antwortet der Trainer, bekommt die Spielerin eine. Ein Trainer-Kommentar ohne Bezug auf einen
+anderen löst keine Nachricht aus.
+
+**Trainer-Übersicht.** Unter Team → Nutzung → Videos steht bei jedem Video, wie viele Fragen und
+Kommentare es hat (💬).
+
+Auch in dieser Version: Ein Video zählt als „komplett angeschaut“, sobald 60 % davon abgespielt
+wurden (siehe v0.57.0).
+
+---
+
+## v0.57.0 — 2026-10-27
+
+**Video-Tracking: Du siehst jetzt pro Video, wer es angeschaut hat und wer noch nicht.** Unter
+Team → Nutzung gibt es einen neuen Abschnitt „Videos“. Zu jedem Clip steht dort, wie viele der
+zugeordneten Spielerinnen ihn gesehen haben („3 von 5 gesehen“), wer ihn wie oft geöffnet hat
+und wer ihn noch nicht gesehen hat. Videos mit offenen Spielerinnen stehen ganz oben. Clips, die
+noch niemand geöffnet hat, erscheinen ebenfalls.
+
+**„Komplett angeschaut“ statt nur „geöffnet“.** Bisher zählte schon das Öffnen des Players.
+Jetzt merkt die App zusätzlich, wenn jemand mindestens 60 % eines Clips tatsächlich abgespielt
+hat. Vorspulen zählt nicht mit. Das gilt für einzelne Szenen, nicht für das ganze Spiel.
+
+**Hinweis für die Spielerinnen.** Unter der Videoliste steht jetzt: „Dein Trainer sieht, welche
+Videos du angeschaut hast.“
+
+Bereits erfasste Ansichten bleiben erhalten und erscheinen in der neuen Übersicht.
+
+---
+
+## v0.56.1 — 2026-10-22
+
+**Zurück aus einem Video landet wieder an der alten Stelle.** Bisher sprang die Liste nach
+„Zurück“ immer ganz nach oben, und man musste bis zum Spiel oder zur Szene wieder herunter-
+scrollen. Jetzt merkt sich die App, wie weit du gescrollt hattest, und bringt dich dorthin
+zurück. Das gilt für den „Zurück“-Knopf oben, die Zurück-Taste am Android-Gerät und die
+Wischgeste am iPhone. Ein Tipp auf einen Menüpunkt unten startet wie gewohnt oben.
+Der Vorschlag kam von Anni.
+
+---
+
 ## v0.56.0 — 2026-10-21
 
 **Team-Einteilung: „Training übernehmen“ nimmt jetzt die Zusagen aus der App.** Bisher holte die

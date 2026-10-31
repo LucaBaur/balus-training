@@ -11,7 +11,7 @@
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="apple-touch-icon" href="/icon-192.png?v=3" />
   <link rel="icon" href="/icon-192.png?v=3" />
-  <link rel="stylesheet" href="/style.css?v=45" />
+  <link rel="stylesheet" href="/style.css?v=47" />
   <title>Balu's Training</title>
 </head>
 <body>
@@ -112,6 +112,7 @@
       <video id="vd-player" class="vd-player" controls playsinline preload="metadata"></video>
       <div id="vd-notiz" class="vd-notiz"></div>
       <div id="vd-aktionen" class="vd-aktionen"></div>
+      <div id="vd-kommentare" class="vd-kommentare"></div>
     </section>
 
     <!-- Termine-Übersicht: kommende Einheiten mit Zusagen, aufklappbar -->
@@ -199,7 +200,6 @@
         <button id="btn-neu-mischen">Neu mischen</button>
         <button id="btn-zurueck">Zurück zur Anwesenheit</button>
       </div>
-      <div id="toast" class="toast hidden"></div>
     </section>
 
     <!-- Rangliste -->
@@ -277,9 +277,12 @@
     <button data-ober="saison"><span class="t-icon">📅</span><span class="t-text">Saison</span></button>
   </nav>
 
+  <!-- Auf Seitenebene, NICHT in einer Ansicht: sonst ist er nur sichtbar, solange genau diese Ansicht offen ist -->
+  <div id="toast" class="toast hidden"></div>
+
   <script src="/local-db.js?v=3"></script>
   <script src="/sync.js?v=11"></script>
   <script src="/teams-local.js?v=2"></script>
-  <script src="/app.js?v=65"></script>
+  <script src="/app.js?v=70"></script>
 </body>
 </html>

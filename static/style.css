@@ -1210,6 +1210,11 @@ button:active { transform: scale(.98); }
 .nk-fehler { font-weight: 600; font-size: 0.88rem; word-break: break-word; }
 .nutz-karte.fehler { border-left: 3px solid var(--warn); }
 .nk-zahlen .alt, .nk-zeile small.alt { color: var(--warn); }
+.nk-titel { display: flex; gap: 8px; align-items: flex-start; min-width: 0; }
+.nk-titel .an-punkt { flex: none; margin-top: 6px; }
+.nk-titel .an-punkt.leer { background: transparent; }
+.nk-dauer { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.nk-offen { color: var(--warn); }
 
 /* Ich -> Videos: Spiele, Videoanalyse; Mein Profil: Spielstatistik */
 .videos-h { margin: 14px 0 6px; font-size: 0.95rem; }
@@ -1248,3 +1253,27 @@ button:active { transform: scale(.98); }
 .liga-mehr summary { cursor: pointer; color: var(--tvg); font-weight: 600; font-size: 0.88rem; margin: 4px 0 8px; }
 .liga-tab th:first-child, .liga-tab td:first-child { padding-left: 8px; }
 .liga-tab th:last-child, .liga-tab td:last-child { padding-right: 8px; }
+
+/* Fragen & Kommentare unter dem Video */
+.vd-kommentare:empty { display: none; }
+.vd-kommentare { margin-top: 18px; }
+.km { background: var(--karte); border-radius: 12px; padding: 10px 12px; margin-bottom: 8px;
+  box-shadow: 0 1px 3px rgba(14,28,51,.06); }
+.km-antwort { margin-left: 18px; border-left: 3px solid var(--linie); border-radius: 0 12px 12px 0; }
+.km-privat { border-left: 3px solid var(--ocker); }
+.km-kopf { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; font-size: 0.9rem; }
+.km-kopf small { color: var(--grau); font-size: 0.76rem; margin-left: auto; }
+.km-badge { background: var(--tvg); color: #fff; font-size: 0.66rem; font-weight: 700;
+  letter-spacing: .06em; text-transform: uppercase; padding: 1px 6px; border-radius: 6px; }
+.km-lock { color: var(--ocker); font-size: 0.76rem; font-weight: 700; }
+.km-text { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.4; }
+.km-knoepfe { display: flex; gap: 14px; margin-top: 6px; }
+.km-knoepfe button { background: none; border: 0; padding: 2px 0; color: var(--tvg);
+  font-size: 0.82rem; font-weight: 600; }
+.km-knoepfe button[data-km-loeschen] { color: var(--grau); }
+.km-neu { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.km-neu textarea { width: 100%; box-sizing: border-box; padding: 10px; border-radius: 10px;
+  border: 1px solid var(--linie); font: inherit; resize: vertical; }
+.km-an { font-size: 0.85rem; color: var(--grau); }
+.km-an button { background: none; border: 0; color: var(--grau); font-size: 0.9rem; }
+.km-privatwahl { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; }

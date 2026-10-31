@@ -514,6 +514,7 @@ py tests/sp_import_test.py          # SpielerPlus-Import (ohne Netz)
 py tests/liga_test.py
 py tests/analyse_test.py
 py tests/nutzung_test.py
+node tests/nutzung_ui.test.mjs
 node tests/offline.test.mjs
 node tests/teams.test.mjs
 ```

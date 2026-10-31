@@ -35,6 +35,8 @@ balu.MEDIA_CLIPS = tmp / "clips"
 balu.MEDIA_CLIPS.mkdir()
 balu.MEDIA_SPIELE = tmp / "spiele"
 balu.MEDIA_SPIELE.mkdir()
+balu.MEDIA_SZENEN = tmp / "szenen"
+balu.MEDIA_SZENEN.mkdir()
 _verbinde = db.verbinde
 db.verbinde = lambda pfad=DB: _verbinde(pfad)
 
@@ -202,11 +204,32 @@ def seed() -> dict:
         db.clip_anlegen(conn, titel, notiz, datei, (HEUTE - timedelta(days=9)).isoformat(),
                         12.0, trainer_id, [ids[w] for w in wer])
 
+    # Szenen-Clips zu den Spielzuegen und zwei Ereignissen (Platzhalterdateien). Zwei
+    # Spielzuege heissen "Kreisel" - genau der Fall, den die Nutzungsseite unterscheiden muss.
+    balu.MEDIA_SZENEN.mkdir(exist_ok=True)
+    szene = {}                                                        # key -> clip-id
+    for key, von, bis in [(z_["key"], z_["t_start"] - 3, z_["t_ende"] + 5) for z_ in zuege] \
+            + [(e_["key"], e_["t"] - 3, e_["t"] + 5) for e_ in events[:2]]:
+        (balu.MEDIA_SZENEN / f"demo-{key}.mp4").write_bytes(bytes(1024))
+        db.szene_clip_speichern(conn, aid, key, f"demo-{key}.mp4", von, bis)
+        szene[key] = conn.execute("SELECT id FROM spiel_szene_clip WHERE analyse_id = ? AND szene_key = ?",
+                                  (aid, key)).fetchone()["id"]
+    # Wer hat welche Szene geoeffnet? Im ALTEN Format: alle mit demselben Titel
+    gesehen = {"Lena": ["z1", "z1", "z3", "z4", "e0"], "Sophie": ["z1", "z2", "z4"],
+               "Zoe": ["z2"], "Greta": ["z3", "z3"]}
+
     # Nutzung: ein paar Besuche, damit die Nutzungsseite etwas zeigt
     for i, name in enumerate(("Lena", "Mia", "Sophie", "Zoe", "Ida", "Greta")):
         bid = db.benutzer_nach_name(conn, name)["id"]
         db.nutzung_speichern(conn, bid, [{"typ": "besuch"}, {"typ": "bereich", "ziel": "training/trainings"},
-                                         {"typ": "bereich", "ziel": "taktik/playbook"}])
+                                         {"typ": "bereich", "ziel": "taktik/playbook"},
+                                         {"typ": "verweil", "ziel": "training/trainings", "dauer_s": 240 + i * 75},
+                                         {"typ": "verweil", "ziel": "taktik/playbook", "dauer_s": 95 + i * 40}])
+        db.nutzung_speichern(conn, bid, [
+            {"typ": "video", "ziel": f"szene:{szene[k]}", "info": "TVG – HSG Beispielstadt"}
+            for k in gesehen.get(name, [])] + (
+            [{"typ": "verweil", "ziel": f"szene:{szene[gesehen[name][0]]}", "dauer_s": 38 + i * 11}]
+            if name in gesehen else []))
         db.geraet_speichern(conn, bid, {"os": "Android 14" if i % 2 else "iOS 18", "browser": "Chrome 130" if i % 2 else "Safari 18",
                                         "modus": "installiert", "bildschirm": "390x844", "app_version": "v0.55.0", "sw": True})
         conn.execute("UPDATE nutzung SET zeit = datetime('now', ?) WHERE benutzer_id = ?",
