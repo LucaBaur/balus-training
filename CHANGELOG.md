@@ -19,6 +19,27 @@ Zahl, Fehlerbehebungen und Design-Feinschliff die letzte.
 
 ---
 
+## v0.60.0 — 2026-10-31
+
+**Team → Videos zeigt jetzt alle Spielzüge, nach Spiel gegliedert.** Bisher standen dort nur die selbst
+hochgeladenen Clips. Jetzt gibt es pro Spiel eine Karte mit allen Spielzügen, jeder mit fester **ID**
+(z. B. `S1-z3`: Spiel 1, Kennung z3 aus Balu-Spielanalyse). Die ID bleibt gleich, auch wenn die Analyse
+erneut hochgeladen wird. Unter jedem Spielzug steht, wer ihn **komplett** angeschaut hat (✓), wer ihn nur
+angetippt hat (◐) und wer ihn noch nie geöffnet hat (○). Tippen auf einen Spielzug öffnet das Video.
+
+**Filtern:** „Zeitverlauf“ (je Spiel nach Spielzeit) oder „Nach Name“ (alle „Kreisel“ oder alle
+„2. Welle“ aus allen Spielen untereinander). Dazu Namens-Knöpfe mit Anzahl, „Nur offene“ und
+„Ereignisse einblenden“ (Tore, Fehlwürfe usw.). Die eigenen Clips stehen darunter. Die Zahl der
+Fragen und Kommentare (💬) steht am Spielzug und an den eigenen Clips. Für Spielerinnen ändert sich nichts.
+
+**Team → Nutzung ist jetzt nur noch eine Liste der Spielerinnen.** Die Videoliste ist dort entfallen. Pro
+Spielerin steht, wo sie war und wie lange, und **welche ihrer Spielzüge sie noch nicht komplett gesehen
+hat** (mit ID). „Gesehen“ gilt ab 60 % Wiedergabe und ohne Zeitgrenze: ein Spielzug, den sie vor Wochen
+angeschaut hat, taucht nicht wieder auf. Spielzüge ohne Videoausschnitt lassen sich nicht messen und
+stehen deshalb nicht in der Liste.
+
+---
+
 ## v0.59.0 — 2026-10-31
 
 **Team → Nutzung ist übersichtlicher.** Oben stehen jetzt die Spielerinnen: pro Person, wie oft sie in

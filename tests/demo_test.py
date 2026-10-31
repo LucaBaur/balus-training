@@ -63,15 +63,29 @@ from fastapi.testclient import TestClient
 c = TestClient(d.balu.app)
 assert c.post('/api/login', json={'name': 'Trainer', 'pin': '1111'}).status_code == 200
 n = c.get('/api/nutzung').json()
-kreisel = [v['zeit'] for v in n['video_ansicht'] if v['label'] == 'Spielzug Kreisel']
+u = c.get('/api/szenen-uebersicht').json()['spiele']
+zuege = [s for g in u for s in g['szenen'] if s['art'] == 'zug']
 lena = next(k for k in n['konten'] if k['name'] == 'Lena')
-print(json.dumps({'kreisel': kreisel, 'lena_sek': lena['sekunden_gesamt'],
-                  'namen': sorted(k['name'] for k in n['konten'])}))
+zustaende = set()
+for s in zuege:
+    for name in s['beteiligt']:
+        g = next((x for x in s['gesehen'] if x['name'] == name), None)
+        zustaende.add('offen' if not g else 'komplett' if g['gespielt'] else 'angetippt')
+print(json.dumps({
+    'spiele': len(u), 'ids': sorted(s['id'] for s in zuege),
+    'kreisel': [s['id'] + ' ' + s['zeit'] for s in zuege if s['label'] == 'Spielzug Kreisel'],
+    'namen': sorted({s['name'] for s in zuege}), 'zustaende': sorted(zustaende),
+    'lena_sek': lena['sekunden_gesamt'], 'lena_offen': lena['offen'],
+    'konten': sorted(k['name'] for k in n['konten'])}))
 """
 d = json.loads(lauf(DATEN))
-check(len(d["kreisel"]) == 2 and len(set(d["kreisel"])) == 2,
-      "Demo-Team: die zwei Spielzuege 'Kreisel' sind an der Spielzeit unterscheidbar")
-check(d["lena_sek"] > 0, "Demo-Team: Verweildauer ist befuellt")
-check("Lena" in d["namen"] and "Trainer" not in d["namen"], "Demo-Team: erfundene Spielerinnen, Trainer zaehlt nicht")
+check(d["spiele"] == 2, "Demo-Team: zwei Spiele")
+check(len(d["ids"]) == len(set(d["ids"])), "Demo-Team: alle Spielzug-IDs sind eindeutig (auch bei gleicher Kennung in zwei Spielen)")
+check(len(d["kreisel"]) >= 3 and len({k.split()[0] for k in d["kreisel"]}) == len(d["kreisel"]),
+      "Demo-Team: mehrere 'Kreisel' sind per ID unterscheidbar")
+check({"Kreisel", "2. Welle"} <= set(d["namen"]), "Demo-Team: Namen zum Filtern ('Kreisel', '2. Welle')")
+check(d["zustaende"] == ["angetippt", "komplett", "offen"], "Demo-Team: alle drei Zustaende kommen vor")
+check(d["lena_sek"] > 0 and d["lena_offen"] > 0, "Demo-Team: Verweildauer befuellt, Lena hat Offenes")
+check("Lena" in d["konten"] and "Trainer" not in d["konten"], "Demo-Team: erfundene Spielerinnen, Trainer zaehlt nicht")
 
 print("\nAlle Tests gruen.")

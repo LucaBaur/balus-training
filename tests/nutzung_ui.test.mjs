@@ -14,8 +14,11 @@ vm.createContext(ctx);
 vm.runInContext(src.slice(start, ende)
   + "\nthis.dauerText = dauerText; this.verweilSegment = verweilSegment;"
   + "\nthis.nutzungVideoLabel = nutzungVideoLabel; this.gruppiereNachSpiel = gruppiereNachSpiel;"
-  + "\nthis.anzahlDauer = anzahlDauer;", ctx);
-const { dauerText, verweilSegment, nutzungVideoLabel, gruppiereNachSpiel, anzahlDauer } = ctx;
+  + "\nthis.anzahlDauer = anzahlDauer; this.filtereSzenen = filtereSzenen;"
+  + "\nthis.namenMitZahl = namenMitZahl; this.gruppiereNachName = gruppiereNachName;"
+  + "\nthis.szenenStatus = szenenStatus;", ctx);
+const { dauerText, verweilSegment, nutzungVideoLabel, gruppiereNachSpiel, anzahlDauer,
+        filtereSzenen, namenMitZahl, gruppiereNachName, szenenStatus } = ctx;
 
 let fehler = 0;
 function check(name, ist, soll) {
@@ -83,6 +86,45 @@ const chrono = gruppiereNachSpiel([
   { ziel: "szene:6", spiel, t: 200 }, { ziel: "szene:7", spiel, t: 1210 },
 ])[0].items.map((x) => x.ziel);
 check("Gruppen: im Spiel nach Spielzeit, ganzes Spiel zuerst", chrono, ["spiel:1", "szene:6", "szene:7", "szene:5"]);
+
+// ------------------------------------------- Spielzug-Uebersicht (Trainer) ----
+//  Szenen so, wie sie /api/szenen-uebersicht liefert (flach, neuestes Spiel zuerst, im Spiel nach Zeit).
+const S = (id, art, name, fehlt, gesehen = [], extra = {}) => ({ id, art, name, fehlt, gesehen, spiel: "TVG – HSV", ...extra });
+const szenen = [
+  S("S2-z1", "zug", "Kreisel", [], [{ name: "Anna", gespielt: 1 }]),
+  S("S1-z1", "zug", "Kreisel", ["Bea"], [{ name: "Anna", gespielt: 1 }]),
+  S("S1-e1", "ereignis", "Tor", ["Anna"], [{ name: "Anna", gespielt: 0 }]),
+  S("S1-z2", "zug", "2. Welle", ["Anna"], [{ name: "Anna", gespielt: 0 }, { name: "Bea", gespielt: 2 }]),
+  S("S1-z3", "zug", "kreisel", null, [], { kein_video: true }),
+];
+
+check("Filter: Standard = nur Spielzuege (Ereignisse aus)",
+  filtereSzenen(szenen, {}).map((s) => s.id), ["S2-z1", "S1-z1", "S1-z2", "S1-z3"]);
+check("Filter: Ereignisse einblenden",
+  filtereSzenen(szenen, { mitEreignissen: true }).map((s) => s.id), ["S2-z1", "S1-z1", "S1-e1", "S1-z2", "S1-z3"]);
+check("Filter: Name (ohne Beachtung der Gross-/Kleinschreibung)",
+  filtereSzenen(szenen, { name: "KREISEL" }).map((s) => s.id), ["S2-z1", "S1-z1", "S1-z3"]);
+check("Filter: Name 2. Welle", filtereSzenen(szenen, { name: "2. Welle" }).map((s) => s.id), ["S1-z2"]);
+check("Filter: nur offene (ohne 'kein Video')",
+  filtereSzenen(szenen, { nurOffen: true }).map((s) => s.id), ["S1-z1", "S1-z2"]);
+check("Filter: Name + nur offene + Ereignisse",
+  filtereSzenen(szenen, { name: "Tor", nurOffen: true, mitEreignissen: true }).map((s) => s.id), ["S1-e1"]);
+check("Filter: leere Eingabe", filtereSzenen([], { name: "x" }), []);
+check("Filter: verandert die Eingabe nicht", szenen.length, 5);
+
+check("Namens-Chips: gezaehlt, Schreibweisen zusammengefasst, haeufigste zuerst",
+  namenMitZahl(filtereSzenen(szenen, {})), [{ name: "Kreisel", anzahl: 3 }, { name: "2. Welle", anzahl: 1 }]);
+check("Namens-Chips: leer", namenMitZahl([]), []);
+
+const nachName = gruppiereNachName(filtereSzenen(szenen, {}));
+check("Nach Name: Gruppen, haeufigste zuerst", nachName.map((x) => [x.name, x.items.length]), [["Kreisel", 3], ["2. Welle", 1]]);
+check("Nach Name: Eintraege behalten die Reihenfolge (neues Spiel, dann Zeit)",
+  nachName[0].items.map((s) => s.id), ["S2-z1", "S1-z1", "S1-z3"]);
+
+check("Status: komplett angeschaut", szenenStatus(szenen[1], "Anna"), "komplett");
+check("Status: nur angetippt", szenenStatus(szenen[3], "Anna"), "angetippt");
+check("Status: nie geoeffnet", szenenStatus(szenen[1], "Bea"), "offen");
+check("Status: kein Video", szenenStatus(szenen[4], "Anna"), "kein_video");
 
 if (fehler) { console.error("\n" + fehler + " Test(s) fehlgeschlagen"); process.exit(1); }
 console.log("\nAlle Tests bestanden");

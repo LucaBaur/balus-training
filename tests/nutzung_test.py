@@ -86,10 +86,8 @@ check(anna_k["besuche"] == 1, "Anna: 1 Besuch")
 check(anna_k["tage"] == 1, "Anna: 1 aktiver Tag")
 check(anna_k["videos_gesehen"] == 2, "Anna: 2 Videos gesehen")
 check(anna_k["bereiche"][0] == {"ziel": "ich/videos", "anzahl": 2, "sekunden": 0}, "Haeufigster Bereich zuerst")
-check(anna_k["videos"] == [{"ziel": "clip:5", "titel": "Kreisanspiel 1", "anzahl": 2, "gespielt": 0,
-                            "sekunden": 0, "label": "Kreisanspiel 1", "spiel": None, "ampel": None,
-                            "zeit": None, "t": None, "zuletzt": anna_k["videos"][0]["zuletzt"]}],
-      "Videos zusammengefasst (ohne Dauer: 0 Sekunden)")
+check("videos" not in anna_k and "video_ansicht" not in d,
+      "Nutzung zeigt nur noch Spielerinnen: keine Videoliste mehr (die steht unter Team -> Videos)")
 check(anna_k["zuletzt"].endswith("Z"), "Zeitpunkt als UTC mit Z")
 check(bea_k["zuletzt"] is None and bea_k["besuche"] == 0, "Bea: noch nie aktiv")
 check(d["seit"] is not None, "Erfassung seit gesetzt")
@@ -103,17 +101,6 @@ check(A.post("/api/nutzung", json={"ereignisse": [
     {"typ": "video", "ziel": f"clip:{clip}", "info": "Kreisanspiel 2"},
     {"typ": "gespielt", "ziel": f"clip:{clip}", "info": "Kreisanspiel 2"}]}).json()["gespeichert"] == 2,
     "Ereignis 'gespielt' wird gespeichert")
-va = {v["ziel"]: v for v in T.get("/api/nutzung").json()["video_ansicht"]}
-v = va[f"clip:{clip}"]
-check([g["name"] for g in v["gesehen"]] == ["Anna"] and v["gesehen"][0]["gespielt"] == 1
-      and v["gesehen"][0]["anzahl"] == 1, "Clip: Anna hat ihn geoeffnet und komplett angeschaut")
-check(v["fehlt"] == ["Bea"], "Clip: Bea ist zugeordnet, hat ihn aber nicht gesehen")
-check(va[f"clip:{unbeachtet}"]["gesehen"] == [] and va[f"clip:{unbeachtet}"]["fehlt"] == ["Anna"],
-      "Clip, den noch niemand geoeffnet hat, erscheint trotzdem")
-check(va["clip:5"]["fehlt"] == [] and va["clip:5"]["gesehen"][0]["anzahl"] == 2,
-      "Geloeschter/unbekannter Clip: niemand 'fehlt', Ansichten bleiben sichtbar")
-check(not any(z.startswith("analyse:") for z in va), "Analyse-Detailseite ist kein eigenes Video")
-check(next(iter(T.get("/api/nutzung").json()["video_ansicht"]))["fehlt"], "Videos mit Offenem stehen oben")
 
 # "Ansehen als": Trainer sieht die App als Anna -> darf nichts schreiben
 check(T.post(f"/api/ansicht/{anna_k['benutzer_id']}").status_code == 200, "Ansicht als Anna")
@@ -171,57 +158,130 @@ check(A.get("/api/nutzung").status_code == 403, "Spielerin sieht keine Fehlerlis
 ok = [A.post("/api/fehler", json={"meldung": f"Schleife {i}"}).json()["ok"] for i in range(30)]
 check(ok.count(True) < 30 and ok[-1] is False, "Stundenlimit bremst eine Fehlerschleife")
 
-# ------------------------------------------- Spielzuege unterscheidbar (v0.57) ----
-#  Frueher hiess jede Szene eines Spiels "TVG - Gegner". Jetzt loest der Server
-#  Spiel, Name, Ampel und Zeit im Spiel ueber die Szene-Kennung auf.
+# ------------------------------- Spielzug-Uebersicht und schlanke Nutzung (v0.60) ----
+#  Team -> Videos zeigt alle Spielzuege nach Spiel mit ID ("S1-z3") und wer sie KOMPLETT
+#  gesehen hat; Team -> Nutzung nennt je Spielerin die Spielzuege, die ihr noch fehlen.
 TT = client("Trainer", "1111")
 c = db.verbinde()
 aid = db.analyse_speichern(
     c, "ext-hsv", "HSV", "2026-09-14", "Liga",
-    [{"typ": "tor", "t": 300.0, "spieler_id": anna, "detail": "Rueckraum", "key": "e1"}],
-    [{"name": "Kreuz", "t_start": 723.0, "t_ende": 740.0, "ampel": "gruen", "key": "z1",
-      "spieler_ids": [anna]},
+    [{"typ": "tor", "t": 300.0, "spieler_id": anna, "detail": "Rueckraum", "key": "e1"},
+     {"typ": "fehlwurf", "t": 724.0, "spieler_id": bea, "key": "z1"}],     # teilt die Kennung mit Spielzug z1
+    [{"name": "Kreuz", "t_start": 723.0, "t_ende": 740.0, "ampel": "gruen", "key": "z1", "spieler_ids": [anna]},
      {"name": "Doppelpass", "t_start": 800.0, "t_ende": 815.0, "ampel": "rot", "key": "z2",
-      "spieler_ids": [anna]}],
+      "spieler_ids": [anna, bea]},
+     {"name": "Kreuz", "t_start": 1200.0, "t_ende": 1212.0, "ampel": "orange", "key": "z3",
+      "spieler_ids": [bea]},                                                 # gleicher Name, aber ohne Clip
+     {"name": "Auftakt", "t_start": 50.0, "t_ende": 60.0, "ampel": "gruen", "spieler_ids": [anna]}],  # ohne Kennung
     None)
-db.szene_clip_speichern(c, aid, "z1", "z1.mp4", 720.0, 745.0)
-db.szene_clip_speichern(c, aid, "z2", "z2.mp4", 797.0, 820.0)
-db.szene_clip_speichern(c, aid, "e1", "e1.mp4", 297.0, 305.0)
+aid2 = db.analyse_speichern(
+    c, "ext-kiel", "Kiel", "2026-09-21", "Liga", [],
+    [{"name": "Kreuz", "t_start": 100.0, "t_ende": 112.0, "ampel": "gruen", "key": "z1",
+      "spieler_ids": [anna]}], None)
+for a_id, key in ((aid, "z1"), (aid, "z2"), (aid, "e1"), (aid2, "z1")):     # z3 und Auftakt: kein Clip
+    db.szene_clip_speichern(c, a_id, key, f"{a_id}-{key}.mp4", 0.0, 10.0)
 db.analyse_datei_setzen(c, aid, "hsv.mp4")
-cid = {r["szene_key"]: r["id"] for r in c.execute("SELECT id, szene_key FROM spiel_szene_clip")}
+cid = {r["szene_key"]: r["id"] for r in c.execute("SELECT id, szene_key FROM spiel_szene_clip WHERE analyse_id = ?", (aid,))}
+cid2 = c.execute("SELECT id FROM spiel_szene_clip WHERE analyse_id = ?", (aid2,)).fetchone()["id"]
 c.close()
+SP1, SP2 = "TVG – HSV · 14.09.", "TVG – Kiel · 21.09."
 
-# Anna meldet im ALTEN Format: Titel ist fuer alle Szenen gleich
+# Anna meldet im ALTEN Format (Titel fuer alle Szenen gleich); "gespielt" = komplett angeschaut
 alt_titel = "TVG – HSV"
 A.post("/api/nutzung", json={"ereignisse": [
     {"typ": "video", "ziel": f"szene:{cid['z1']}", "info": alt_titel},
     {"typ": "video", "ziel": f"szene:{cid['z1']}", "info": alt_titel},
+    {"typ": "gespielt", "ziel": f"szene:{cid['z1']}", "info": alt_titel},
+    {"typ": "video", "ziel": f"szene:{cid['z2']}", "info": alt_titel},        # nur angetippt
     {"typ": "video", "ziel": f"szene:{cid['e1']}", "info": alt_titel},
-    {"typ": "video", "ziel": "szene:9999", "info": "TVG – Weg"}]})
+    {"typ": "video", "ziel": "szene:9999", "info": "TVG – Weg"}]})            # geloeschte Szene
+B.post("/api/nutzung", json={"ereignisse": [
+    {"typ": "video", "ziel": f"szene:{cid['z2']}", "info": alt_titel},
+    {"typ": "gespielt", "ziel": f"szene:{cid['z2']}", "info": alt_titel}]})
+c = db.verbinde()                                                              # Kiel: komplett, aber vor 40 Tagen
+c.execute("INSERT INTO nutzung (benutzer_id, zeit, typ, ziel) VALUES (?, datetime('now','-40 days'), 'gespielt', ?)",
+          (anna_k["benutzer_id"], f"szene:{cid2}"))
+c.commit()
+c.close()
+
+# Fragen am Spielzug: gezaehlt werden Hauptkommentare (Antworten nicht)
+c = db.verbinde()
+frage = db.kommentar_anlegen(c, f"szene:{cid['z1']}", {"id": anna_k["benutzer_id"], "rolle": "spieler"},
+                             "Wann kommt der Kreis?", False, None)
+db.kommentar_anlegen(c, f"szene:{cid['z1']}", {"id": bea_k["benutzer_id"], "rolle": "spieler"},
+                     "Auf drei.", False, frage["id"])
+c.close()
+
+# --- Rechte
+check(A.get("/api/szenen-uebersicht").status_code == 403, "Spielzug-Uebersicht: Spielerin bekommt 403")
+check(TestClient(balu.app).get("/api/szenen-uebersicht").status_code == 401, "Spielzug-Uebersicht: ohne Login 401")
+r = TT.get("/api/szenen-uebersicht")
+check(r.status_code == 200, "Spielzug-Uebersicht: Trainer liest sie")
+spiele = r.json()["spiele"]
+check([s["analyse_id"] for s in spiele] == [aid2, aid] and spiele[0]["spiel"] == SP2 and spiele[1]["spiel"] == SP1,
+      "Spiele: neuestes zuerst, mit Gegner und Datum")
+
+# --- IDs und Reihenfolge
+sz = {s["id"]: s for s in spiele[1]["szenen"]}
+check([s["id"] for s in spiele[1]["szenen"]] ==
+      [f"S{aid}-t50", f"S{aid}-e1", f"S{aid}-z1", f"S{aid}-z2", f"S{aid}-z3"],
+      "IDs 'S<Spiel>-<Kennung>', im Spiel nach Spielzeit sortiert; ohne Kennung Ersatz-ID aus der Startsekunde")
+check(spiele[0]["szenen"][0]["id"] == f"S{aid2}-z1", "Gleiche Kennung in einem anderen Spiel ergibt eine andere ID")
+z1, z2, z3, e1, ohne = (sz[f"S{aid}-{k}"] for k in ("z1", "z2", "z3", "e1", "t50"))
+check(z1["name"] == "Kreuz" and z3["name"] == "Kreuz" and z1["id"] != z3["id"],
+      "Zwei Spielzuege 'Kreuz' sind per ID unterscheidbar")
+check((z1["kommentare"], z2["kommentare"]) == (1, 0), "Kommentarzahl am Spielzug: nur Hauptkommentare")
+check(z1["spiel"] == SP1 and spiele[0]["szenen"][0]["spiel"] == SP2,
+      "Jede Szene traegt ihr Spiel (fuer die Ansicht 'Nach Name' ueber mehrere Spiele)")
+check((z1["art"], z1["label"], z1["ampel"], z1["zeit"], z1["t"]) ==
+      ("zug", "Spielzug Kreuz", "gruen", "12:03–12:20", 723.0),
+      "Spielzug hat bei gemeinsamer Kennung Vorrang vor dem Ereignis (Name, Ampel, Zeit)")
+check((e1["art"], e1["name"], e1["label"], e1["zeit"]) == ("ereignis", "Tor", "Tor · Rueckraum", "5:00"),
+      "Ereignis: Art als Name, Detail im Label")
+
+# --- Wer hat gesehen (nur komplett zaehlt), wer soll sehen (nur Beteiligte)
+check(z1["beteiligt"] == ["Anna", "Bea"], "Beteiligte: Spielzug und Ereignis derselben Kennung zusammen")
+check([(g["name"], g["anzahl"], g["gespielt"]) for g in z1["gesehen"]] == [("Anna", 2, 1)]
+      and z1["fehlt"] == ["Bea"], "z1: Anna komplett, Bea (nie geoeffnet) fehlt")
+check(sorted((g["name"], g["gespielt"]) for g in z2["gesehen"]) == [("Anna", 0), ("Bea", 1)]
+      and z2["fehlt"] == ["Anna"], "z2: nur angetippt zaehlt nicht - Anna fehlt, Bea hat komplett gesehen")
+check(e1["fehlt"] == ["Anna"], "Ereignis nur angetippt: fehlt")
+check(z3["kein_video"] and z3["clip_id"] is None and z3["fehlt"] is None and z3["gesehen"] == [],
+      "Zug ohne Clip: 'kein Video', nichts ueber gesehen/fehlt behauptet")
+check(ohne["kein_video"] and ohne["key"] is None, "Zug ohne Kennung hat keinen Clip")
+kiel = spiele[0]["szenen"][0]
+check(kiel["beteiligt"] == ["Anna"] and kiel["fehlt"] == [] and kiel["gesehen"][0]["gespielt"] == 1,
+      "'Gesehen' gilt fuer immer: komplett angeschaut vor 40 Tagen zaehlt noch; Bea gehoert nicht dazu")
+check(f"szene:9999" not in str(spiele), "Geloeschte Szene (Waise in der Nutzung) taucht nicht auf")
+
+# --- Daten-Upload aendert die IDs nicht (spiel_zug.id wird neu vergeben, die Kennung bleibt)
+ids_vorher = [s["id"] for s in spiele[1]["szenen"]]
+c = db.verbinde()
+db.analyse_speichern(
+    c, "ext-hsv", "HSV", "2026-09-14", "Liga",
+    [{"typ": "tor", "t": 300.0, "spieler_id": anna, "detail": "Rueckraum", "key": "e1"},
+     {"typ": "fehlwurf", "t": 724.0, "spieler_id": bea, "key": "z1"}],
+    [{"name": "Kreuz", "t_start": 723.0, "t_ende": 740.0, "ampel": "gruen", "key": "z1", "spieler_ids": [anna]},
+     {"name": "Doppelpass", "t_start": 800.0, "t_ende": 815.0, "ampel": "rot", "key": "z2", "spieler_ids": [anna, bea]},
+     {"name": "Kreuz", "t_start": 1200.0, "t_ende": 1212.0, "ampel": "orange", "key": "z3", "spieler_ids": [bea]},
+     {"name": "Auftakt", "t_start": 50.0, "t_ende": 60.0, "ampel": "gruen", "spieler_ids": [anna]}], None)
+c.close()
+check([s["id"] for s in TT.get("/api/szenen-uebersicht").json()["spiele"][1]["szenen"]] == ids_vorher,
+      "Erneuter Daten-Upload der Analyse: alle IDs bleiben gleich")
+
+# --- Nutzung: je Spielerin die Spielzuege, die noch fehlen (nur Spielzuege, nur mit Clip)
 d = TT.get("/api/nutzung").json()
-va = {v["ziel"]: v for v in d["video_ansicht"]}
-z1, z2, e1 = (va[f"szene:{cid[k]}"] for k in ("z1", "z2", "e1"))
-check(z1["label"] == "Spielzug Kreuz" and z2["label"] == "Spielzug Doppelpass",
-      "Zwei Spielzuege desselben Spiels haben verschiedene Namen")
-check(e1["label"] == "Tor · Rueckraum", "Ereignis-Szene: Art + Detail statt Spielname")
-check(z1["spiel"] == z2["spiel"] == e1["spiel"] == "TVG – HSV · 14.09.", "Alle Szenen tragen ihr Spiel mit Datum")
-check((z1["ampel"], z2["ampel"], e1["ampel"]) == ("gruen", "rot", None), "Ampel: Spielzug gruen/rot, Ereignis keine")
-check((z1["zeit"], z2["zeit"], e1["zeit"]) == ("12:03–12:20", "13:20–13:35", "5:00"),
-      "Zeit im Spiel: Spanne beim Spielzug, Zeitpunkt beim Ereignis")
-check((z1["t"], z2["t"], e1["t"]) == (723.0, 800.0, 300.0),
-      "Startzeit als Zahl (t) fuer die Sortierung im Spiel")
-check(va[f"spiel:{aid}"]["t"] is None and va["szene:9999"]["t"] is None, "Ohne Szene keine Startzeit")
-check(z1["gesehen"][0]["anzahl"] == 2 and z1["fehlt"] == [],"Spielzug 1: von Anna 2x geoeffnet, niemand fehlt")
-check(z2["gesehen"] == [] and z2["fehlt"] == ["Anna"], "Ungeoeffneter Spielzug erscheint, Anna fehlt")
-weg = va["szene:9999"]
-check(weg["label"] == "TVG – Weg" and weg["spiel"] is None,
-      "Geloeschte Szene: Fallback auf gespeicherten Titel, kein Fehler")
-check(va[f"spiel:{aid}"]["spiel"] == "TVG – HSV · 14.09." and va[f"spiel:{aid}"]["label"] == "Ganzes Spiel",
-      "Ganzes Spiel haengt in seiner Spielgruppe")
 anna_k = next(k for k in d["konten"] if k["name"] == "Anna")
-av = {v["ziel"]: v for v in anna_k["videos"]}
-check(av[f"szene:{cid['z1']}"]["label"] == "Spielzug Kreuz" and av[f"szene:{cid['e1']}"]["label"] == "Tor · Rueckraum",
-      "Auch in Annas Kartenliste sind die Szenen unterscheidbar")
+bea_k = next(k for k in d["konten"] if k["name"] == "Bea")
+check([n["id"] for n in anna_k["nicht_gesehen"]] == [f"S{aid}-z2"] and anna_k["offen"] == 1,
+      "Anna: nur z2 fehlt (z1 und Kiel komplett; Tor und Spielzug ohne Clip zaehlen nicht)")
+n = anna_k["nicht_gesehen"][0]
+check((n["spiel"], n["label"], n["zeit"], n["ampel"], n["geoeffnet"]) ==
+      (SP1, "Spielzug Doppelpass", "13:20–13:35", "rot", True),
+      "Eintrag mit Spiel, Name, Zeit, Ampel; 'geoeffnet' kennzeichnet nur Angetipptes")
+check([n["id"] for n in bea_k["nicht_gesehen"]] == [f"S{aid}-z1"] and not bea_k["nicht_gesehen"][0]["geoeffnet"]
+      and bea_k["offen"] == 1, "Bea: z1 fehlt (nie geoeffnet); z2 hat sie komplett gesehen")
+check(all(k["offen"] == len(k["nicht_gesehen"]) for k in d["konten"]), "'offen' entspricht der Listenlaenge")
 
 # ------------------------------------------------------------ Verweildauer ----
 ev = [{"typ": "verweil", "ziel": "ich/videos", "dauer_s": 120},
@@ -245,10 +305,8 @@ bereich = {b["ziel"]: b for b in anna_k["bereiche"]}
 check(bereich["ich/videos"]["sekunden"] == 180 and bereich["ich/videos"]["anzahl"] == 2,
       "Bereich: 120 + 60 Sekunden summiert, Anzahl der Besuche unveraendert")
 check(bereich["home/home"]["sekunden"] == 1800, "Bereich: Obergrenze 1800 Sekunden wird akzeptiert")
-av = {v["ziel"]: v for v in anna_k["videos"]}
-check(av[f"szene:{cid['z1']}"]["sekunden"] == 45, "Video/Spielzug: Dauer je Ziel")
 check(anna_k["sekunden_gesamt"] == 120 + 60 + 45 + 1800, "Gesamtdauer je Spielerin")
-check(anna_k["besuche"] == 1 and anna_k["videos_gesehen"] == 7,
+check(anna_k["besuche"] == 1 and anna_k["videos_gesehen"] == 8,
       "Verweil-Ereignisse veraendern Besuche und Video-Zaehler nicht")
 bea_k = next(k for k in d["konten"] if k["name"] == "Bea")
 check(bea_k["sekunden_gesamt"] == 0, "Ohne Messung: 0 Sekunden")

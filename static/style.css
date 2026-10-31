@@ -1216,6 +1216,20 @@ button:active { transform: scale(.98); }
 .nk-dauer { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .nk-offen { color: var(--warn); }
 
+/* Team -> Videos (Trainer): Spielzug-Uebersicht */
+.videos-liste > .su-voll { grid-column: 1 / -1; }   /* .videos-liste ist breit ein 2-Spalten-Raster */
+.su-leiste, .su-chips { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin: 0 0 8px; }
+.su-leiste label { font-size: 0.85rem; color: var(--grau); display: inline-flex; gap: 4px; align-items: center; }
+.su-knopf {
+  border: 1px solid var(--linie); background: var(--karte); color: var(--text);
+  border-radius: 999px; padding: 5px 11px; font: inherit; font-size: 0.85rem; cursor: pointer;
+}
+.su-knopf.aktiv { background: var(--tvg); border-color: var(--tvg); color: #fff; font-weight: 600; }
+.su-id { font-variant-numeric: tabular-nums; font-size: 0.78rem; color: var(--grau); margin-right: 4px; }
+.su-titel { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; flex: 1; }
+.su-zeile { align-items: flex-start; padding: 5px 0; }
+.su-wer { margin-top: 1px; }
+
 /* Ich -> Videos: Spiele, Videoanalyse; Mein Profil: Spielstatistik */
 .videos-h { margin: 14px 0 6px; font-size: 0.95rem; }
 .videos-h:first-child { margin-top: 2px; }

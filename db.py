@@ -1406,12 +1406,20 @@ def _clips_mit_spielern(conn: sqlite3.Connection, rows) -> list[dict]:
     return clips
 
 
+def _kommentar_zahlen(conn: sqlite3.Connection) -> dict[str, int]:
+    """ziel ("clip:5", "szene:12", ...) -> Anzahl der Hauptkommentare (Antworten zaehlen nicht)."""
+    return dict(conn.execute("SELECT ziel, COUNT(*) FROM video_kommentar "
+                             "WHERE antwort_auf IS NULL GROUP BY ziel").fetchall())
+
+
 def clips_alle(conn: sqlite3.Connection) -> list[dict]:
+    """Alle eigenen Clips (nur Trainer), je mit der Zahl der Hauptkommentare."""
     rows = conn.execute(
         "SELECT id, titel, notiz, datei, spiel_datum, dauer_s, erstellt_am "
         "FROM video_clip ORDER BY COALESCE(spiel_datum, '') DESC, id DESC"
     ).fetchall()
-    return _clips_mit_spielern(conn, rows)
+    zahlen = _kommentar_zahlen(conn)
+    return [{**c, "kommentare": zahlen.get(f"clip:{c['id']}", 0)} for c in _clips_mit_spielern(conn, rows)]
 
 
 def clips_fuer_spieler(conn: sqlite3.Connection, spieler_id: int) -> list[dict]:
@@ -1784,32 +1792,32 @@ def nutzung_auswertung(conn: sqlite3.Connection, tage: int = 30) -> dict:
                 "app_version": g["app_version"], "sw": bool(g["sw"]),
                 "zuletzt": _utc_z(g["zuletzt"])})
 
+    # Szenen und wer sie komplett gesehen hat - fuer IMMER, nicht nur im 30-Tage-Fenster:
+    # ein vor 40 Tagen angeschauter Spielzug darf nicht als "nicht gesehen" erscheinen.
+    katalog = _szenen_katalog(conn)
+    gesehen = _szenen_gesehen((b, r["zeit"], r["typ"], r["ziel"]) for b, zeilen in rows.items() for r in zeilen)
+
     ausgabe = []
-    pro_video: dict[str, dict] = {}      # ziel -> {titel, gesehen: {benutzer_id: {...}}}
     for k in konten:
         ev = rows[k["id"]]
         neu = [r for r in ev if lies(r["zeit"]) >= grenze]
         bereiche: dict[str, int] = {}
-        videos: dict[str, dict] = {}
         sekunden: dict[str, int] = {}       # ziel -> Summe der 'verweil'-Ereignisse
         for r in neu:
             if r["typ"] == "verweil" and r["ziel"] and r["dauer_s"]:
                 sekunden[r["ziel"]] = sekunden.get(r["ziel"], 0) + r["dauer_s"]
             elif r["typ"] == "bereich" and r["ziel"]:
                 bereiche[r["ziel"]] = bereiche.get(r["ziel"], 0) + 1
-            elif r["typ"] in ("video", "gespielt") and r["ziel"]:
-                v = videos.setdefault(r["ziel"], {"ziel": r["ziel"], "titel": r["info"],
-                                                  "anzahl": 0, "gespielt": 0, "zuletzt": r["zeit"]})
-                v["anzahl" if r["typ"] == "video" else "gespielt"] += 1
-                v["zuletzt"] = r["zeit"]
-                if r["info"]:
-                    v["titel"] = r["info"]
-        for ziel, v in videos.items():
-            p = pro_video.setdefault(ziel, {"titel": v["titel"], "gesehen": {}})
-            p["titel"] = v["titel"] or p["titel"]
-            p["gesehen"][k["id"]] = {"benutzer_id": k["id"], "name": k["name"],
-                                     "anzahl": v["anzahl"], "gespielt": v["gespielt"],
-                                     "zuletzt": _utc_z(v["zuletzt"])}
+        nicht_gesehen = []
+        for s in katalog:                    # nur Spielzuege mit Clip, an denen sie beteiligt ist
+            if s["art"] != "zug" or s["clip_id"] is None or k["spieler_id"] not in s["spieler_ids"]:
+                continue
+            g = gesehen.get(s["clip_id"], {}).get(k["id"])
+            if g and g["gespielt"]:
+                continue
+            nicht_gesehen.append({"id": s["id"], "analyse_id": s["analyse_id"], "spiel": s["spiel"],
+                                  "label": s["label"], "name": s["name"], "ampel": s["ampel"],
+                                  "zeit": s["zeit"], "t": s["t"], "geoeffnet": bool(g)})
         ausgabe.append({
             "benutzer_id": k["id"], "name": k["name"],
             "zuletzt": (ev[-1]["zeit"].replace(" ", "T") + "Z") if ev else None,
@@ -1819,16 +1827,12 @@ def nutzung_auswertung(conn: sqlite3.Connection, tage: int = 30) -> dict:
             "sekunden_gesamt": sum(sekunden.values()),
             "bereiche": [{"ziel": z, "anzahl": n, "sekunden": sekunden.get(z, 0)} for z, n in
                          sorted(bereiche.items(), key=lambda x: -x[1])[:6]],
-            "videos": sorted(
-                [{**v, "zuletzt": v["zuletzt"].replace(" ", "T") + "Z",
-                  "sekunden": sekunden.get(v["ziel"], 0),
-                  **_ziel_beschreibung(conn, v["ziel"], v["titel"])} for v in videos.values()],
-                key=lambda v: v["zuletzt"], reverse=True)[:10],
+            "nicht_gesehen": sorted(nicht_gesehen, key=lambda n: (-n["analyse_id"], n["t"] or 0)),
+            "offen": len(nicht_gesehen),
             "geraete": geraete[k["id"]],
         })
     return {"tage": tage, "seit": (erste.replace(" ", "T") + "Z") if erste else None,
-            "konten": ausgabe, "fehler": _fehler_gruppiert(conn, grenze),
-            "video_ansicht": _video_ansicht(conn, konten, pro_video)}
+            "konten": ausgabe, "fehler": _fehler_gruppiert(conn, grenze)}
 
 
 NUTZUNG_EREIGNIS_NAMEN = {"tor": "Tor", "fehlwurf": "Fehlwurf", "ballverlust": "Ballverlust",
@@ -1848,88 +1852,104 @@ def _spiel_name(gegner: str, datum: str | None) -> str:
     return f"TVG – {gegner}{tag}"
 
 
-def _ziel_beschreibung(conn: sqlite3.Connection, ziel: str, titel: str | None) -> dict:
-    """Menschenlesbare Angaben zu einem Video-Ziel: label, spiel, ampel, zeit.
-    Fuer 'szene:<id>' wird Spielzug bzw. Ereignis ueber die Szene-Kennung aufgeloest -
-    der gespeicherte Titel ist dort fuer alle Szenen eines Spiels derselbe. Ist die
-    Szene geloescht, bleibt der gespeicherte Titel."""
-    art, _, nr = ziel.partition(":")
-    leer = {"label": titel or ziel, "spiel": None, "ampel": None, "zeit": None, "t": None}
-    if not nr.isdigit():
-        return leer
-    if art == "spiel":
-        a = conn.execute("SELECT gegner, datum FROM spiel_analyse WHERE id = ?", (int(nr),)).fetchone()
-        return {**leer, "label": "Ganzes Spiel", "spiel": _spiel_name(a["gegner"], a["datum"])} if a else leer
-    if art != "szene":
-        return leer
-    c = conn.execute(
-        "SELECT c.analyse_id, c.szene_key, a.gegner, a.datum FROM spiel_szene_clip c "
-        "JOIN spiel_analyse a ON a.id = c.analyse_id WHERE c.id = ?", (int(nr),)).fetchone()
-    if not c:
-        return leer
-    res = {**leer, "label": titel or "Szene", "spiel": _spiel_name(c["gegner"], c["datum"])}
-    z = conn.execute("SELECT name, ampel, t_start, t_ende FROM spiel_zug "
-                     "WHERE analyse_id = ? AND szene_key = ? ORDER BY t_start LIMIT 1",
-                     (c["analyse_id"], c["szene_key"])).fetchone()
-    if z:
-        return {**res, "label": "Spielzug " + z["name"], "ampel": z["ampel"], "t": z["t_start"],
-                "zeit": f"{_spielzeit(z['t_start'])}–{_spielzeit(z['t_ende'])}"}
-    e = conn.execute("SELECT typ, t, detail FROM spiel_event "
-                     "WHERE analyse_id = ? AND szene_key = ? ORDER BY t LIMIT 1",
-                     (c["analyse_id"], c["szene_key"])).fetchone()
-    if e:
+def _szenen_katalog(conn: sqlite3.Connection) -> list[dict]:
+    """Alle Szenen aller Spiele (Spielzuege UND Ereignisse), je Kennung (szene_key) EINE.
+
+    ID = "S<Spiel>-<Kennung>" (z. B. "S1-z3"). Die Kennung vergibt die Desktop-App und bleibt
+    bei einem erneuten Daten-Upload erhalten - anders als spiel_zug.id, die dabei neu vergeben
+    wird. Ohne Kennung gilt als Ersatz die Startsekunde ("S1-t723"). Teilen sich ein Spielzug
+    und ein Ereignis eine Kennung, hat der Spielzug beim Namen Vorrang (wie beim Clip); die
+    Beteiligten beider werden zusammengefasst, genau wie in szene_clip_darf.
+    'clip_id' ist None, wenn es (noch) keinen Videoausschnitt gibt - dann laesst sich nicht
+    messen, wer ihn gesehen hat."""
+    spiele = {r["id"]: (_spiel_name(r["gegner"], r["datum"]), r["datum"])
+              for r in conn.execute("SELECT id, gegner, datum FROM spiel_analyse")}
+    clips = {(r["analyse_id"], r["szene_key"]): r["id"]
+             for r in conn.execute("SELECT id, analyse_id, szene_key FROM spiel_szene_clip")}
+    mitspieler: dict[int, set[int]] = {}
+    for r in conn.execute("SELECT zug_id, spieler_id FROM spiel_zug_spieler"):
+        mitspieler.setdefault(r["zug_id"], set()).add(r["spieler_id"])
+    szenen: dict[tuple[int, str], dict] = {}
+
+    def eintrag(aid: int, key: str | None, start: float, **felder) -> dict:
+        ident = key or f"t{int(start)}"                  # ohne Kennung: Startsekunde als Ersatz
+        s = szenen.get((aid, ident))
+        if s is None:                                    # der zuerst angelegte Eintrag behaelt seine Felder
+            name_spiel, datum = spiele.get(aid, (None, None))
+            s = szenen[(aid, ident)] = {
+                "id": f"S{aid}-{ident}", "analyse_id": aid, "key": key or None,
+                "clip_id": clips.get((aid, key)) if key else None,
+                "spiel": name_spiel, "datum": datum, "spieler_ids": set(), **felder}
+        return s
+
+    for z in conn.execute("SELECT id, analyse_id, name, ampel, t_start, t_ende, szene_key "
+                          "FROM spiel_zug ORDER BY analyse_id, t_start"):
+        s = eintrag(z["analyse_id"], z["szene_key"], z["t_start"], art="zug", name=z["name"],
+                    label="Spielzug " + z["name"], ampel=z["ampel"], t=z["t_start"],
+                    zeit=f"{_spielzeit(z['t_start'])}–{_spielzeit(z['t_ende'])}")
+        s["spieler_ids"] |= mitspieler.get(z["id"], set())
+    for e in conn.execute("SELECT analyse_id, typ, t, detail, spieler_id, assist_id, szene_key "
+                          "FROM spiel_event ORDER BY analyse_id, t"):
         name = NUTZUNG_EREIGNIS_NAMEN.get(e["typ"], e["typ"])
-        return {**res, "label": name + (" · " + e["detail"] if e["detail"] else ""),
-                "zeit": _spielzeit(e["t"]), "t": e["t"]}
-    return res
+        s = eintrag(e["analyse_id"], e["szene_key"], e["t"], art="ereignis", name=name,
+                    label=name + (" · " + e["detail"] if e["detail"] else ""), ampel=None,
+                    t=e["t"], zeit=_spielzeit(e["t"]))
+        s["spieler_ids"] |= {x for x in (e["spieler_id"], e["assist_id"]) if x}
+    return sorted(szenen.values(), key=lambda s: (-s["analyse_id"], s["t"]))
 
 
-def _sollen_sehen(conn: sqlite3.Connection, ziel: str, konten) -> set[int] | None:
-    """Benutzer-IDs der Konten, fuer die das Video gedacht ist - oder None, wenn
-    sich das nicht sagen laesst (z. B. die Detailseite einer Analyse)."""
-    art, _, nr = ziel.partition(":")
-    if not nr.isdigit():
-        return None
-    if art == "spiel":                                   # ganzes Spiel: fuer die ganze Mannschaft
-        return {k["id"] for k in konten}
-    if art == "clip":
-        zugeordnet = {r[0] for r in conn.execute(
-            "SELECT spieler_id FROM video_clip_spieler WHERE clip_id = ?", (int(nr),))}
-        return {k["id"] for k in konten if k["spieler_id"] in zugeordnet}
-    if art == "szene":
-        return {k["id"] for k in konten
-                if k["spieler_id"] and szene_clip_darf(conn, int(nr), k["spieler_id"])}
-    return None
-
-
-def _video_ansicht(conn: sqlite3.Connection, konten, pro_video: dict[str, dict]) -> list[dict]:
-    """Videozentrierte Sicht: je Video, wer es gesehen hat (und wie oft) und wer es
-    sehen sollte, aber nicht hat. Clips und Spiele erscheinen auch dann, wenn sie noch
-    niemand geoeffnet hat - gerade das ist die interessante Information."""
-    for r in conn.execute("SELECT id, titel FROM video_clip"):
-        pro_video.setdefault(f"clip:{r['id']}", {"titel": r["titel"], "gesehen": {}})
-    for r in conn.execute("SELECT id, gegner FROM spiel_analyse WHERE datei IS NOT NULL"):
-        pro_video.setdefault(f"spiel:{r['id']}", {"titel": "TVG – " + r["gegner"], "gesehen": {}})
-    for r in conn.execute("SELECT id FROM spiel_szene_clip"):      # auch ungeoeffnete Spielzuege zeigen
-        pro_video.setdefault(f"szene:{r['id']}", {"titel": None, "gesehen": {}})
-    namen = {k["id"]: k["name"] for k in konten}
-    kommentare = dict(conn.execute("SELECT ziel, COUNT(*) FROM video_kommentar "
-                                   "WHERE antwort_auf IS NULL GROUP BY ziel").fetchall())
-    ausgabe = []
-    for ziel, p in pro_video.items():
-        if ziel.startswith("analyse:"):          # Detailseite, kein eigenes Video
+def _szenen_gesehen(zeilen) -> dict[int, dict[int, dict]]:
+    """clip_id -> benutzer_id -> {anzahl (geoeffnet), gespielt (komplett angeschaut), zuletzt}.
+    `zeilen`: (benutzer_id, zeit, typ, ziel) aus 'nutzung'. Bewusst OHNE Zeitfenster."""
+    aus: dict[int, dict[int, dict]] = {}
+    for benutzer_id, zeit, typ, ziel in zeilen:
+        if typ not in ("video", "gespielt") or not ziel or not ziel.startswith("szene:"):
             continue
-        sollen = _sollen_sehen(conn, ziel, konten)
-        gesehen = sorted(p["gesehen"].values(), key=lambda g: g["zuletzt"], reverse=True)
-        fehlt = None if sollen is None else sorted(
-            namen[b] for b in sollen if b not in p["gesehen"])
-        ausgabe.append({"ziel": ziel, "titel": p["titel"], "gesehen": gesehen, "fehlt": fehlt,
-                        "kommentare": kommentare.get(ziel, 0),
-                        **_ziel_beschreibung(conn, ziel, p["titel"])})
-    # Videos mit offenen Zuordnungen zuerst, dann nach letzter Ansicht
-    ausgabe.sort(key=lambda v: (v["gesehen"][0]["zuletzt"] if v["gesehen"] else ""), reverse=True)
-    ausgabe.sort(key=lambda v: not v["fehlt"])
-    return ausgabe
+        if not ziel[6:].isdigit():
+            continue
+        g = aus.setdefault(int(ziel[6:]), {}).setdefault(
+            benutzer_id, {"anzahl": 0, "gespielt": 0, "zuletzt": zeit})
+        g["anzahl" if typ == "video" else "gespielt"] += 1
+        g["zuletzt"] = max(g["zuletzt"], zeit)
+    return aus
+
+
+def szenen_uebersicht(conn: sqlite3.Connection) -> dict:
+    """Trainer-Sicht (Team -> Videos): je Spiel alle Szenen mit ID, wer sie komplett gesehen
+    hat ('gesehen': alle, die sie geoeffnet haben, mit 'gespielt' > 0 = komplett) und wer sie
+    sehen soll, aber noch nicht komplett gesehen hat ('fehlt'; None = kein Video, nicht messbar).
+    Sehen sollen nur die Beteiligten - eine Spielerin bekommt ohnehin nur ihre eigenen Szenen."""
+    konten = conn.execute(
+        "SELECT id, name, spieler_id FROM benutzer WHERE rolle = 'spieler' AND aktiv = 1").fetchall()
+    namen = {k["id"]: k["name"] for k in konten}
+    konto_von_spieler = {k["spieler_id"]: k["id"] for k in konten if k["spieler_id"]}
+    gesehen = _szenen_gesehen(
+        (r["benutzer_id"], r["zeit"], r["typ"], r["ziel"]) for r in conn.execute(
+            "SELECT benutzer_id, zeit, typ, ziel FROM nutzung "
+            "WHERE typ IN ('video', 'gespielt') AND ziel LIKE 'szene:%' ORDER BY zeit")
+        if r["benutzer_id"] in namen)
+    kommentare = _kommentar_zahlen(conn)
+    gruppen: dict[int, dict] = {}
+    for s in _szenen_katalog(conn):
+        beteiligt = sorted((konto_von_spieler[sp] for sp in s["spieler_ids"] if sp in konto_von_spieler),
+                           key=lambda b: namen[b])
+        g = gesehen.get(s["clip_id"], {}) if s["clip_id"] is not None else {}
+        gruppe = gruppen.setdefault(s["analyse_id"], {
+            "analyse_id": s["analyse_id"], "spiel": s["spiel"], "datum": s["datum"], "szenen": []})
+        gruppe["szenen"].append({
+            "id": s["id"], "key": s["key"], "analyse_id": s["analyse_id"], "clip_id": s["clip_id"],
+            "spiel": s["spiel"], "art": s["art"], "name": s["name"], "label": s["label"], "ampel": s["ampel"],
+            "zeit": s["zeit"], "t": s["t"], "kein_video": s["clip_id"] is None,
+            "kommentare": kommentare.get(f"szene:{s['clip_id']}", 0) if s["clip_id"] is not None else 0,
+            "beteiligt": [namen[b] for b in beteiligt],
+            "gesehen": sorted(({"name": namen[b], "anzahl": v["anzahl"], "gespielt": v["gespielt"],
+                                "zuletzt": _utc_z(v["zuletzt"])} for b, v in g.items() if b in namen),
+                              key=lambda v: v["zuletzt"], reverse=True),
+            "fehlt": None if s["clip_id"] is None else
+                     [namen[b] for b in beteiligt if not g.get(b, {}).get("gespielt")],
+        })
+    return {"spiele": sorted(gruppen.values(), key=lambda x: (x["datum"] or "", x["analyse_id"]),
+                             reverse=True)}
 
 
 # ------------------------------------------------------- Video-Kommentare ----

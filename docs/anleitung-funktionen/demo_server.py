@@ -193,10 +193,24 @@ def seed() -> dict:
          "spieler_ids": [z["Lena"], z["Greta"], z["Emma"]], "key": "z3"},
         {"name": "Kreisel", "t_start": 1900, "t_ende": 1912, "ampel": "gruen",
          "spieler_ids": [z["Lena"], z["Sophie"], z["Jule"]], "key": "z4"},
+        {"name": "2. Welle", "t_start": 2400, "t_ende": 2411, "ampel": "gruen",
+         "spieler_ids": [z["Zoe"], z["Ida"], z["Jule"]], "key": "z5"},
+        {"name": "2. Welle", "t_start": 2800, "t_ende": 2810, "ampel": "orange",
+         "kommentar": "Zu spät gestartet.", "spieler_ids": [z["Zoe"], z["Greta"], z["Paula"]], "key": "z6"},
+    ]
+    # Zweites Spiel mit denselben Kennungen (z1, z2 ...): die ID enthaelt die Spielnummer ("S2-z1")
+    zuege2 = [
+        {"name": "Kreisel", "t_start": 150, "t_ende": 162, "ampel": "gruen",
+         "spieler_ids": [z["Lena"], z["Sophie"]], "key": "z1"},
+        {"name": "2. Welle", "t_start": 900, "t_ende": 911, "ampel": "orange",
+         "spieler_ids": [z["Zoe"], z["Greta"]], "key": "z2"},
+        {"name": "Auftakt", "t_start": 1500, "t_ende": 1512, "ampel": "rot", "spieler_ids": [z["Ida"]], "key": "z3"},
     ]
     trainer_id = db.benutzer_nach_name(conn, "Trainer")["id"]
     aid = db.analyse_speichern(conn, "demo-spiel-1", "HSG Beispielstadt",
                          (HEUTE - timedelta(days=9)).isoformat(), "Liga", events, zuege, trainer_id)
+    aid2 = db.analyse_speichern(conn, "demo-spiel-2", "TSV Vorbild",
+                         (HEUTE - timedelta(days=16)).isoformat(), "Liga", [], zuege2, trainer_id)
     (balu.MEDIA_SPIELE / "demo-spiel-1.mp4").write_bytes(bytes(2048))    # Platzhalter, wird nicht abgespielt
     db.analyse_datei_setzen(conn, aid, "demo-spiel-1.mp4")
 
@@ -209,19 +223,28 @@ def seed() -> dict:
         db.clip_anlegen(conn, titel, notiz, datei, (HEUTE - timedelta(days=9)).isoformat(),
                         12.0, trainer_id, [ids[w] for w in wer])
 
-    # Szenen-Clips zu den Spielzuegen und zwei Ereignissen (Platzhalterdateien). Zwei
-    # Spielzuege heissen "Kreisel" - genau der Fall, den die Nutzungsseite unterscheiden muss.
+    # Szenen-Clips zu den Spielzuegen beider Spiele und zwei Ereignissen (Platzhalterdateien).
+    # Mehrere Spielzuege heissen "Kreisel" bzw. "2. Welle" - genau der Fall, den IDs und Filter loesen.
     balu.MEDIA_SZENEN.mkdir(exist_ok=True)
-    szene = {}                                                        # key -> clip-id
-    for key, von, bis in [(z_["key"], z_["t_start"] - 3, z_["t_ende"] + 5) for z_ in zuege] \
-            + [(e_["key"], e_["t"] - 3, e_["t"] + 5) for e_ in events[:2]]:
-        (balu.MEDIA_SZENEN / f"demo-{key}.mp4").write_bytes(bytes(1024))
-        db.szene_clip_speichern(conn, aid, key, f"demo-{key}.mp4", von, bis)
-        szene[key] = conn.execute("SELECT id FROM spiel_szene_clip WHERE analyse_id = ? AND szene_key = ?",
-                                  (aid, key)).fetchone()["id"]
-    # Wer hat welche Szene geoeffnet? Im ALTEN Format: alle mit demselben Titel
-    gesehen = {"Lena": ["z1", "z1", "z3", "z4", "e0"], "Sophie": ["z1", "z2", "z4"],
-               "Zoe": ["z2"], "Greta": ["z3", "z3"]}
+    szene = {}                                                        # (analyse_id, key) -> clip-id
+    clip_plan = ([(aid, z_["key"], z_["t_start"], z_["t_ende"]) for z_ in zuege]
+                 + [(aid, e_["key"], e_["t"], e_["t"]) for e_ in events[:2]]
+                 + [(aid2, z_["key"], z_["t_start"], z_["t_ende"]) for z_ in zuege2])
+    for a_id, key, von, bis in clip_plan:
+        datei = f"demo-{a_id}-{key}.mp4"
+        (balu.MEDIA_SZENEN / datei).write_bytes(bytes(1024))
+        db.szene_clip_speichern(conn, a_id, key, datei, von - 3, bis + 5)
+        szene[(a_id, key)] = conn.execute(
+            "SELECT id FROM spiel_szene_clip WHERE analyse_id = ? AND szene_key = ?", (a_id, key)).fetchone()["id"]
+    # Wer hat welche Szene gesehen? "komplett" = zu mindestens 60 % abgespielt (Ereignis 'gespielt'),
+    # "angetippt" = nur geoeffnet. Alles andere ist "noch nicht gesehen". Im ALTEN Format (gleicher Titel).
+    gesehen = {
+        "Lena": [(aid, "z1", "komplett"), (aid, "z4", "komplett"), (aid, "z3", "angetippt"), (aid2, "z1", "komplett")],
+        "Sophie": [(aid, "z1", "komplett"), (aid, "z2", "angetippt"), (aid, "z4", "komplett")],
+        "Zoe": [(aid, "z2", "komplett"), (aid, "z5", "komplett"), (aid, "z6", "angetippt")],
+        "Greta": [(aid, "z3", "komplett"), (aid2, "z2", "komplett")],
+        "Ida": [(aid, "z5", "angetippt")],
+    }
 
     # Nutzung: ein paar Besuche, damit die Nutzungsseite etwas zeigt
     for i, name in enumerate(("Lena", "Mia", "Sophie", "Zoe", "Ida", "Greta")):
@@ -230,11 +253,15 @@ def seed() -> dict:
                                          {"typ": "bereich", "ziel": "taktik/playbook"},
                                          {"typ": "verweil", "ziel": "training/trainings", "dauer_s": 240 + i * 75},
                                          {"typ": "verweil", "ziel": "taktik/playbook", "dauer_s": 95 + i * 40}])
-        db.nutzung_speichern(conn, bid, [
-            {"typ": "video", "ziel": f"szene:{szene[k]}", "info": "TVG – HSG Beispielstadt"}
-            for k in gesehen.get(name, [])] + (
-            [{"typ": "verweil", "ziel": f"szene:{szene[gesehen[name][0]]}", "dauer_s": 38 + i * 11}]
-            if name in gesehen else []))
+        ansichten = []
+        for a_id, key, stand in gesehen.get(name, []):
+            ziel = f"szene:{szene[(a_id, key)]}"
+            ansichten.append({"typ": "video", "ziel": ziel, "info": "TVG – HSG Beispielstadt"})
+            if stand == "komplett":
+                ansichten.append({"typ": "gespielt", "ziel": ziel, "info": "TVG – HSG Beispielstadt"})
+        if ansichten:
+            ansichten.append({"typ": "verweil", "ziel": ansichten[0]["ziel"], "dauer_s": 38 + i * 11})
+        db.nutzung_speichern(conn, bid, ansichten)
         db.geraet_speichern(conn, bid, {"os": "Android 14" if i % 2 else "iOS 18", "browser": "Chrome 130" if i % 2 else "Safari 18",
                                         "modus": "installiert", "bildschirm": "390x844", "app_version": "v0.55.0", "sw": True})
         conn.execute("UPDATE nutzung SET zeit = datetime('now', ?) WHERE benutzer_id = ?",

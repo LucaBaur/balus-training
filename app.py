@@ -224,6 +224,12 @@ def api_nutzung(conn=Depends(hole_conn), _t=Depends(require_trainer)):
     return db.nutzung_auswertung(conn)
 
 
+@app.get("/api/szenen-uebersicht")
+def api_szenen_uebersicht(conn=Depends(hole_conn), _t=Depends(require_trainer)):
+    """Team -> Videos (Trainer): alle Szenen je Spiel mit ID und 'wer hat sie komplett gesehen'."""
+    return db.szenen_uebersicht(conn)
+
+
 # ------------------------------------------------------ Video-Kommentare ----
 #  Fragen und Kommentare unter einem Video (Clip, Szene, ganzes Spiel). Wer das
 #  Video sehen darf, darf auch kommentieren. "Nur Trainer" macht einen Kommentar
@@ -1079,6 +1085,7 @@ def _clip_oeffentlich(clip: dict) -> dict:
         "id": clip["id"], "titel": clip["titel"], "notiz": clip.get("notiz"),
         "spiel_datum": clip.get("spiel_datum"), "dauer_s": clip.get("dauer_s"),
         "erstellt_am": clip.get("erstellt_am"), "spieler": clip.get("spieler", []),
+        **({"kommentare": clip["kommentare"]} if "kommentare" in clip else {}),   # nur in der Trainer-Liste
     }
 
 

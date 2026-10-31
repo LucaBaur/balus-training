@@ -409,6 +409,48 @@ function gruppiereNachSpiel(videos) {
     spiel, items: items.slice().sort((a, b) => (a.t == null ? -1 : a.t) - (b.t == null ? -1 : b.t)),
   }));
 }
+// Spielzug-Uebersicht (Team -> Videos, Trainer). Eingabe: flache Szenen wie von
+// /api/szenen-uebersicht ({id, art, name, spiel, fehlt, gesehen, kein_video}).
+const _nameKey = (n) => String(n || "").trim().toLowerCase();
+
+// Filter: Ereignisse (Tor, Fehlwurf ...) nur auf Wunsch; Name ohne Beachtung der Schreibweise;
+// "nur offene" = mindestens eine Beteiligte hat den Clip noch nicht komplett gesehen.
+function filtereSzenen(szenen, { name = null, nurOffen = false, mitEreignissen = false } = {}) {
+  const gesucht = name ? _nameKey(name) : null;
+  return szenen.filter((s) =>
+    (mitEreignissen || s.art === "zug")
+    && (!gesucht || _nameKey(s.name) === gesucht)
+    && (!nurOffen || (s.fehlt && s.fehlt.length > 0)));
+}
+
+// Namens-Chips: [{name, anzahl}], haeufigster zuerst; "Kreisel" und "kreisel" zaehlen zusammen.
+function namenMitZahl(szenen) {
+  const zaehler = new Map();
+  for (const s of szenen) {
+    const k = _nameKey(s.name);
+    if (!zaehler.has(k)) zaehler.set(k, { name: s.name, anzahl: 0 });
+    zaehler.get(k).anzahl++;
+  }
+  return [...zaehler.values()].sort((a, b) => b.anzahl - a.anzahl || a.name.localeCompare(b.name, "de"));
+}
+
+// "Nach Name": alle Kreisel zusammen ueber alle Spiele; Reihenfolge der Eintraege bleibt wie eingegeben.
+function gruppiereNachName(szenen) {
+  const gruppen = new Map();
+  for (const s of szenen) {
+    const k = _nameKey(s.name);
+    if (!gruppen.has(k)) gruppen.set(k, { name: s.name, items: [] });
+    gruppen.get(k).items.push(s);
+  }
+  return [...gruppen.values()].sort((a, b) => b.items.length - a.items.length || a.name.localeCompare(b.name, "de"));
+}
+
+// Stand einer Spielerin bei einer Szene: komplett | angetippt (geoeffnet, aber unter 60 %) | offen | kein_video.
+function szenenStatus(szene, spielerName) {
+  if (szene.kein_video) return "kein_video";
+  const g = (szene.gesehen || []).find((x) => x.name === spielerName);
+  return !g ? "offen" : g.gespielt > 0 ? "komplett" : "angetippt";
+}
 // ---- Ende Nutzung-Hilfen ----
 
 // ---------------------------------------------------------------- Nutzung ----
@@ -661,32 +703,8 @@ function nutzungPunkt(ampel) {
   return `<span class="an-punkt ${ampel ? escape(ampel) : "leer"}"></span>`;   // "leer" haelt die Spalte frei
 }
 
-// Spielzug-/Videosicht: je Spiel eine Karte, darin eine Zeile pro Spielzug mit
-// "gesehen von" und "noch offen". Spielzuege eines Spiels sind so unterscheidbar.
-function renderNutzungVideos(videos, tage) {
-  if (!videos.length) return "";
-  let html = `<h3 class="nutz-h">Spielzüge &amp; Videos (letzte ${tage} Tage)</h3>`;
-  for (const gruppe of gruppiereNachSpiel(videos)) {
-    const offen = gruppe.items.reduce((n, v) => n + (v.fehlt ? v.fehlt.length : 0), 0);
-    const zeilen = gruppe.items.map((v) => {
-      const gesehen = v.gesehen.map((g) =>
-        `${escape(g.name)} ${g.anzahl}×${g.gespielt ? " ✓" : ""}`).join(", ");
-      const fehlt = v.fehlt && v.fehlt.length ? `<span class="nk-offen">Offen: ${escape(v.fehlt.join(", "))}</span>` : "";
-      const zahl = v.fehlt == null ? `${v.gesehen.length} gesehen`
-        : `${v.gesehen.length} von ${v.gesehen.length + v.fehlt.length}`;   // fehlt enthaelt nur, wer NICHT gesehen hat
-      return `<div class="nk-zeile"><span class="nk-titel">${nutzungPunkt(v.ampel)}<span>${escape(nutzungVideoLabel(v))}`
-        + `<small>${gesehen ? "Gesehen: " + gesehen : "Noch niemand"}${v.kommentare ? ` · 💬 ${v.kommentare}` : ""}</small>`
-        + `${fehlt ? "<small>" + fehlt + "</small>" : ""}</span></span><b class="nk-dauer">${zahl}</b></div>`;
-    }).join("");
-    html += `<details class="nutz-karte${offen ? " nie" : ""}">
-      <summary><span class="nk-name">${escape(gruppe.spiel)}</span>
-        <span class="nk-zahlen">${gruppe.items.length} ${gruppe.items.length === 1 ? "Eintrag" : "Einträge"}${offen ? ` · <b>${offen}</b> offen` : ""}</span></summary>
-      <div class="nk-detail">${zeilen}</div></details>`;
-  }
-  return html;
-}
-
-// Eine Spielerin: wo sie war und wie lange, danach welche Spielzuege sie gesehen hat.
+// Eine Spielerin: wo sie war und wie lange, danach welche ihrer Spielzuege sie noch nicht
+// komplett gesehen hat (mit ID). Die Videoliste selbst steht unter Team -> Videos.
 function renderNutzungSpielerin(k, tage) {
   const pl = (n, ein, mehr) => `<b>${n}</b> ${n === 1 ? ein : mehr}`;
   const g0 = (k.geraete || [])[0];
@@ -696,26 +714,26 @@ function renderNutzungSpielerin(k, tage) {
   const zahlen = k.zuletzt
     ? `${pl(k.tage, "Tag", "Tage")} · ${pl(k.besuche, "Besuch", "Besuche")} · <b>${escape(dauerText(k.sekunden_gesamt))}</b>${gerat}`
     : "noch nicht in der App";
+  const offen = k.offen ? `<span class="nk-offen"><b>${k.offen}</b> ${k.offen === 1 ? "Spielzug" : "Spielzüge"} nicht gesehen</span>` : "";
   let detail = "";
   if (k.bereiche.length) {
     detail += '<h4>Wo sie war</h4>' + k.bereiche.map((b) =>
       `<div class="nk-zeile"><span>${escape(nutzungBereichName(b.ziel))}<small>${b.anzahl}× geöffnet</small></span>`
       + `<b class="nk-dauer">${escape(dauerText(b.sekunden))}</b></div>`).join("");
   }
-  for (const gruppe of gruppiereNachSpiel(k.videos)) {
-    detail += `<h4>${escape(gruppe.spiel)}</h4>` + gruppe.items.map((v) =>
-      `<div class="nk-zeile"><span class="nk-titel">${nutzungPunkt(v.ampel)}<span>${escape(nutzungVideoLabel(v))}`
-      + `<small>${v.gespielt ? "komplett angeschaut · " : ""}zuletzt ${escape(vorZeit(v.zuletzt))}</small></span></span>`
-      + `<b class="nk-dauer">${escape(anzahlDauer(v.anzahl, v.sekunden))}</b></div>`).join("");
+  for (const gruppe of gruppiereNachSpiel(k.nicht_gesehen || [])) {
+    detail += `<h4>Noch nicht gesehen · ${escape(gruppe.spiel)}</h4>` + gruppe.items.map((n) =>
+      `<div class="nk-zeile"><span class="nk-titel">${nutzungPunkt(n.ampel)}<span><b class="su-id">${escape(n.id)}</b> `
+      + `${escape(n.label)}<small>${escape(n.zeit || "")}${n.geoeffnet ? " · angetippt, nicht komplett" : ""}</small></span></span></div>`).join("");
   }
   if ((k.geraete || []).length) detail += "<h4>Geräte</h4>" + k.geraete.map(nutzungGeraetZeile).join("");
-  if (!k.bereiche.length && !k.videos.length) {
+  if (!k.bereiche.length) {
     detail = '<p class="hinweis">In den letzten ' + tage + ' Tagen nichts aufgerufen.</p>' + detail;
   }
   return `<details class="nutz-karte${k.zuletzt ? "" : " nie"}">
     <summary><span class="nk-name">${escape(k.name)}</span>
       <span class="nk-zuletzt" title="${k.zuletzt ? escape(new Date(k.zuletzt).toLocaleString("de-DE")) : ""}">${escape(vorZeit(k.zuletzt))}</span>
-      <span class="nk-zahlen">${zahlen}</span></summary>
+      <span class="nk-zahlen">${zahlen}</span>${offen ? `<span class="nk-zahlen">${offen}</span>` : ""}</summary>
     <div class="nk-detail">${detail}</div></details>`;
 }
 
@@ -727,10 +745,11 @@ function renderNutzung() {
   const seit = d.seit ? new Date(d.seit).toLocaleDateString("de-DE") : "–";
   let html = `<p class="hinweis">Zähler der letzten ${d.tage} Tage, nur Spielerinnen. Erfasst seit ${seit}. `
            + `„Zuletzt aktiv“ zählt auch ältere Besuche. Die Dauer wird erst seit Version 0.59 gemessen `
-           + `(nur bei geöffneter App, höchstens 30 Min. am Stück); davor steht „–“. ✓ = komplett angeschaut.</p>`
+           + `(nur bei geöffneter App, höchstens 30 Min. am Stück); davor steht „–“. „Nicht gesehen“ heißt: `
+           + `nicht komplett angeschaut (mindestens 60 %), unabhängig vom Zeitraum. Die Spielzüge selbst stehen `
+           + `unter Team → Videos.</p>`
            + '<h3 class="nutz-h">Spielerinnen</h3>'
            + konten.map((k) => renderNutzungSpielerin(k, d.tage)).join("")
-           + renderNutzungVideos(d.video_ansicht || [], d.tage)
            + renderNutzungFehler(d.fehler || [], d.tage);
   el.innerHTML = html;
 }
@@ -3281,6 +3300,9 @@ async function ladeVideos() {
     if (aktRolle === "trainer" && !videoKader) {
       try { videoKader = await api("/api/spieler"); } catch (_) { videoKader = []; }
     }
+    if (aktRolle === "trainer") {                      // alle Spielzuege je Spiel; ohne Netz bleibt der letzte Stand
+      try { szenenDaten = await api("/api/szenen-uebersicht"); } catch (_) { /* alter Stand oder leer */ }
+    }
     renderVideos();
     scrollNachRenderAnwenden();
   } catch (_) {
@@ -3291,15 +3313,124 @@ async function ladeVideos() {
   }
 }
 
+// ---- Trainer: alle Spielzuege je Spiel (statt nur der manuell hochgeladenen Clips) ----
+let szenenDaten = null;     // Antwort von /api/szenen-uebersicht
+const szenenFilter = { sortierung: "zeit", name: null, nurOffen: false, mitEreignissen: false };
+
+// Haken je Zustand: komplett angeschaut / nur angetippt / nie geoeffnet
+const SZENEN_SYMBOL = { komplett: "✓", angetippt: "◐", offen: "○" };
+
+function szenenZeile(s, mitSpiel) {
+  const namen = { komplett: [], angetippt: [], offen: [] };
+  for (const n of s.beteiligt) namen[szenenStatus(s, n)]?.push(n);
+  const wer = s.kein_video
+    ? "kein Video – Ansicht nicht messbar"
+    : ["komplett", "angetippt", "offen"].filter((z) => namen[z].length)
+        .map((z) => `<span class="${z === "komplett" ? "" : "nk-offen"}">${SZENEN_SYMBOL[z]} ${escape(namen[z].join(", "))}</span>`).join(" · ")
+      || "keine Beteiligte mit Konto";
+  const zahl = s.kein_video ? "–" : `${namen.komplett.length} von ${s.beteiligt.length}`;
+  const kopf = `${nutzungPunkt(s.ampel)}<span><b class="su-id">${escape(s.id)}</b> ${escape(s.label)}`
+    + `<small>${escape([mitSpiel ? s.spiel : "", s.zeit, s.kommentare ? "💬 " + s.kommentare : ""].filter(Boolean).join(" · "))}</small>`
+    + `<small class="su-wer">${wer}</small></span>`;
+  const titel = s.clip_id
+    ? `<button type="button" class="su-titel" data-clip="${s.clip_id}" data-sid="${escape(s.id)}">${kopf}</button>`
+    : `<span class="su-titel">${kopf}</span>`;
+  return `<div class="nk-zeile su-zeile">${titel}<b class="nk-dauer">${zahl}</b></div>`;
+}
+
+function renderSzenenUebersicht() {
+  if (!szenenDaten) return '<p class="hinweis">Spielzüge werden geladen …</p>';
+  const spiele = szenenDaten.spiele || [];
+  if (!spiele.length) {
+    return '<p class="hinweis">Noch keine Spielanalyse. Spielzüge kommen aus „Balu-Spielanalyse“ ' +
+      'und werden am PC mit „Balu-Videoschnitt“ geschnitten.</p>';
+  }
+  const f = szenenFilter;
+  const optionen = { name: f.name, nurOffen: f.nurOffen, mitEreignissen: f.mitEreignissen };
+  const alle = spiele.flatMap((g) => g.szenen);
+  const chips = namenMitZahl(filtereSzenen(alle, { mitEreignissen: f.mitEreignissen }));
+  const knopf = (aktiv, attr, text) => `<button type="button" class="su-knopf${aktiv ? " aktiv" : ""}" ${attr}>${escape(text)}</button>`;
+  let html = '<div class="su-leiste">'
+    + knopf(f.sortierung === "zeit", 'data-sort="zeit"', "Zeitverlauf")
+    + knopf(f.sortierung === "name", 'data-sort="name"', "Nach Name")
+    + `<label><input type="checkbox" data-schalter="nurOffen"${f.nurOffen ? " checked" : ""}> Nur offene</label>`
+    + `<label><input type="checkbox" data-schalter="mitEreignissen"${f.mitEreignissen ? " checked" : ""}> Ereignisse einblenden</label>`
+    + '</div><div class="su-chips">'
+    + knopf(!f.name, 'data-name=""', "Alle " + chips.reduce((n, c) => n + c.anzahl, 0))
+    + chips.map((c) => knopf(f.name && _nameKey(f.name) === _nameKey(c.name), `data-name="${escape(c.name)}"`, `${c.name} ${c.anzahl}`)).join("")
+    + "</div>";
+  const karte = (titel, items, mitSpiel) => {
+    const offen = items.filter((s) => s.fehlt && s.fehlt.length).length;
+    return `<details class="nutz-karte${offen ? " nie" : ""}" open>
+      <summary><span class="nk-name">${escape(titel)}</span>
+        <span class="nk-zahlen">${items.length} ${items.length === 1 ? "Eintrag" : "Einträge"}${offen ? ` · <b>${offen}</b> mit Offenem` : ""}</span></summary>
+      <div class="nk-detail">${items.map((s) => szenenZeile(s, mitSpiel)).join("")}</div></details>`;
+  };
+  let treffer = 0;
+  if (f.sortierung === "name") {
+    const gefiltert = filtereSzenen(alle, optionen);
+    treffer = gefiltert.length;
+    html += gruppiereNachName(gefiltert).map((g) => karte(g.name, g.items, true)).join("");
+  } else {
+    for (const g of spiele) {
+      const items = filtereSzenen(g.szenen, optionen);
+      treffer += items.length;
+      if (items.length) html += karte(g.spiel || "Spiel " + g.analyse_id, items, false);
+    }
+  }
+  if (!treffer) html += '<p class="hinweis">Keine Einträge für diesen Filter.</p>';
+  return html + '<p class="hinweis">✓ komplett angeschaut (mindestens 60 %) · ◐ nur angetippt · ○ nie geöffnet. '
+    + "„x von y“ = wie viele der Beteiligten ihn komplett gesehen haben. Tippen öffnet den Clip.</p>";
+}
+
+// Klicks der Spielzug-Uebersicht: Filter und Clip oeffnen (Delegation - die Ansicht wird neu gezeichnet)
+function szenenKlick(e) {
+  const t = e.target.closest("button[data-sort], button[data-name], button[data-clip], input[data-schalter]");
+  if (!t) return;
+  if (t.dataset.clip) {
+    const s = (szenenDaten.spiele || []).flatMap((g) => g.szenen).find((x) => x.id === t.dataset.sid);
+    if (!s) return;
+    oeffneSzenenClip(+t.dataset.clip, s.id + " · " + s.label,
+      { text: s.label + " (" + s.id + ")", farbe: s.ampel || "grau", kommentar: "",
+        zeit: [s.spiel, s.zeit].filter(Boolean).join(" · ") });
+    return;
+  }
+  if (t.dataset.sort) szenenFilter.sortierung = t.dataset.sort;
+  else if (t.dataset.schalter) szenenFilter[t.dataset.schalter] = t.checked;
+  else szenenFilter.name = t.dataset.name || null;
+  const y = window.scrollY;
+  renderVideos();
+  window.scrollTo(0, y);
+}
+
+function renderTrainerVideos() {
+  const el = $("#videos-liste");
+  el.innerHTML = "";
+  const box = document.createElement("div");
+  box.className = "su-voll";
+  box.innerHTML = renderSzenenUebersicht();
+  box.addEventListener("click", szenenKlick);
+  el.appendChild(box);
+  const h = document.createElement("h3");
+  h.className = "videos-h su-voll";
+  h.textContent = "Eigene Clips";
+  el.appendChild(h);
+  if (!(videoClips || []).length) {
+    const p = document.createElement("p");
+    p.className = "hinweis su-voll";
+    p.textContent = "Noch keine eigenen Clips. Sie werden am PC mit „Balu-Videoschnitt“ hochgeladen.";
+    el.appendChild(p);
+  }
+  for (const c of videoClips || []) el.appendChild(videoKarte(c));
+}
+
 function renderVideos() {
   const el = $("#videos-liste");
+  if (aktRolle === "trainer") { renderTrainerVideos(); return; }
   const clips = videoClips || [];
-  const spiele = aktRolle === "trainer" ? [] : (videoSpiele || []);
+  const spiele = videoSpiele || [];
   if (!clips.length && !spiele.length) {
-    el.innerHTML = aktRolle === "trainer"
-      ? '<p class="hinweis">Noch keine Clips. Szenen werden am PC mit „Balu-Videoschnitt" ' +
-        'geschnitten und hochgeladen.</p>'
-      : '<p class="hinweis">Für dich sind noch keine Videos hinterlegt.</p>';
+    el.innerHTML = '<p class="hinweis">Für dich sind noch keine Videos hinterlegt.</p>';
     return;
   }
   el.innerHTML = "";
@@ -3352,7 +3483,7 @@ function videoKarte(c) {
   if (c.notiz) inner += `<span class="vk-notiz">${escape(c.notiz)}</span>`;
   if (aktRolle === "trainer") {
     const namen = (c.spieler || []).map((s) => s.name).join(", ") || "niemandem zugeordnet";
-    inner += `<span class="vk-spieler">${escape(namen)}</span>`;
+    inner += `<span class="vk-spieler">${escape(namen)}${c.kommentare ? " · 💬 " + c.kommentare : ""}</span>`;
   }
   karte.innerHTML = inner;
   karte.addEventListener("click", () => oeffneVideo(c));
@@ -4614,7 +4745,7 @@ $("#btn-mic").addEventListener("click", async () => {
 // Sichtbare Versionsnummer im Kopf — was drin ist, steht in CHANGELOG.md.
 // Bei jeder Aenderung: hier hochzaehlen, Eintrag im CHANGELOG, sw.js CACHE
 // bumpen und die ?v= der geaenderten Dateien in index.html.
-const APP_VERSION = "v0.59.0";
+const APP_VERSION = "v0.60.0";
 const versionEl = document.getElementById("version");
 if (versionEl) versionEl.textContent = APP_VERSION;
 

@@ -130,9 +130,10 @@ check(200 in ok and ok[-1] == 400, "Stundenlimit bremst Spam")
 check(T.post(f"/api/ansicht/{anna_b}").status_code == 200, "Ansicht als Anna")
 check(neu(T, "darf nicht").status_code == 403, "Im Ansicht-Modus ist Schreiben gesperrt")
 
-# Auswertung zaehlt Hauptkommentare je Video
-d = client("Trainer", "1111").get("/api/nutzung").json()
-v = next(x for x in d["video_ansicht"] if x["ziel"] == Z)
-check(v["kommentare"] > 0, "Nutzung: Kommentarzahl am Video")
+# Team -> Videos (Trainer): Hauptkommentare werden am eigenen Clip gezaehlt
+eigener = next(x for x in client("Trainer", "1111").get("/api/clips").json() if x["id"] == clip)
+check(eigener["kommentare"] > 0, "Eigene Clips: Kommentarzahl am Clip")
+check(all("kommentare" not in x for x in client("Anna", "2222").get("/api/clips").json()),
+      "Spielerin bekommt keine Zaehler (Clipliste unveraendert)")
 
 print("\nAlle Tests gruen.")
