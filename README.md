@@ -515,6 +515,21 @@ py tests/liga_test.py
 py tests/analyse_test.py
 py tests/nutzung_test.py
 node tests/nutzung_ui.test.mjs
+py tests/demo_test.py
 node tests/offline.test.mjs
 node tests/teams.test.mjs
 ```
+
+## Demo-Team (zum Ausprobieren und für Demovideos)
+
+Die Demo ist eine zweite Instanz mit **erfundenen** Spielerinnen, Spielen und Nutzungsdaten
+(`docs/anleitung-funktionen/demo_server.py`). Sie hat bei jedem Start frische Daten.
+
+- **Lokal:** `py docs/anleitung-funktionen/demo_server.py` → http://127.0.0.1:8299
+- **Auf dem Server:** `bash deploy_demo.sh` richtet sie neben der echten App ein
+  (`http://<server>:8201`, nur im Heimnetz, kein Funnel). Logins: `Trainer / 1111`, `Lena / 2222`.
+  Zurücksetzen: `systemctl --user restart elo-demo`. Entfernen: `bash deploy_demo.sh --entfernen`.
+  Nach einem normalen `bash deploy.sh` die Demo mit `bash deploy_demo.sh` nachziehen.
+- **Getrennt von der echten App:** eigener Ordner (`~/elo-demo`, Kopie des Codes), eigener Dienst und
+  Port, eigene temporäre Datenbank, eigener Cookie `sitzung_demo` (Cookies gelten pro Host, nicht pro
+  Port), kein Push, keine Fotos, kein Zugriff auf Anytype-Exporte.

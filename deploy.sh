@@ -171,3 +171,4 @@ trap - ERR
 printf '\n== Fertig: %s deployt ==\n' "$SOLL"
 echo "Zurueckrollen: ssh $DEPLOY_HOST \"cd $DIR && cp -p <datei>.bak-$STAMP <datei>\" und Dienst neu starten."
 echo "Backups auf dem Server: $("${SSH[@]}" "cd '$DIR' && ls *.bak-* static/*.bak-* 2>/dev/null | wc -l") Dateien (werden nicht automatisch geloescht)."
+echo "Falls es eine Demo-Instanz gibt: die hat noch den alten Code - mit  bash deploy_demo.sh  nachziehen."

@@ -7,6 +7,10 @@ echten Fotos auftauchen.
 
 Start:   py docs/anleitung-funktionen/demo_server.py          (Port 8299)
 Logins:  Trainer / 1111      Lena / 2222 (Spielerin)
+
+Auf dem Server laeuft sie als eigener Dienst neben der echten App (deploy_demo.sh).
+Dort kommen Host, Port und Geheimnis aus der Umgebung: DEMO_HOST, DEMO_PORT, APP_SECRET.
+Bei jedem Start entstehen die Daten neu (temporaere Datenbank) - Neustart = zuruecksetzen.
 """
 from __future__ import annotations
 
@@ -18,7 +22,7 @@ import tempfile
 from datetime import date, timedelta
 from pathlib import Path
 
-os.environ["APP_SECRET"] = "nur-fuer-die-anleitung"
+os.environ.setdefault("APP_SECRET", "nur-fuer-die-anleitung")   # auf dem Server: eigener Zufallswert
 BASIS = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(BASIS))
 
@@ -28,7 +32,8 @@ import db  # noqa: E402
 import liga  # noqa: E402
 import trainings_termine  # noqa: E402
 
-PORT = 8299
+HOST = os.environ.get("DEMO_HOST", "127.0.0.1")
+PORT = int(os.environ.get("DEMO_PORT", "8299"))
 tmp = Path(tempfile.mkdtemp(prefix="balu_demo_"))
 DB = tmp / "demo.db"
 balu.MEDIA_CLIPS = tmp / "clips"
@@ -242,5 +247,5 @@ def seed() -> dict:
 if __name__ == "__main__":
     import uvicorn
     seed()
-    print(f"Demo-Instanz läuft auf http://127.0.0.1:{PORT}  (Trainer/1111, Lena/2222)", flush=True)
-    uvicorn.run(balu.app, host="127.0.0.1", port=PORT, log_level="warning")
+    print(f"Demo-Instanz läuft auf http://{HOST}:{PORT}  (Trainer/1111, Lena/2222)", flush=True)
+    uvicorn.run(balu.app, host=HOST, port=PORT, log_level="warning")

@@ -24,7 +24,9 @@ from pathlib import Path
 BASIS = Path(__file__).parent
 _ITER = 200_000
 _MAX_ALTER = 60 * 24 * 3600          # Session-Gueltigkeit: 60 Tage
-COOKIE_NAME = "sitzung"
+# Cookies gelten pro Host, nicht pro Port: Laeuft daneben eine zweite Instanz (Demo) auf
+# demselben Rechner, braucht sie einen eigenen Namen, sonst melden sich beide gegenseitig ab.
+COOKIE_NAME = os.getenv("SESSION_COOKIE", "sitzung")
 
 
 # ------------------------------------------------------------------- Secret ----
