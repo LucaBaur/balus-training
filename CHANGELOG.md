@@ -19,6 +19,250 @@ Zahl, Fehlerbehebungen und Design-Feinschliff die letzte.
 
 ---
 
+## v0.70.1 — 2026-11-05
+
+**Aufgeräumt im Hintergrund, in der App ändert sich nichts.** Der Server-Code lag in zwei sehr großen Dateien
+(`app.py` mit allen Endpunkten, `db.py` mit der ganzen Datenhaltung). Er ist jetzt nach Themen aufgeteilt:
+
+- **`routen/`:** ein Modul je Bereich (Termine, To-Dos, Videos, Spielanalysen, Ämter, Mitteilungen …).
+  Dieselben Adressen und Rechte wie vorher, 99 Endpunkte, geprüft gegen den alten Stand.
+- **`daten/`:** die Datenbankfunktionen nach Themen. `db.py` bleibt als Eingang bestehen, deshalb laufen die
+  Cron-Skripte auf dem Server unverändert weiter.
+- **Deploy:** `deploy.sh` und `deploy_demo.sh` laden die beiden neuen Ordner mit hoch. Beim ersten Deploy
+  ersetzen `app.py` und `db.py` ihre alten Fassungen, die Sicherung davor legt `deploy.sh` wie gewohnt an.
+- Für Entwickler: Tests, die Medienordner umbiegen, nutzen jetzt `routen.pfade` statt `app`.
+
+## v0.70.0 — 2026-11-04
+
+**„Braucht dich“ zeigt jetzt das, was wirklich auf dich wartet.**
+
+- **To-Do-Feedback erst nach der Woche:** Ein To-Do taucht erst dann als „wartet auf Feedback“ auf, wenn die Woche
+  vorbei ist, in der die Spielerin es ausprobiert. Vorher gibt es noch nichts zu bewerten. (Die Übersicht unter
+  Team → To-Dos und die Sonntags-Erinnerung bleiben wie sie waren.)
+- **Offene Fragen zu Videos:** Hat eine Spielerin zu einem Video eine Frage oder einen Kommentar geschrieben und du
+  hast noch nicht geantwortet, steht das Video unter „Braucht dich“ (höchstens drei Zeilen, das neueste zuerst).
+  Ein Tipp öffnet das Video. Schreibt die Spielerin nach deiner Antwort noch einmal, ist die Frage wieder offen.
+  Eigene Kommentare von dir zählen nicht.
+
+## v0.69.1 — 2026-11-04
+
+**Trainer sieht den eigenen Kommentar zum Spielzug wieder.** Öffnet man in Team → Videos einen Spielzug aus der
+Übersicht, stand unter dem Video nur der Name, aber nicht der Kommentar, den man in der Spielanalyse dazu geschrieben
+hatte. Der Kommentar erscheint jetzt oben im Video als „Kommentar vom Trainer“, genau wie bei den Spielerinnen.
+
+## v0.69.0 — 2026-11-04
+
+**Mitteilungen für Ämter.** Neue Art **Ämter** unter Profil → Mitteilungen (einzeln abschaltbar).
+
+- **Wenn dich jemand einteilt:** Trägt die Inhaberin einer Liste dich ein (Trikots, Leibchen, Getränke oder als
+  Selbstfahrerin beim Bussle), bekommst du sofort „Du bist dran: Waschliste“ mit Termin und Uhrzeit. Wer sich selbst
+  einträgt, bekommt nichts, und dieselbe Zuteilung klingelt nicht zweimal. Für vergangene Termine kommt nichts.
+- **Eine Stunde vorher „Heute nicht vergessen“:** Vor jedem Training, vor der Abfahrt bei Auswärtsspielen und vor dem
+  Anwurf bei Heimspielen. Drin steht, was du mitbringen sollst, z. B. „Tape und Harz und Öl · Training 19:00 Uhr“.
+  Es erinnert an die Mitbring-Ämter (Duschgel nur beim Training, Eiskoffer und Musik nur bei Spielen, Tape und
+  Harz/Öl immer) und an Listen, für die du an diesem Termin eingeteilt bist: Getränke, Leibchen und Trikots
+  mitnehmen, mit dem eigenen Auto fahren. Wer für den Termin abgesagt hat, bekommt nichts. Ohne Uhrzeit am Termin
+  gibt es keine Erinnerung.
+- Läuft als Cronjob `push_amt_erinnerung.py` alle zehn Minuten zwischen 5 und 21 Uhr und sendet je Termin und Person
+  nur einmal. Neu auf dem Server: dieser Cronjob.
+
+---
+
+## v0.68.0 — 2026-11-04
+
+**Ämter der Mannschaft.** Jede sieht, wer welches Amt hat und was es bedeutet, und die Listen für Trikots, Leibchen,
+Getränke und das Bussle liegen jetzt in der App.
+
+- **Neuer Reiter „Mannschaft“** (für den Trainer unter Saison) mit zwei Seiten. **Ämter:** alle 20 Ämter mit
+  kurzer Beschreibung und den Namen derer, die sie haben. Die eigenen stehen oben. **Listen:** Waschliste,
+  Leibchen, Getränke und Bussle.
+- **Im Menü hinter dem Kreis oben rechts** stehen unter dem Namen die eigenen Ämter, dazu der Punkt „Meine Ämter“.
+- **Listen:** Wer ein Amt mit Liste hat (z. B. die Waschliste), wählt pro Termin aus, wer die Trikots mit nach Hause
+  nimmt, und hakt ab, sobald sie gewaschen sind. Alle sehen, wer dran ist und **wie oft jede seit dem 1. Juli
+  schon dran war**; wer am seltensten dran war, steht vorne. Leibchen gibt es nur bei Trainings, die Waschliste
+  nur bei Spielen, Getränke bei beiden.
+- **Bussle:** Bei Auswärtsspielen steht „Bussle da / nicht da“, dazu wer selbst mit dem Auto fährt, samt Zähler.
+- **Home:** Wer dran ist, sieht es dort auf einer Karte „Du bist dran“.
+- **Rolle für die Balu-Trainings-App:** Das Amt „Balu-Trainings-App“ (früher SpielerPlus) erlaubt, Trainings und
+  Spiele anzulegen und zu löschen, sonst nichts. Trainingspläne, Rangliste und Nachbereitung bleiben beim Trainer.
+  Wer die Aufgabe übernehmen soll, bekommt einfach das Amt.
+- **Der Trainer** vergibt die Ämter unter Saison → Ämter (antippen = Amt geben oder entziehen), ändert die
+  Beschreibungen und legt neue Ämter an. Das Amt „Essensplan“ hat noch keine Beschreibung.
+- Wer welches Amt hat, steht nur in der Datenbank und wird in der App eingetragen, nicht im Programmcode.
+- Noch nicht dabei: Kasse (Kassenwart ist vorerst nur ein Titel) und Dienste/Schichten. Eintragen und Abhaken
+  braucht eine Verbindung zum Server.
+
+---
+
+## v0.67.1 — 2026-11-04
+
+**Kopf-Portrait ohne Kreis.** Das Schild saß in einem weißen Kreis, das passte nicht zum Rest der App. Jetzt steht
+es als Schild mit hellem Rand direkt im Kopf, wie überall sonst (Aufstellung, Profil, Menü).
+
+---
+
+## v0.67.0 — 2026-11-04
+
+**Portrait statt Anfangsbuchstabe, und jede wählt selbst.** Der Kreis oben rechts und das Profil-Menü zeigen jetzt
+das Portrait der angemeldeten Person (im selben Wappen wie in der Aufstellung) statt nur des Buchstabens.
+
+Auf der Seite „Ich“ gibt es neu die Karte **Mein Portrait**:
+- **Foto / Buchstabe** umschalten – wer nur den Anfangsbuchstaben möchte, bekommt ihn überall (Kopf, Aufstellung,
+  Profil). Das Foto bleibt gespeichert und ist mit einem Tipp wieder da.
+- **Eigenes Foto wählen:** Bild aussuchen, mit dem Finger verschieben und zoomen, übernehmen. Der Ausschnitt wird in
+  der Wappenform angezeigt, so sieht man vorher, was übrig bleibt.
+- **Eigenes Foto entfernen:** danach gilt wieder das Foto vom Trainer.
+
+Alle anderen sehen die Wahl sofort (auch in der Aufstellung). Ohne Netz bleibt das zuletzt gesehene Foto erhalten.
+Im „Ansicht als“-Modus ist die Karte ausgeblendet (dort darf nichts geändert werden).
+
+---
+
+## v0.66.1 — 2026-11-03
+
+**Keine automatische Erinnerung mehr für freiwillige Trainings.** Die tägliche Mitteilung „bitte zu- oder absagen“,
+die zwei Tage vor einem Termin an alle ohne Antwort geht, entfällt für Freitags-Trainings. Für Montag und
+Donnerstag und für Spiele ändert sich nichts. Die Erinnerung, die der Trainer im Termin selbst auslöst
+(„Erinnerung an Offene senden“), geht weiterhin auch für einen Freitag, weil sie eine bewusste Handlung ist.
+
+---
+
+## v0.66.0 — 2026-11-03
+
+**Freiwilliges Training am Freitag, keine Warnungen mehr für Spielerinnen.** Trainings am Freitag gelten jetzt als
+freiwillig: Dort ist es in Ordnung, wenn nur wenige kommen, weil viel individuell trainiert wird. Spiele sind
+nie freiwillig, auch nicht am Freitag.
+
+- **Spielerinnen** sehen nirgends mehr einen Hinweis wie „zu wenig Zusagen, noch Zeit zum Verschieben“. Die
+  rote Warnung oben in der Terminliste, das Wort „zu wenig“ unter der Zahl und die rote bzw. orange
+  Färbung der Karten sind nur noch für Trainer da. Das gilt auch in „Ansehen als“.
+- **Freitags-Trainings** lösen auch für Trainer keine Warnung aus: nicht in der Terminliste, nicht in der
+  Liste „Braucht dich“ auf Home und nicht als Mitteilung „Zu wenige Zusagen“. Die Karte trägt stattdessen
+  die Marke **freiwillig**, für alle.
+- **Eine Stelle für die Regel:** `FREIWILLIGE_WOCHENTAGE` in `db.py` (aktuell nur Freitag). Wer die Regel
+  später ändern will, ändert nur diese Zeile; die App liest das Feld `freiwillig` vom Server.
+
+Nicht geändert: Die Erinnerung an alle ohne Antwort (Mitteilung zwei Tage vorher) gilt weiter auch für
+Freitags-Trainings.
+
+---
+
+## v0.65.1 — 2026-11-03
+
+**Neues App-Symbol.** Ein weißes **B** (für Balu) auf dunklem Vereinsblau, mit der gestrichelten 9-m-Linie als
+Kreis und einem Handball darauf. Die Linie ist dieselbe Signatur wie unter dem Kopf der App. Das Symbol gibt es
+jetzt als scharfes Vektorbild für den Browser-Tab (`icon.svg`), in drei Größen für Startbildschirm und
+Android (192, 512 und eine Version mit Rand für runde Ausschnitte) und als 180-Pixel-Version für das iPhone.
+Die kleine Marke in der Statusleiste bei Mitteilungen ist jetzt ein weißes B auf durchsichtigem Grund; vorher
+wurde dort das farbige Symbol zu einem grauen Quadrat.
+
+Erzeugt wird alles mit `py make_icons.py` aus derselben Geometrie, Änderungen am Aussehen gehören dort hinein.
+
+**Wann das neue Symbol auf dem Handy erscheint:** In der Android-App (Balu-APK) erst nach einem neuen Build,
+als installierte Web-App im Browser oft erst nach einigen Tagen oder nach erneutem „Zum Startbildschirm
+hinzufügen“. Das Symbol im Browser-Tab und in der App selbst ist sofort neu.
+
+---
+
+## v0.65.0 — 2026-11-03
+
+**Neues Aussehen in den Vereinsfarben, Dunkelmodus, neue Startseiten und gezielte Mitteilungen.**
+
+**Navigation.** Spielerinnen haben unten vier Reiter: **Home, Termine, Videos, Playbook**. Trainer behalten
+Home, Training, Team, Taktik und Saison. Die Leiste ist jetzt Vereinsblau, der aktive Reiter hat eine helle
+Fläche hinter dem Symbol. Die Emoji-Symbole sind durch eigene Linien-Symbole ersetzt, die auf jedem Gerät
+gleich aussehen. Auf dem Videos-Reiter erscheint ein Punkt, wenn es etwas Neues für dich gibt.
+
+**Profil-Menü.** Oben rechts steht ein Kreis mit deinem Anfangsbuchstaben. Er öffnet: Mein Profil, Meine
+To-Dos, Meine Statistik, Mitteilungen, die Wahl **Auto / Hell / Dunkel** und Abmelden. Auch „Ansehen als“ (nur
+Trainer) und der Verbindungsstatus mit der Version liegen jetzt dort. Der Reiter „Ich“ und die Leiste mit
+„Abmelden“ auf Home sind weggefallen. Der Statuspunkt im Kopf zeigt nur noch bei „offline“ und „sendet“ Text.
+
+**Dunkelmodus.** Dunkelblau statt Schwarz, das Vereinsblau wird heller, damit alles lesbar bleibt. „Auto“
+folgt dem Gerät. Die Wahl wird gemerkt und beim Start sofort gesetzt, ohne Aufblitzen in der falschen Farbe.
+
+**Startseite der Spielerin.** Oben das nächste Training groß in Vereinsblau, mit den Knöpfen Zusagen,
+Unsicher und Absagen direkt darin. Darunter: weitere Termine ohne Antwort, **Neu für dich** (neue Clips und
+Videoanalysen), dein Wochenziel samt Trainer-Feedback, die nächsten Spiele und ein Auszug aus der Tabelle
+mit deinem Platz. Beim allerersten Öffnen gilt nichts als „neu“.
+
+**Startseite des Trainers.** Oben die Liste **Braucht dich**: Termine mit zu wenigen Zusagen, wie viele noch
+nicht geantwortet haben, Spiele ohne Nachbereitung (letzte zwei Wochen) und To-Dos, die auf Feedback warten.
+Jede Zeile führt direkt zum Termin bzw. zur Seite. Darunter das nächste Training, die Spiele und die
+Schnellzugriffe.
+
+**Gezielte Mitteilungen.** Neu ausgelöst werden:
+- **Neuer Clip** oder **neue Videoanalyse** für dich (bei Analysen, sobald das Video da ist, und nur einmal
+  je Person, auch wenn das Video neu hochgeladen wird).
+- **Termin abgesagt**, wenn der Trainer einen Termin löscht, an alle, die zugesagt oder „unsicher“
+  gesagt hatten (vergangene Termine werden still aufgeräumt).
+- **Abfahrt bzw. Anwurf** am Vortag und am Spieltag für alle mit Zusage oder „unsicher“. Dazu muss auf dem
+  Server der Job `push_spieltag.py` per Cron eingetragen werden (siehe unten).
+- **Zu wenige Zusagen** (Trainer): sobald ein kommender Termin unter sechs Zusagen fällt, einmal pro
+  Unterschreitung.
+
+Unter **Profil → Mitteilungen** schaltet jede Person Arten einzeln ein oder aus: Termine, Videos,
+Rückmeldungen (Feedback, Fragen) und für Trainer Warnungen. Dort steht auch, ob Mitteilungen auf diesem Gerät
+an sind, mit Testnachricht und einem Hinweis fürs iPhone (App muss auf dem Home-Bildschirm liegen). Die
+bisherigen Mitteilungen (Erinnerung, Kommentare, To-Do-Feedback) tragen jetzt ebenfalls eine Art und
+lassen sich abschalten. Der Hinweis „Mitteilungen anschalten?“ auf Home erscheint nur, solange sie aus sind,
+und lässt sich für zwei Wochen wegklicken.
+
+**Fehler behoben: Mitteilungen kamen bei ruhenden Geräten nicht an.** Der Push-Versand gab dem Push-Dienst
+keine Lebensdauer mit (Standard: 0). Der Dienst lieferte dann nur, wenn das Gerät in dem Moment sofort
+erreichbar war, sonst wurde die Nachricht verworfen. Jetzt gilt eine Lebensdauer von 12 Stunden und die
+Dringlichkeit „hoch“, damit auch ein Handy im Ruhezustand geweckt wird.
+
+**Einrichtung am Server (einmalig).** Cronjobs, Zeiten in Berlin-Zeit:
+```
+0 18 * * *   ~/anytype-sync/.venv/bin/python ~/elo/push_spieltag.py --tage 1
+30 8 * * *   ~/anytype-sync/.venv/bin/python ~/elo/push_spieltag.py --tage 0
+```
+Die Datenbank bekommt zwei kleine Tabellen von selbst (`push_praeferenz`, `push_gesendet`).
+
+**Nicht dabei:** „Termin geändert“. Termine lassen sich in der App bisher nur anlegen und löschen, nicht
+bearbeiten, deshalb gibt es dafür keinen Auslöser. Unter den Videos nicht beantwortete Fragen fehlen in der
+Aufgabenliste des Trainers noch.
+
+---
+
+## v0.64.0 — 2026-11-02
+
+**Neu: Nachbereitung zu Spielen (nur für Trainer).** Im Termin eines Test- oder Ligaspiels gibt es
+jetzt den Bereich **„Nachbereitung“** mit drei Feldern: **Meine Gedanken**, **Gegner (fürs Rückspiel)**
+und **Ansprache Montag**. Spielerinnen sehen den Bereich nicht und bekommen die Texte auch nicht
+vom Server geschickt. Beide Trainer sehen und bearbeiten dieselben Notizen; darunter steht, wer zuletzt
+gespeichert hat.
+
+- **Rückspiel:** Öffnest du ein Spiel gegen einen Gegner, gegen den ihr schon gespielt habt, stehen
+  oben die Notizen „Gegner“ und „Meine Gedanken“ aus dem früheren Spiel (Groß-/Kleinschreibung und
+  Leerzeichen im Namen sind egal). Falls der Name anders geschrieben ist, lässt sich das frühere Spiel
+  von Hand auswählen.
+- **Funkloch:** Jede Eingabe wird sofort als Entwurf auf dem Gerät gesichert und bleibt dort, bis der
+  Server das Speichern bestätigt hat. Ohne Netz kannst du trotzdem schreiben; eine klare Meldung sagt,
+  dass noch nicht gespeichert ist.
+- **Zwei Trainer gleichzeitig:** Hat der andere inzwischen gespeichert, wird nichts überschrieben.
+  Du siehst seine Fassung und entscheidest, welche gilt.
+- In der Terminliste tragen Spiele mit Notizen für Trainer ein 📝.
+
+## v0.63.0 — 2026-11-02
+
+**Neu: Wochen-To-Dos.** Unter **Ich → To Do** sehen Spielerinnen die Ziele, die der Trainer für sie
+angelegt hat (z. B. „Fangen mit zwei Händen“), und wählen **eins für die laufende Woche**. Wer
+wechseln will, nimmt die Auswahl zurück, solange es noch kein Feedback gibt. Abgehakte To-Dos stehen
+unter „Geschafft“ mit ☑, das Feedback des Trainers steht direkt am To-Do.
+
+Der Trainer legt unter **Team → To-Dos** je Spielerin Ziele an (ändern, löschen, wieder öffnen) und sieht,
+was gewählt wurde. Zu jeder gewählten Aufgabe gibt er kurz Feedback und entscheidet: **„Bleibt noch“**
+(das To-Do bleibt offen und kann nächste Woche wieder gewählt werden) oder **„Erledigt ✓“** (wird bei der
+Spielerin abgehakt). Die Spielerin bekommt dazu eine Push-Nachricht.
+
+**Benachrichtigung am Wochenende:** Der Server meldet den Trainern per Push, wer noch auf Feedback wartet.
+Dafür muss einmalig der Cronjob `todo_wochenende.py` (sonntags 18:00) auf dem Server eingetragen werden.
+Das Limit steht in `db.py` (`TODO_MAX_WAHL`, aktuell 1 Wahl pro Woche).
+
+---
+
 ## v0.62.0 — 2026-10-31
 
 **↻ Aktualisieren auf Nutzung und Videos (Trainer).** Ein Knopf lädt die angezeigte Seite frisch vom

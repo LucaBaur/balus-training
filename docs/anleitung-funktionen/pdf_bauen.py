@@ -184,32 +184,32 @@ def titelseite():
     c.setFillColor(colors.HexColor("#B9C8E3"))
     c.drawString(M, H - 38 * mm, "Alle Funktionen der App, so wie sie auf dem Handy aussehen")
     c.setFont(FONT, 10)
-    c.drawString(M, H - 49 * mm, "TVG Frauen · Stand: Version 0.55")
+    c.drawString(M, H - 49 * mm, "TVG Frauen · Stand: Version 0.65")
 
     y = absatz(
         "Balu's Training ist die App fürs Team: Zu- und Absagen fürs Training, der Trainingsplan, "
-        "das Playbook, die Videoanalyse der Spiele und faire Teams für die Trainingsspiele. "
+        "das Playbook, die Videoanalyse der Spiele, Wochen-To-Dos und faire Teams für die Trainingsspiele. "
         "Du brauchst sie auf dem Handy, installiert wird sie wie eine normale App "
         "(siehe <b>Anleitung-Videos.pdf</b>). Diese Anleitung zeigt jeden Bereich Schritt für Schritt.",
         M, H - 68 * mm, W - 2 * M)
 
-    pfad = handy("02-home")
+    pfad = handy("30-spielerin-home")
     iw, ih = Image.open(pfad).size
     bw = 66 * mm
     bh = bw * ih / iw
     c.drawImage(str(pfad), W - M - bw + 4 * mm, y - 6 * mm - bh, bw, bh)
 
     zeilen = [
-        ("Home", "Nächstes Training, nächste Spiele, Liga-Tabelle", "alle"),
-        ("Ich", "Dein Profil, deine Statistik, Videos", "alle mit Profil"),
-        ("Training", "Termine, Zu- und Absagen, Plan, Aufstellung, Teams", "alle, Plan und Teams nur Trainer"),
-        ("Team", "Rangliste, Kader, Statistik, Nutzung", "nur Trainer"),
-        ("Taktik", "Playbook, Gegnercheck", "alle, Gegner nur Trainer"),
-        ("Saison", "Orga, Statistik der Spiele, Notizen", "nur Trainer"),
+        ("Home", "Nächstes Training mit Zu- und Absage, Neues für dich, Tabelle. Trainer: „Braucht dich“", "alle"),
+        ("Termine", "Zu- und Absagen, Aufstellung. Beim Trainer „Training“ mit Plan, Teams, Übungen, Coach", "alle, Plan und Teams nur Trainer"),
+        ("Videos", "Videoanalyse der Spiele und einzelne Szenen mit Fragen und Kommentaren", "Spielerinnen, Trainer unter Team"),
+        ("Playbook", "Spielzüge, Überzahl, Unterzahl, Abwehr. Beim Trainer „Taktik“ mit Gegnercheck", "alle, Gegner nur Trainer"),
+        ("Team und Saison", "Rangliste, Kader, Nutzung, To-Dos, Orga, Statistik der Spiele, Notizen", "nur Trainer"),
+        ("Kreis oben rechts", "Profil, To-Dos, Mitteilungen, Hell oder Dunkel, Abmelden", "alle"),
     ]
     yy = y - 8 * mm
     tb = W - 2 * M - bw - 4 * mm
-    absatz("Die sechs Bereiche unten in der App", M, yy, tb, fett)
+    absatz("Unten die Reiter, oben rechts dein Profil", M, yy, tb, fett)
     yy -= 8 * mm
     for name, was, wer in zeilen:
         yy = absatz(f"<b>{name}</b><br/>{was}", M, yy, tb, klein) - 0.8 * mm
@@ -227,21 +227,59 @@ def baue():
 
     bildseite("Anmelden und zurechtfinden", "Alle",
               "Du meldest dich mit deinem Namen und der PIN an, die du vom Trainerteam bekommen hast. "
-              "Danach bleibst du angemeldet. Unten wechselst du zwischen den Bereichen, "
-              "oben unter dem Wappen zwischen den Seiten des Bereichs.",
+              "Danach bleibst du angemeldet. Unten wechselst du zwischen den Bereichen, oben unter dem Wappen "
+              "zwischen den Seiten des Bereichs. Spielerinnen haben vier Reiter, Trainer fünf.",
               [("01-login", "Anmelden", "Name und PIN eingeben. Dein Zugang gehört zu deinem Spielerprofil, "
                 "du siehst nur, was für dich bestimmt ist."),
-               ("02-home", "Home", "Das nächste Training und die nächsten Spiele. Der Punkt oben rechts zeigt, "
-                "ob die App mit dem Server verbunden ist. Ohne Netz bleibt sie benutzbar."),
-               ("03-liga", "Liga", "Tabelle und Spielplan der Bezirksoberliga. Die Daten kommen vom Verband, "
-                "unser Team ist hervorgehoben.")])
+               ("30-spielerin-home", "Home als Spielerin", "Das nächste Training steht groß oben, mit den Knöpfen "
+                "Zusagen, Unsicher und Absagen. Der Punkt oben rechts zeigt, ob die App mit dem Server verbunden ist."),
+               ("02-home", "Home als Trainer", "Oben „Braucht dich“: Termine mit zu wenigen Zusagen, wer noch nicht "
+                "geantwortet hat, Spiele ohne Nachbereitung und To-Dos, die auf Feedback warten. Ein Tipp führt direkt hin.")])
+
+    bildseite("Startseite im Detail", "Spielerinnen",
+              "Weiter unten auf Home steht, was sich seit deinem letzten Besuch getan hat, dein Ziel für die Woche "
+              "und die Tabelle. Alles ist antippbar.",
+              [("30b-home-weiter", "Neu für dich, Ziel, Tabelle", "Neue Clips und Videoanalysen erscheinen unter "
+                "„Neu für dich“, am Reiter „Videos“ sitzt dann ein Punkt. Darunter dein Wochenziel mit dem Feedback "
+                "des Trainers und dein Tabellenplatz."),
+               ("03-liga", "Liga", "Ein Tipp auf die Tabelle öffnet Tabelle und Spielplan der Bezirksoberliga. "
+                "Die Daten kommen vom Verband, unser Team ist hervorgehoben.")])
+
+    bildseite("Profil, Darstellung und Mitteilungen", "Alle",
+              "Der Kreis oben rechts öffnet dein Profil-Menü. Dort stellst du ein, ob die App hell oder dunkel sein soll, "
+              "und welche Mitteilungen du bekommst. Trainer wählen hier auch „Ansehen als“.",
+              [("40-profil-menue", "Profil-Menü", "Mein Profil, Meine To-Dos, Meine Statistik, Mitteilungen, "
+                "Darstellung (Auto, Hell, Dunkel), Verbindung mit Version und Abmelden."),
+               ("42-home-dunkel", "Dunkelmodus", "Dunkelblau statt Schwarz, das Vereinsblau bleibt erkennbar. "
+                "„Auto“ folgt dem Gerät: abends dunkel, tagsüber hell."),
+               ("41-mitteilungen", "Mitteilungen", "Oben steht, ob sie auf diesem Gerät an sind, mit Testnachricht. "
+                "Darunter schaltest du Arten einzeln aus: Termine, Videos, Rückmeldungen. Trainer bekommen zusätzlich Warnungen.")])
+
+    textseite("Welche Mitteilungen kommen", "Alle", [
+        ("Termine",
+         "Eine Erinnerung, wenn du noch nicht geantwortet hast. Am Tag vor einem Spiel und am Spieltag die Abfahrts- "
+         "oder Anwurfzeit, wenn du zugesagt hast oder „unsicher“ warst. Eine Nachricht, wenn ein Termin abgesagt wird, "
+         "für den du zugesagt hattest."),
+        ("Videos",
+         "Ein neuer Clip für dich oder eine neue Videoanalyse, in der du vorkommst. Bei Analysen kommt die "
+         "Nachricht, sobald das Video da ist, und nur einmal."),
+        ("Rückmeldungen",
+         "Feedback des Trainers zu deinem To-Do und Antworten auf deine Fragen unter Videos. "
+         "Trainer bekommen hier die Fragen der Spielerinnen."),
+        ("Warnungen (nur Trainer)",
+         "Wenn für einen kommenden Termin weniger als sechs Zusagen da sind. Freitags-Trainings sind freiwillig und lösen sie nicht aus. Die Warnung kommt einmal, "
+         "wenn die Zahl unter die Grenze fällt, nicht bei jeder weiteren Absage."),
+        ("Auf dem iPhone",
+         "Mitteilungen gehen dort nur, wenn die App auf dem Home-Bildschirm liegt: Teilen-Symbol antippen, "
+         "„Zum Home-Bildschirm“ wählen und die App von dort öffnen."),
+    ])
 
     bildseite("Termine", "Alle, Anlegen nur Trainer",
               "Unter <b>Training → Termine</b> stehen alle kommenden Trainings, Testspiele und Ligaspiele. "
               "Trainings sind weiß, Spiele farbig. Der Balken zeigt die Zusagen. "
               "Die Trainings am Montag und Donnerstag legt die App selbst an, du musst nichts eintragen.",
-              [("04-termine", "Terminliste", "Rechts steht die Zahl der Zusagen. Die Warnung oben erscheint, "
-                "wenn bei einem Termin weniger als sechs zugesagt haben."),
+              [("04-termine", "Terminliste", "Rechts steht die Zahl der Zusagen. Trainer sehen eine Warnung, "
+                "wenn bei einem Termin weniger als sechs zugesagt haben, außer bei freiwilligen Trainings (Freitag)."),
                ("06-termin-aufgeklappt", "Aufklappen", "Ein Tipp auf den Termin zeigt, wer zu- und abgesagt hat. "
                 "Trainer tragen hier für andere ein: Haken = zusagen, Fragezeichen = unsicher, Kreuz = absagen."),
                ("05-termin-neu", "Neuer Termin", "Trainer legen Trainings, Testspiele und Ligaspiele von Hand an. "
@@ -260,8 +298,8 @@ def baue():
     bildseite("Zu- und Absagen", "Spielerinnen",
               "Zu- und Absage gehören zu den wichtigsten Dingen in der App. Antworten kannst du auf der Startseite "
               "oder im Termin. Die Antwort sehen alle, damit der Trainer planen kann.",
-              [("30-spielerin-home", "Auf der Startseite", "Wo deine Antwort noch fehlt, steht sie unter "
-                "„Deine Antwort fehlt noch“ mit drei Knöpfen."),
+              [("30-spielerin-home", "Auf der Startseite", "Das nächste Training steht groß oben mit drei Knöpfen. "
+                "Weitere Termine ohne Antwort stehen darunter unter „Deine Antwort fehlt noch“."),
                ("31-spielerin-termine", "Im Termin", "Oben deine Antwort, darunter alle anderen nach "
                 "Zusage, Unsicher, Absage und noch keine Rückmeldung."),
                ("32-absage-grund", "Absagen mit Grund", "Bei einer Absage wählst du einen Grund oder schreibst "
@@ -286,13 +324,55 @@ def baue():
                ("14-coach", "Coach", "Beschreibe das Training, getippt oder per Sprachnachricht. Der Coach fragt "
                 "nach, wenn etwas fehlt, und hängt den Plan auf Wunsch direkt ans Training.")])
 
-    bildseite("Mein Profil und Videos", "Spielerinnen",
-              "Unter <b>Ich</b> findest du alles zu dir selbst. Du siehst nur deine eigenen Zahlen und deine eigenen Szenen.",
+    bildseite("Mein Profil und To-Dos", "Spielerinnen",
+              "Dein Profil öffnest du über den Kreis oben rechts. Du siehst nur deine eigenen Zahlen. "
+              "To-Dos sind kleine Ziele, die dein Trainer für dich anlegt, zum Beispiel „Fangen mit zwei Händen“.",
               [("33-profil", "Mein Profil", "Deine Trainingsbeteiligung, die Laufchallenge und deine Statistik "
                 "aus den analysierten Spielen."),
-               ("34-videos", "Videos", "Oben die Spiele mit Videoanalyse, darunter einzelne Szenen als kurze Clips."),
+               ("36-todo", "To-Dos", "Oben das Ziel dieser Woche mit dem Feedback des Trainers. Darunter die Ziele "
+                "zur Auswahl. Pro Woche wählst du eins, „Wählen“ ist dann für die übrigen grau.")])
+
+    textseite("So laufen die Wochen-To-Dos", "Alle", [
+        ("Wählen",
+         "Der Trainer legt für jede Spielerin ein paar Ziele an. Du wählst eins für die laufende Woche. "
+         "Wer wechseln will, nimmt die Auswahl zurück, solange es noch kein Feedback gibt."),
+        ("Feedback",
+         "Im Training schaut der Trainer, wie es lief, und gibt kurz Feedback. Er entscheidet: „Bleibt noch“ "
+         "(das Ziel bleibt offen und kann nächste Woche wieder gewählt werden) oder „Erledigt“ (wird abgehakt "
+         "und steht unter „Geschafft“). Du bekommst dazu eine Mitteilung."),
+        ("Erinnerung für den Trainer",
+         "Am Sonntag meldet der Server den Trainern, wer noch auf Feedback wartet. Auf Home steht das auch "
+         "jederzeit unter „Braucht dich“."),
+    ])
+
+    bildseite("To-Dos für das Team", "Trainer",
+              "Unter <b>Team → To-Dos</b> legst du je Spielerin Ziele an, siehst die Wahl der Woche und gibst Feedback.",
+              [("26-team-todos", "Wer wartet auf dich", "Oben steht, wie viele auf Feedback warten. Bei einer "
+                "gewählten Aufgabe schreibst du kurz, wie es lief, und wählst „Bleibt noch“ oder „Erledigt“."),
+               ("27-team-todos-feedback", "Gegebenes Feedback", "Dein Feedback steht bei der Aufgabe und bei der "
+                "Spielerin. Mit den kleinen Knöpfen änderst du Texte, löschst Ziele oder öffnest Erledigtes wieder.")])
+
+    bildseite("Videos", "Spielerinnen",
+              "Unter <b>Videos</b> findest du die Spiele mit Videoanalyse und einzelne Szenen als kurze Clips. "
+              "Du siehst nur Szenen, in denen du vorkommst, das ganze Spiel sehen alle.",
+              [("34-videos", "Videos", "Oben die Spiele mit Videoanalyse, darunter einzelne Szenen als kurze Clips. "
+                "Ein Punkt am Reiter zeigt, dass etwas Neues da ist."),
                ("35-analyse", "Videoanalyse", "Deine Tore, Fehlwürfe und Vorlagen im Spiel. Spielzüge sind mit einer "
                 "Ampel bewertet. Ein Tipp auf eine Szene spielt den Clip ab.")])
+
+    textseite("Fragen, Kommentare und was der Trainer sieht", "Alle", [
+        ("Fragen und Kommentare",
+         "Unter jedem Video steht „Fragen &amp; Kommentare“. Wer das Video sehen darf, kann schreiben und lesen. "
+         "Auf einen Kommentar kann man antworten. Mit dem Haken „Nur für Trainer sichtbar“ bleibt eine Frage privat. "
+         "Schreibt eine Spielerin, bekommen die Trainer eine Mitteilung, antwortet der Trainer, bekommt sie eine."),
+        ("Was der Trainer sieht",
+         "Dein Trainer sieht, welche Videos du angeschaut hast. Ein Clip zählt als „komplett angeschaut“, wenn mindestens "
+         "60 % davon abgespielt wurden. Vorspulen zählt nicht mit. Das steht auch unter der Videoliste."),
+        ("Für Trainer: Team → Videos und Nutzung",
+         "Unter <b>Team → Videos</b> stehen alle Spielzüge nach Spiel, jeder mit fester Kennung (zum Beispiel S1-z3) und "
+         "der Angabe, wer ihn komplett, nur angetippt oder noch gar nicht gesehen hat. Unter <b>Team → Nutzung</b> steht "
+         "je Spielerin, welche Spielzüge sie noch nicht komplett gesehen hat."),
+    ])
 
     bildseite("Team: Rangliste und Kader", "Trainer",
               "Der Bereich <b>Team</b> ist nur für das Trainerteam. Spielerinnen sehen weder ELO-Werte noch die Rangliste.",
@@ -335,7 +415,7 @@ def baue():
               "wie sie eine bestimmte Spielerin sieht.",
               [("24-statistik-spiele", "Statistik Spiele", "Angriffs- und Wurfeffektivität, die Spielzüge "
                 "mit Anteil gut, mittel und schlecht, dazu jede Spielerin einzeln und nach Position."),
-               ("02b-ansehen-als", "Ansehen als", "Oben auf Home wählst du „Ansehen als: Name“. Ein Balken erinnert dich "
+               ("02b-ansehen-als", "Ansehen als", "Im Profil-Menü oben rechts wählst du „Ansehen als: Name“. Ein Balken erinnert dich "
                 "daran. Mit „zurück zu Trainer“ bist du wieder du.")])
 
     textseite("Wie die Zu- und Absagen zusammenkommen", "Trainer", [

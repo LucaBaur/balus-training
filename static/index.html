@@ -9,9 +9,20 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Balu" />
   <link rel="manifest" href="/manifest.webmanifest" />
-  <link rel="apple-touch-icon" href="/icon-192.png?v=3" />
-  <link rel="icon" href="/icon-192.png?v=3" />
-  <link rel="stylesheet" href="/style.css?v=49" />
+  <link rel="apple-touch-icon" href="/icon-180.png?v=4" />
+  <link rel="icon" type="image/svg+xml" href="/icon.svg?v=4" />
+  <link rel="icon" type="image/png" href="/icon-192.png?v=4" />
+  <script src="/theme.js?v=1"></script>
+  <script>
+    /* Hell/Dunkel vor dem ersten Zeichnen setzen, sonst blitzt beim Start die falsche Farbe auf. */
+    (function () {
+      var dunkel = false, wahl = "auto";
+      try { dunkel = matchMedia("(prefers-color-scheme: dark)").matches; } catch (e) {}
+      try { wahl = Theme.laden(window.localStorage); } catch (e) {}
+      try { Theme.anwenden(document, wahl, dunkel); } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="/style.css?v=56" />
   <title>Balu's Training</title>
 </head>
 <body>
@@ -57,7 +68,9 @@
     <button id="server-punkt" title="Serververbindung – tippen zum Synchronisieren">
       <i></i><span id="sync-text">synchron</span><span id="sync-badge" style="display:none">0</span>
     </button>
-    <small id="version"></small>
+    <button id="profil-knopf" class="profil-knopf" aria-label="Profil und Einstellungen" aria-haspopup="dialog">
+      <span id="profil-initial">?</span>
+    </button>
   </header>
   <!-- Ansicht-als: sichtbar, wenn ein Trainer die App als eine Spielerin ansieht. -->
   <div id="ansicht-banner" class="ansicht-banner hidden"></div>
@@ -67,17 +80,20 @@
   <main>
     <!-- Home / Dashboard -->
     <section id="view-home" class="view">
-      <div id="benutzer-leiste" class="benutzer-leiste">
-        <span id="benutzer-name"></span>
-        <select id="ansicht-select" class="hidden" title="Ansehen als …"></select>
-        <button id="logout-btn">Abmelden</button>
-      </div>
       <div id="push-box" class="push-box"></div>
+      <!-- Trainer: was ihn gerade braucht -->
+      <div id="home-aufgaben" class="home-aufgaben"></div>
       <div id="home-naechstes" class="home-karte"></div>
-      <!-- Die nächsten drei Test-/Ligaspiele (mit Abfahrt bei auswärts) -->
-      <div id="home-spiele" class="home-spiele"></div>
       <!-- Termine, für die die eigene Zu-/Absage noch fehlt (nur Spielerinnen) -->
       <div id="home-offen" class="home-offen"></div>
+      <!-- Neue Clips und Analysen (nur Spielerinnen) -->
+      <div id="home-neu" class="home-neu"></div>
+      <div id="home-todo" class="home-todo"></div>
+      <!-- Wo ich gerade mit einem Amt dran bin (Trikots, Leibchen, Getränke, Auto) -->
+      <div id="home-aemter" class="home-aemter"></div>
+      <!-- Die nächsten drei Test-/Ligaspiele (mit Abfahrt bei auswärts) -->
+      <div id="home-spiele" class="home-spiele"></div>
+      <div id="home-tabelle" class="home-tabelle"></div>
       <div id="home-schnell" class="home-schnell"></div>
     </section>
 
@@ -101,6 +117,36 @@
         <span class="aktual-text" id="aktual-videos"></span>
       </div>
       <div id="videos-liste" class="videos-liste"></div>
+    </section>
+
+    <!-- Mitteilungen: Push auf diesem Gerät und welche Arten kommen -->
+    <section id="view-mitteilungen" class="view hidden">
+      <h2>Mitteilungen</h2>
+      <div id="mitteilungen-inhalt"></div>
+    </section>
+
+    <!-- Ich -> To Do: Wochenziele wählen, Feedback und Abgehaktes sehen -->
+    <section id="view-todo" class="view hidden">
+      <h2>To Do</h2>
+      <div id="todo-inhalt"></div>
+    </section>
+
+    <!-- Mannschaft -> Ämter: wer hat welches Amt und was heißt das; Trainer vergibt sie -->
+    <section id="view-aemter" class="view hidden">
+      <h2>Ämter</h2>
+      <div id="aemter-inhalt"></div>
+    </section>
+
+    <!-- Mannschaft -> Listen: Trikots, Leibchen, Getränke, Bussle - wer ist dran, wer wie oft -->
+    <section id="view-listen" class="view hidden">
+      <h2>Listen</h2>
+      <div id="listen-inhalt"></div>
+    </section>
+
+    <!-- Team -> To-Dos (Trainer): Ziele je Spielerin, Wahl der Woche, Feedback -->
+    <section id="view-todo-team" class="view hidden">
+      <h2>To-Dos</h2>
+      <div id="todo-team-inhalt"></div>
     </section>
 
     <!-- Videoanalyse eines Spiels (Ich -> Videos -> Spiel) -->
@@ -136,6 +182,7 @@
       <div id="td-rsvp" class="td-rsvp"></div>
       <div id="td-teilnahme" class="td-teilnahme"></div>
       <div id="td-erinnern" class="td-erinnern"></div>
+      <div id="td-nachb" class="td-nachb"></div>
       <div id="td-plan" class="markdown td-plan"></div>
     </section>
 
@@ -277,14 +324,32 @@
     </section>
   </main>
 
-  <nav id="tableiste">
-    <button data-ober="home" class="aktiv"><span class="t-icon">🏠</span><span class="t-text">Home</span></button>
-    <button data-ober="ich"><span class="t-icon">🙋</span><span class="t-text">Ich</span></button>
-    <button data-ober="training"><span class="t-icon">📋</span><span class="t-text">Training</span></button>
-    <button data-ober="team"><span class="t-icon">👥</span><span class="t-text">Team</span></button>
-    <button data-ober="taktik"><span class="t-icon">🎯</span><span class="t-text">Taktik</span></button>
-    <button data-ober="saison"><span class="t-icon">📅</span><span class="t-text">Saison</span></button>
-  </nav>
+  <!-- Die Reiter baut app.js aus nav.js (je nach Rolle vier bis fünf). -->
+  <nav id="tableiste" aria-label="Bereiche"></nav>
+
+  <!-- Profil-Menü: öffnet sich beim Tipp auf den Kreis oben rechts. -->
+  <div id="profil-menue" class="profil-menue hidden">
+    <div class="pm-hinten" data-schliessen></div>
+    <div class="pm-karte" role="dialog" aria-label="Profil und Einstellungen">
+      <div class="pm-kopf" id="pm-kopf"></div>
+      <div class="pm-liste" id="pm-liste"></div>
+      <div class="pm-zeile pm-darst">
+        <span class="pm-label">Darstellung</span>
+        <div class="pm-seg" id="pm-darstellung" role="group" aria-label="Darstellung">
+          <button type="button" data-darstellung="auto">Auto</button>
+          <button type="button" data-darstellung="hell">Hell</button>
+          <button type="button" data-darstellung="dunkel">Dunkel</button>
+        </div>
+      </div>
+      <!-- Ansehen als (nur Trainer) und Name: früher auf Home -->
+      <div id="benutzer-leiste" class="pm-konto">
+        <span id="benutzer-name"></span>
+        <select id="ansicht-select" class="hidden" title="Ansehen als …"></select>
+      </div>
+      <button type="button" id="pm-sync" class="pm-zeile pm-knopf"><span class="pm-label" id="pm-sync-text">Synchron</span><small id="version"></small></button>
+      <button type="button" id="logout-btn" class="pm-zeile pm-knopf pm-logout">Abmelden</button>
+    </div>
+  </div>
 
   <!-- Auf Seitenebene, NICHT in einer Ansicht: sonst ist er nur sichtbar, solange genau diese Ansicht offen ist -->
   <div id="toast" class="toast hidden"></div>
@@ -292,6 +357,8 @@
   <script src="/local-db.js?v=3"></script>
   <script src="/sync.js?v=11"></script>
   <script src="/teams-local.js?v=2"></script>
-  <script src="/app.js?v=73"></script>
+  <script src="/nav.js?v=2"></script>
+  <script src="/home-logik.js?v=3"></script>
+  <script src="/app.js?v=86"></script>
 </body>
 </html>

@@ -31,12 +31,24 @@ Eintrag, was geändert wurde (samt Checkliste für den Versions-Bump).
 ## Was die App kann
 
 Die Rolle bestimmt, was man sieht: **Trainer** bekommen alles, **Spielerinnen** ihre
-eigenen Sachen. Die Rechte werden im Server erzwungen (`app.py`), nicht nur im
+eigenen Sachen. Die Rechte werden im Server erzwungen (`routen/`), nicht nur im
 Frontend ausgeblendet. Unten die sechs Bereiche der App. Jeden Bereich zeigt die
 **[Anleitung in Bildern](#anleitung-in-bildern)** weiter unten (auch als
 [PDF](docs/anleitung-funktionen/Anleitung-Funktionen.pdf));
 die Installation auf Android und iPhone steht in der
 [Anleitung zum Videoschauen](docs/anleitung-videos/Anleitung-Videos.pdf).
+
+**Navigation:** Spielerinnen haben unten fünf Reiter (Home, Termine, Videos, Playbook, Mannschaft), Trainer fünf
+(Home, Training, Team, Taktik, Saison). Hinter dem Kreis oben rechts liegen Profil, To-Dos,
+Mitteilungen, die Wahl Auto/Hell/Dunkel und Abmelden. Reiter und Namen stehen als Daten in `static/nav.js`.
+
+**Mannschaft** (Ämter) – Wer hat welches Amt (Kapitän, Kassenwart, Waschliste …) und was bedeutet es; die
+eigenen stehen im Menü hinter dem Kreis oben rechts. Ein Amt ist **keine Rolle**: Die Rolle bleibt Trainer oder
+Spielerin, ein Amt hängt an der Spielerin und gibt höchstens gezielte Rechte (`aemter.py`, `AMT_RECHTE`).
+Heute gibt das Amt „Balu-Trainings-App“ das Recht, Trainings und Spiele anzulegen und zu löschen. Ämter mit Liste
+(Waschliste, Leibchen, Getränke, Bussle) teilen pro Termin eine Spielerin ein, zeigen für alle, wie oft jede seit
+dem 1. Juli dran war, und tragen beim Bussle „da / nicht da“ und die Selbstfahrerinnen ein. Der Trainer vergibt
+die Ämter (Trainer: Saison → Ämter). **Wer welches Amt hat, steht nur in der Datenbank**, nie im Code oder Repo.
 
 **Home** – Übersicht mit dem nächsten Training (Zu-/Absage direkt dort), den nächsten drei
 Spielen und Abkürzungen; dazu **Liga** mit Tabelle und Spielplan der Bezirksoberliga
@@ -44,14 +56,19 @@ Spielen und Abkürzungen; dazu **Liga** mit Tabelle und Spielplan der Bezirksobe
 
 **Ich** – *Mein Profil* mit Portrait, Trainingsbeteiligung, Laufchallenge und eigener
 Spielstatistik; *Videos* mit der Videoanalyse der Spiele und einzelnen Szenen-Clips
-(jede Spielerin sieht nur ihre eigenen Szenen, das ganze Spiel sehen alle).
+(jede Spielerin sieht nur ihre eigenen Szenen, das ganze Spiel sehen alle); *To Do* mit den
+Wochenzielen, die der Trainer anlegt: Die Spielerin wählt eins für die Woche, der Trainer gibt Feedback
+und hakt es ab oder lässt es stehen (Trainer-Seite: Team → To-Dos, Wochenend-Push per `todo_wochenende.py`).
 
 **Training**
 - *Termine:* Trainings, Testspiele und Ligaspiele in einer Übersicht, farblich getrennt.
   Zu-/Absage in der App (bei Absage mit Grund), Trainer tragen für andere ein, Frühwarnung
-  bei weniger als sechs Zusagen, Push-Erinnerung an alle ohne Antwort.
+  für Trainer bei weniger als sechs Zusagen (nicht bei freiwilligen Trainings am Freitag, Spielerinnen sehen sie nie), Push-Erinnerung an alle ohne Antwort (automatisch nicht für freiwillige Trainings am Freitag).
 - Im Termin (Trainer): **Trainingsplan als Blöcke** (Dauer optional, Übungen aus der
   Sammlung übernehmbar, nur für Trainer sichtbar) und der Knopf „Aus SpielerPlus aktualisieren“.
+- Im Spiel-Termin (Trainer): **Nachbereitung** mit Gedanken, Gegner-Notizen und Ansprache für Montag
+  (nur für Trainer, mit lokalem Entwurf bei fehlendem Netz); beim Rückspiel erscheinen die Notizen
+  des früheren Spiels gegen denselben Gegner.
 - *Aufstellung:* alle Zusagen auf ihrer Position im Spielfeld (Training oder Spiel,
   Portraits oder Namen).
 - *Einteilung* (Trainer): Zusagen eines Termins übernehmen (oder Anwesende anhaken), faire
@@ -89,11 +106,45 @@ Alle Bilder zeigen eine Testinstanz mit erfundenen Namen. Dieselbe Anleitung gib
 
 *Für: Alle*
 
-Du meldest dich mit deinem Namen und der PIN an, die du vom Trainerteam bekommen hast. Danach bleibst du angemeldet. Unten wechselst du zwischen den Bereichen, oben unter dem Wappen zwischen den Seiten des Bereichs.
+Du meldest dich mit deinem Namen und der PIN an, die du vom Trainerteam bekommen hast. Danach bleibst du angemeldet. Unten wechselst du zwischen den Bereichen, oben unter dem Wappen zwischen den Seiten des Bereichs. Spielerinnen haben vier Reiter, Trainer fünf.
 
-| <img src="docs/anleitung-funktionen/handy/01-login.jpg" width="230" alt="Anmelden"> | <img src="docs/anleitung-funktionen/handy/02-home.jpg" width="230" alt="Home"> | <img src="docs/anleitung-funktionen/handy/03-liga.jpg" width="230" alt="Liga"> |
+| <img src="docs/anleitung-funktionen/handy/01-login.jpg" width="230" alt="Anmelden"> | <img src="docs/anleitung-funktionen/handy/30-spielerin-home.jpg" width="230" alt="Home als Spielerin"> | <img src="docs/anleitung-funktionen/handy/02-home.jpg" width="230" alt="Home als Trainer"> |
 |:---:|:---:|:---:|
-| **1. Anmelden**<br>Name und PIN eingeben. Dein Zugang gehört zu deinem Spielerprofil, du siehst nur, was für dich bestimmt ist. | **2. Home**<br>Das nächste Training und die nächsten Spiele. Der Punkt oben rechts zeigt, ob die App mit dem Server verbunden ist. Ohne Netz bleibt sie benutzbar. | **3. Liga**<br>Tabelle und Spielplan der Bezirksoberliga. Die Daten kommen vom Verband, unser Team ist hervorgehoben. |
+| **1. Anmelden**<br>Name und PIN eingeben. Dein Zugang gehört zu deinem Spielerprofil, du siehst nur, was für dich bestimmt ist. | **2. Home als Spielerin**<br>Das nächste Training steht groß oben, mit den Knöpfen Zusagen, Unsicher und Absagen. Der Punkt oben rechts zeigt, ob die App mit dem Server verbunden ist. | **3. Home als Trainer**<br>Oben „Braucht dich“: Termine mit zu wenigen Zusagen, wer noch nicht geantwortet hat, Spiele ohne Nachbereitung und To-Dos, die auf Feedback warten. Ein Tipp führt direkt hin. |
+
+### Startseite im Detail
+
+*Für: Spielerinnen*
+
+Weiter unten auf Home steht, was sich seit deinem letzten Besuch getan hat, dein Ziel für die Woche und die Tabelle. Alles ist antippbar.
+
+| <img src="docs/anleitung-funktionen/handy/30b-home-weiter.jpg" width="230" alt="Neu für dich, Ziel, Tabelle"> | <img src="docs/anleitung-funktionen/handy/03-liga.jpg" width="230" alt="Liga"> |
+|:---:|:---:|
+| **1. Neu für dich, Ziel, Tabelle**<br>Neue Clips und Videoanalysen erscheinen unter „Neu für dich“, am Reiter „Videos“ sitzt dann ein Punkt. Darunter dein Wochenziel mit dem Feedback des Trainers und dein Tabellenplatz. | **2. Liga**<br>Ein Tipp auf die Tabelle öffnet Tabelle und Spielplan der Bezirksoberliga. Die Daten kommen vom Verband, unser Team ist hervorgehoben. |
+
+### Profil, Darstellung und Mitteilungen
+
+*Für: Alle*
+
+Der Kreis oben rechts öffnet dein Profil-Menü. Dort stellst du ein, ob die App hell oder dunkel sein soll, und welche Mitteilungen du bekommst. Trainer wählen hier auch „Ansehen als“.
+
+| <img src="docs/anleitung-funktionen/handy/40-profil-menue.jpg" width="230" alt="Profil-Menü"> | <img src="docs/anleitung-funktionen/handy/42-home-dunkel.jpg" width="230" alt="Dunkelmodus"> | <img src="docs/anleitung-funktionen/handy/41-mitteilungen.jpg" width="230" alt="Mitteilungen"> |
+|:---:|:---:|:---:|
+| **1. Profil-Menü**<br>Mein Profil, Meine To-Dos, Meine Statistik, Mitteilungen, Darstellung (Auto, Hell, Dunkel), Verbindung mit Version und Abmelden. | **2. Dunkelmodus**<br>Dunkelblau statt Schwarz, das Vereinsblau bleibt erkennbar. „Auto“ folgt dem Gerät: abends dunkel, tagsüber hell. | **3. Mitteilungen**<br>Oben steht, ob sie auf diesem Gerät an sind, mit Testnachricht. Darunter schaltest du Arten einzeln aus: Termine, Videos, Rückmeldungen. Trainer bekommen zusätzlich Warnungen. |
+
+### Welche Mitteilungen kommen
+
+*Für: Alle*
+
+**Termine** Eine Erinnerung, wenn du noch nicht geantwortet hast. Am Tag vor einem Spiel und am Spieltag die Abfahrts- oder Anwurfzeit, wenn du zugesagt hast oder „unsicher“ warst. Eine Nachricht, wenn ein Termin abgesagt wird, für den du zugesagt hattest.
+
+**Videos** Ein neuer Clip für dich oder eine neue Videoanalyse, in der du vorkommst. Bei Analysen kommt die Nachricht, sobald das Video da ist, und nur einmal.
+
+**Rückmeldungen** Feedback des Trainers zu deinem To-Do und Antworten auf deine Fragen unter Videos. Trainer bekommen hier die Fragen der Spielerinnen.
+
+**Warnungen (nur Trainer)** Wenn für einen kommenden Termin weniger als sechs Zusagen da sind. Freitags-Trainings sind freiwillig und lösen sie nicht aus. Die Warnung kommt einmal, wenn die Zahl unter die Grenze fällt, nicht bei jeder weiteren Absage.
+
+**Auf dem iPhone** Mitteilungen gehen dort nur, wenn die App auf dem Home-Bildschirm liegt: Teilen-Symbol antippen, „Zum Home-Bildschirm“ wählen und die App von dort öffnen.
 
 ### Termine
 
@@ -103,7 +154,7 @@ Unter **Training → Termine** stehen alle kommenden Trainings, Testspiele und L
 
 | <img src="docs/anleitung-funktionen/handy/04-termine.jpg" width="230" alt="Terminliste"> | <img src="docs/anleitung-funktionen/handy/06-termin-aufgeklappt.jpg" width="230" alt="Aufklappen"> | <img src="docs/anleitung-funktionen/handy/05-termin-neu.jpg" width="230" alt="Neuer Termin"> |
 |:---:|:---:|:---:|
-| **1. Terminliste**<br>Rechts steht die Zahl der Zusagen. Die Warnung oben erscheint, wenn bei einem Termin weniger als sechs zugesagt haben. | **2. Aufklappen**<br>Ein Tipp auf den Termin zeigt, wer zu- und abgesagt hat. Trainer tragen hier für andere ein: Haken = zusagen, Fragezeichen = unsicher, Kreuz = absagen. | **3. Neuer Termin**<br>Trainer legen Trainings, Testspiele und Ligaspiele von Hand an. Bei Spielen kommen Gegner, Heim oder Auswärts und die Abfahrt dazu. |
+| **1. Terminliste**<br>Rechts steht die Zahl der Zusagen. Trainer sehen eine Warnung, wenn bei einem Termin weniger als sechs zugesagt haben, außer bei freiwilligen Trainings (Freitag). | **2. Aufklappen**<br>Ein Tipp auf den Termin zeigt, wer zu- und abgesagt hat. Trainer tragen hier für andere ein: Haken = zusagen, Fragezeichen = unsicher, Kreuz = absagen. | **3. Neuer Termin**<br>Trainer legen Trainings, Testspiele und Ligaspiele von Hand an. Bei Spielen kommen Gegner, Heim oder Auswärts und die Abfahrt dazu. |
 
 ### Training vorbereiten
 
@@ -123,7 +174,7 @@ Zu- und Absage gehören zu den wichtigsten Dingen in der App. Antworten kannst d
 
 | <img src="docs/anleitung-funktionen/handy/30-spielerin-home.jpg" width="230" alt="Auf der Startseite"> | <img src="docs/anleitung-funktionen/handy/31-spielerin-termine.jpg" width="230" alt="Im Termin"> | <img src="docs/anleitung-funktionen/handy/32-absage-grund.jpg" width="230" alt="Absagen mit Grund"> |
 |:---:|:---:|:---:|
-| **1. Auf der Startseite**<br>Wo deine Antwort noch fehlt, steht sie unter „Deine Antwort fehlt noch“ mit drei Knöpfen. | **2. Im Termin**<br>Oben deine Antwort, darunter alle anderen nach Zusage, Unsicher, Absage und noch keine Rückmeldung. | **3. Absagen mit Grund**<br>Bei einer Absage wählst du einen Grund oder schreibst einen eigenen. Ohne Grund geht die Absage nicht raus. |
+| **1. Auf der Startseite**<br>Das nächste Training steht groß oben mit drei Knöpfen. Weitere Termine ohne Antwort stehen darunter unter „Deine Antwort fehlt noch“. | **2. Im Termin**<br>Oben deine Antwort, darunter alle anderen nach Zusage, Unsicher, Absage und noch keine Rückmeldung. | **3. Absagen mit Grund**<br>Bei einer Absage wählst du einen Grund oder schreibst einen eigenen. Ohne Grund geht die Absage nicht raus. |
 
 ### Aufstellung und Teams
 
@@ -145,15 +196,55 @@ Nach dem Spiel trägst du das Ergebnis ein. Beim Planen helfen dir die Übungssa
 |:---:|:---:|:---:|
 | **1. Ergebnis eintragen**<br>Tippe auf das Team, das gewonnen hat, oder auf Unentschieden. Die ELO-Werte ändern sich, ein Spiel lässt sich rückgängig machen. | **2. Übungen**<br>Die Sammlung eurer Übungen. Beim Planen übernimmst du sie als Block. | **3. Coach**<br>Beschreibe das Training, getippt oder per Sprachnachricht. Der Coach fragt nach, wenn etwas fehlt, und hängt den Plan auf Wunsch direkt ans Training. |
 
-### Mein Profil und Videos
+### Mein Profil und To-Dos
 
 *Für: Spielerinnen*
 
-Unter **Ich** findest du alles zu dir selbst. Du siehst nur deine eigenen Zahlen und deine eigenen Szenen.
+Dein Profil öffnest du über den Kreis oben rechts. Du siehst nur deine eigenen Zahlen. To-Dos sind kleine Ziele, die dein Trainer für dich anlegt, zum Beispiel „Fangen mit zwei Händen“.
 
-| <img src="docs/anleitung-funktionen/handy/33-profil.jpg" width="230" alt="Mein Profil"> | <img src="docs/anleitung-funktionen/handy/34-videos.jpg" width="230" alt="Videos"> | <img src="docs/anleitung-funktionen/handy/35-analyse.jpg" width="230" alt="Videoanalyse"> |
-|:---:|:---:|:---:|
-| **1. Mein Profil**<br>Deine Trainingsbeteiligung, die Laufchallenge und deine Statistik aus den analysierten Spielen. | **2. Videos**<br>Oben die Spiele mit Videoanalyse, darunter einzelne Szenen als kurze Clips. | **3. Videoanalyse**<br>Deine Tore, Fehlwürfe und Vorlagen im Spiel. Spielzüge sind mit einer Ampel bewertet. Ein Tipp auf eine Szene spielt den Clip ab. |
+| <img src="docs/anleitung-funktionen/handy/33-profil.jpg" width="230" alt="Mein Profil"> | <img src="docs/anleitung-funktionen/handy/36-todo.jpg" width="230" alt="To-Dos"> |
+|:---:|:---:|
+| **1. Mein Profil**<br>Deine Trainingsbeteiligung, die Laufchallenge und deine Statistik aus den analysierten Spielen. | **2. To-Dos**<br>Oben das Ziel dieser Woche mit dem Feedback des Trainers. Darunter die Ziele zur Auswahl. Pro Woche wählst du eins, „Wählen“ ist dann für die übrigen grau. |
+
+### So laufen die Wochen-To-Dos
+
+*Für: Alle*
+
+**Wählen** Der Trainer legt für jede Spielerin ein paar Ziele an. Du wählst eins für die laufende Woche. Wer wechseln will, nimmt die Auswahl zurück, solange es noch kein Feedback gibt.
+
+**Feedback** Im Training schaut der Trainer, wie es lief, und gibt kurz Feedback. Er entscheidet: „Bleibt noch“ (das Ziel bleibt offen und kann nächste Woche wieder gewählt werden) oder „Erledigt“ (wird abgehakt und steht unter „Geschafft“). Du bekommst dazu eine Mitteilung.
+
+**Erinnerung für den Trainer** Am Sonntag meldet der Server den Trainern, wer noch auf Feedback wartet. Auf Home steht das auch jederzeit unter „Braucht dich“.
+
+### To-Dos für das Team
+
+*Für: Trainer*
+
+Unter **Team → To-Dos** legst du je Spielerin Ziele an, siehst die Wahl der Woche und gibst Feedback.
+
+| <img src="docs/anleitung-funktionen/handy/26-team-todos.jpg" width="230" alt="Wer wartet auf dich"> | <img src="docs/anleitung-funktionen/handy/27-team-todos-feedback.jpg" width="230" alt="Gegebenes Feedback"> |
+|:---:|:---:|
+| **1. Wer wartet auf dich**<br>Oben steht, wie viele auf Feedback warten. Bei einer gewählten Aufgabe schreibst du kurz, wie es lief, und wählst „Bleibt noch“ oder „Erledigt“. | **2. Gegebenes Feedback**<br>Dein Feedback steht bei der Aufgabe und bei der Spielerin. Mit den kleinen Knöpfen änderst du Texte, löschst Ziele oder öffnest Erledigtes wieder. |
+
+### Videos
+
+*Für: Spielerinnen*
+
+Unter **Videos** findest du die Spiele mit Videoanalyse und einzelne Szenen als kurze Clips. Du siehst nur Szenen, in denen du vorkommst, das ganze Spiel sehen alle.
+
+| <img src="docs/anleitung-funktionen/handy/34-videos.jpg" width="230" alt="Videos"> | <img src="docs/anleitung-funktionen/handy/35-analyse.jpg" width="230" alt="Videoanalyse"> |
+|:---:|:---:|
+| **1. Videos**<br>Oben die Spiele mit Videoanalyse, darunter einzelne Szenen als kurze Clips. Ein Punkt am Reiter zeigt, dass etwas Neues da ist. | **2. Videoanalyse**<br>Deine Tore, Fehlwürfe und Vorlagen im Spiel. Spielzüge sind mit einer Ampel bewertet. Ein Tipp auf eine Szene spielt den Clip ab. |
+
+### Fragen, Kommentare und was der Trainer sieht
+
+*Für: Alle*
+
+**Fragen und Kommentare** Unter jedem Video steht „Fragen & Kommentare“. Wer das Video sehen darf, kann schreiben und lesen. Auf einen Kommentar kann man antworten. Mit dem Haken „Nur für Trainer sichtbar“ bleibt eine Frage privat. Schreibt eine Spielerin, bekommen die Trainer eine Mitteilung, antwortet der Trainer, bekommt sie eine.
+
+**Was der Trainer sieht** Dein Trainer sieht, welche Videos du angeschaut hast. Ein Clip zählt als „komplett angeschaut“, wenn mindestens 60 % davon abgespielt wurden. Vorspulen zählt nicht mit. Das steht auch unter der Videoliste.
+
+**Für Trainer: Team → Videos und Nutzung** Unter **Team → Videos** stehen alle Spielzüge nach Spiel, jeder mit fester Kennung (zum Beispiel S1-z3) und der Angabe, wer ihn komplett, nur angetippt oder noch gar nicht gesehen hat. Unter **Team → Nutzung** steht je Spielerin, welche Spielzüge sie noch nicht komplett gesehen hat.
 
 ### Team: Rangliste und Kader
 
@@ -203,7 +294,7 @@ Für jedes analysierte Spiel gibt es eine Auswertung. Und du kannst die App so a
 
 | <img src="docs/anleitung-funktionen/handy/24-statistik-spiele.jpg" width="230" alt="Statistik Spiele"> | <img src="docs/anleitung-funktionen/handy/02b-ansehen-als.jpg" width="230" alt="Ansehen als"> |
 |:---:|:---:|
-| **1. Statistik Spiele**<br>Angriffs- und Wurfeffektivität, die Spielzüge mit Anteil gut, mittel und schlecht, dazu jede Spielerin einzeln und nach Position. | **2. Ansehen als**<br>Oben auf Home wählst du „Ansehen als: Name“. Ein Balken erinnert dich daran. Mit „zurück zu Trainer“ bist du wieder du. |
+| **1. Statistik Spiele**<br>Angriffs- und Wurfeffektivität, die Spielzüge mit Anteil gut, mittel und schlecht, dazu jede Spielerin einzeln und nach Position. | **2. Ansehen als**<br>Im Profil-Menü oben rechts wählst du „Ansehen als: Name“. Ein Balken erinnert dich daran. Mit „zurück zu Trainer“ bist du wieder du. |
 
 ### Wie die Zu- und Absagen zusammenkommen
 
@@ -220,6 +311,17 @@ Für jedes analysierte Spiel gibt es eine Auswertung. Und du kannst die App so a
 **Und wenn etwas nicht stimmt?** Fehlt eine Spielerin in der Liste oder stimmt eine Antwort nicht, trag sie im Termin selbst ein. Die Version der App steht oben rechts neben dem Verbindungspunkt. Was sich in welcher Version geändert hat, steht im Changelog.
 
 <!-- ANLEITUNG-ENDE -->
+
+## Mitteilungen (Push)
+
+Ausgelöst werden sie in `benachrichtigung.py` (neuer Clip, neue Videoanalyse, abgesagter Termin, zu wenige
+Zusagen, Zuteilung bei einem Amt, Art `aemter`) und in den Cronjobs `push_spieltag.py` (Abfahrt/Anwurf am Vortag
+und am Spieltag) und `push_amt_erinnerung.py` (alle zehn Minuten; eine Stunde vor Training, Abfahrt oder Anwurf
+„heute nicht vergessen“: Mitbring-Ämter wie Tape und Harz/Öl, dazu Getränke, Leibchen, Trikots und Fahrten für
+die, die dafür eingeteilt sind; Wer abgesagt hat, bekommt nichts). Versendet wird über
+`push.sende(..., art=...)`; dort wird nach den Einstellungen der Person gefiltert (Tabelle `push_praeferenz`,
+Menü Profil → Mitteilungen). Einmal-Nachrichten merkt sich `push_gesendet`, damit ein zweiter Lauf nichts doppelt
+sendet. Cron siehe CHANGELOG v0.65.0.
 
 ## SpielerPlus-Brücke
 
@@ -249,8 +351,10 @@ des Sync-Ordners (`SP_SYNC_DIR`, Standard `~/anytype-sync`).
 |-------------------|-------------------------------------------------------------|
 | `elo.py`          | ELO-Berechnung (individuell gegen Gegnerteam-Schnitt)       |
 | `teams.py`        | Faire Team-Aufteilung (min. ELO-Differenz, Torhüter-Pflicht)|
-| `db.py`           | SQLite-Datenhaltung (Spieler, Spiele, ELO-Verlauf)          |
-| `app.py`          | FastAPI-Backend (JSON-Endpunkte + liefert die PWA aus)      |
+| `db.py`           | Fassade: reicht alles aus `daten/` unter dem Namen `db` durch (`db.funktion(...)` überall wie gewohnt) |
+| `daten/`          | SQLite-Datenhaltung nach Themen: `schema`, `core` (Verbindung, Migrationen), `spieler`, `spiele` (ELO), `termine`, `wiki`, `todos`, `clips`, `analysen`, `nutzung`, `kommentare`, `nachbereitung`, `push`, `benutzer`, `chat`, `zeit` |
+| `app.py`          | Baut die Anwendung zusammen: Middleware, Datenbank, Router, PWA-Auslieferung |
+| `routen/`         | Die JSON-Endpunkte, ein `APIRouter` je Bereich (`termine`, `todos`, `videos`, `analysen`, `mannschaft`, …). `gemeinsam.py` hat Datenbankverbindung und Rollenprüfung, `pfade.py` die Ablageorte |
 | `static/`         | PWA (index.html, app.js, style.css, manifest, sw, Icons)    |
 | `portraits/`      | Original-Fotos der Spielerinnen (groß, unverändert)         |
 | `static/portraits/` | Zugeschnittene Portraits für die App + `index.json`        |
@@ -481,18 +585,18 @@ Die `.env` liegt nur auf dem Server (nicht im Repo).
 # Dienst steuern (auf dem Server; bei SSH ohne Login: XDG_RUNTIME_DIR setzen)
 export XDG_RUNTIME_DIR=/run/user/$(id -u)
 systemctl --user status|restart|stop elo.service
-
-# Neu deployen (vom PC aus, im Ordner „Coding"):
-tar czf - --exclude='__pycache__' --exclude='elo.db' --exclude='.env' \
-  --exclude='media' -C . Balu-Training \
-  | ssh you@homeserver "tar xzf - -C ~/elo --strip-components=1 && \
-    export XDG_RUNTIME_DIR=/run/user/\$(id -u) && systemctl --user restart elo.service"
 ```
 
-`bash deploy.sh` fasst nur die `static/`-Dateien an — für Änderungen an `app.py`
-oder `db.py` (etwa die Szenen-Videos) den vollen `tar`-Weg oben nehmen. Der
-Medienordner entsteht beim Start von selbst; falls nicht, einmalig
-`mkdir -p ~/elo/media/clips` auf dem Server.
+**Deployen** (vom PC aus, im Projektordner, Git Bash): `bash deploy.sh [Beschreibung]`.
+Das Skript testet zuerst (Syntax, alle Tests, nur bei Grün weiter), vergleicht per MD5 mit dem
+Server und lädt **nur Geändertes** hoch (alle `*.py`, `static/*`, Portraits, CHANGELOG, README).
+Vorher sichert es die betroffenen Dateien als `datei.bak-<Datum>-vor-<Beschreibung>`, bei Änderungen
+am Backend auch die Datenbank (SQLite-Backup, `integrity_check`). Danach startet es den Dienst
+neu und prüft HTTP 200 und die ausgelieferte `APP_VERSION`; schlägt etwas fehl, spielt es die
+Sicherungen automatisch zurück. `--trocken` zeigt nur, was passieren würde. Die Zugangsdaten
+stehen in `deploy.env` (nicht im Repo, Vorlage `deploy.env.example`). Nicht vom Skript erledigt:
+neue Pakete bei geänderter `requirements.txt` und neue Cronjobs. Der Medienordner entsteht beim
+Start von selbst; falls nicht, einmalig `mkdir -p ~/elo/media/clips` auf dem Server.
 
 ## Zugriff in der Halle (Tailscale)
 
@@ -518,6 +622,10 @@ node tests/nutzung_ui.test.mjs
 py tests/demo_test.py
 node tests/offline.test.mjs
 node tests/teams.test.mjs
+py tests/push_ausloeser_test.py
+node tests/theme.test.mjs
+node tests/nav.test.mjs
+node tests/home-logik.test.mjs
 ```
 
 ## Demo-Team (zum Ausprobieren und für Demovideos)

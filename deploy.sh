@@ -66,8 +66,8 @@ schritt "2/5 Vergleich mit dem Server"
 "${SSH[@]}" true 2>/dev/null || abbruch "Server $DEPLOY_HOST nicht erreichbar (Heimnetz? SSH-Schluessel?)"
 
 shopt -s nullglob
-DATEIEN=(*.py requirements.txt CHANGELOG.md README.md
-         static/*.js static/*.css static/*.html static/*.webmanifest static/*.png static/portraits/*)
+DATEIEN=(*.py daten/*.py routen/*.py requirements.txt CHANGELOG.md README.md
+         static/*.js static/*.css static/*.html static/*.webmanifest static/*.png static/*.svg static/portraits/*)
 shopt -u nullglob
 
 normal() { sed 's/^\([0-9a-f]\{32\}\) [ *]/\1 /'; }       # "hash *name" / "hash  name" -> "hash name"
@@ -142,6 +142,7 @@ trap zurueck ERR
 # ---------------------------------------------------------------- 4 Hochladen ----
 schritt "4/5 Hochladen"
 # static/ zuerst, Backend zuletzt: der Neustart kommt erst, wenn alles Passende da ist.
+"${SSH[@]}" "cd '$DIR' && mkdir -p daten routen"      # Pakete db (daten/) und app (routen/) beim ersten Mal anlegen
 for f in "${ZU_LADEN[@]}"; do case "$f" in static/*) scp -qp "$f" "$DEPLOY_HOST:$DIR/$f"; echo "  hoch  $f" ;; esac; done
 for f in "${ZU_LADEN[@]}"; do case "$f" in static/*) ;; *) scp -qp "$f" "$DEPLOY_HOST:$DIR/$f"; echo "  hoch  $f" ;; esac; done
 

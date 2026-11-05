@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from fastapi.testclient import TestClient  # noqa: E402
 
 import app as balu  # noqa: E402
+from routen import spielerplus as spielerplus_route  # noqa: E402
 import auth  # noqa: E402
 import db  # noqa: E402
 import sp_import  # noqa: E402
@@ -132,7 +133,7 @@ assert r.status_code == 200 and r.json()["eingetragen"] == 1, r.text
 assert T.post("/api/spielerplus-abgleich").status_code == 429, "Mindestabstand"
 print("ok Endpunkt (Rolle, Mindestabstand)")
 
-balu._sp_zuletzt = 0.0
+spielerplus_route._sp_zuletzt = 0.0
 
 
 def kaputt(tage=14, heute=None):

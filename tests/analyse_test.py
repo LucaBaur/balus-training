@@ -13,15 +13,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from fastapi.testclient import TestClient  # noqa: E402
 
 import app as balu  # noqa: E402
+from routen import pfade  # noqa: E402
 import auth  # noqa: E402
 import db  # noqa: E402
 
 tmp = Path(tempfile.mkdtemp(prefix="analyse_test_"))
 DB = tmp / "test.db"
-balu.MEDIA_SPIELE = tmp / "spiele"
-balu.MEDIA_SPIELE.mkdir()
-balu.MEDIA_SZENEN = tmp / "szenen"
-balu.MEDIA_SZENEN.mkdir()
+pfade.MEDIA_SPIELE = tmp / "spiele"
+pfade.MEDIA_SPIELE.mkdir()
+pfade.MEDIA_SZENEN = tmp / "szenen"
+pfade.MEDIA_SZENEN.mkdir()
 _verbinde = db.verbinde
 db.verbinde = lambda pfad=DB: _verbinde(pfad)
 
@@ -93,14 +94,14 @@ r = T.put(f"/api/analysen/{aid}/video", content=iter([video[:300000], video[3000
 check(r.status_code == 200 and r.json()["bytes"] == len(video), "Video gestreamt hochgeladen")
 check(A.put(f"/api/analysen/{aid}/video", content=b"x").status_code == 403, "Spielerin darf kein Video hochladen")
 check(T.put(f"/api/analysen/{aid}/video", content=b"").status_code == 400, "leeres Video abgelehnt")
-check(len(list(balu.MEDIA_SPIELE.glob("*.part"))) == 0, "keine .part-Reste")
-check(len(list(balu.MEDIA_SPIELE.glob("*.mp4"))) == 1, "genau eine Videodatei (leerer Upload ersetzt nichts)")
+check(len(list(pfade.MEDIA_SPIELE.glob("*.part"))) == 0, "keine .part-Reste")
+check(len(list(pfade.MEDIA_SPIELE.glob("*.mp4"))) == 1, "genau eine Videodatei (leerer Upload ersetzt nichts)")
 g = T.get(f"/api/analysen/{aid}/video", headers={"Range": "bytes=10-19"})
 check(g.status_code == 206 and g.content == video[10:20], "Range-Abruf (Seek) funktioniert")
 T.post("/api/analysen", json=DATEN)
 check(T.get(f"/api/analysen/{aid}").json()["video_da"], "Daten-Update behaelt das Video")
 T.put(f"/api/analysen/{aid}/video", content=video)
-check(len(list(balu.MEDIA_SPIELE.glob("*.mp4"))) == 1, "neues Video ersetzt das alte Datei")
+check(len(list(pfade.MEDIA_SPIELE.glob("*.mp4"))) == 1, "neues Video ersetzt das alte Datei")
 
 # ---- Szenen-Clips ----------------------------------------------------------------
 clip = b"\x00\x00\x00\x18ftypmp42" + bytes(range(256)) * 40                      # ~10 KB
@@ -112,7 +113,7 @@ check(T.put(f"/api/analysen/{aid}/clips/z%201?von=92&bis=104", content=clip).sta
 check(T.put(f"/api/analysen/{aid}/clips/z1?von=104&bis=92", content=clip).status_code == 400, "Ausschnitt mit bis < von abgelehnt")
 check(T.put(f"/api/analysen/{aid}/clips/z1?von=92&bis=104", content=b"").status_code == 400, "leerer Clip abgelehnt")
 check(T.put(f"/api/analysen/999/clips/z1?von=92&bis=104", content=clip).status_code == 404, "Clip zu unbekannter Analyse: 404")
-check(len(list(balu.MEDIA_SZENEN.glob("*"))) == 0, "abgelehnte Uploads hinterlassen nichts")
+check(len(list(pfade.MEDIA_SZENEN.glob("*"))) == 0, "abgelehnte Uploads hinterlassen nichts")
 r = T.put(f"/api/analysen/{aid}/clips/z1?von=92&bis=104", content=iter([clip[:4000], clip[4000:]]))
 check(r.status_code == 200 and r.json()["bytes"] == len(clip), "Clip z1 gestreamt hochgeladen")
 T.put(f"/api/analysen/{aid}/clips/z3?von=187&bis=204", content=clip)
@@ -120,7 +121,7 @@ T.put(f"/api/analysen/{aid}/clips/e2?von=194&bis=204", content=clip)
 l = {x["key"]: x for x in T.get(f"/api/analysen/{aid}/clips").json()}
 check(set(l) == {"z1", "z3", "e2"} and l["z1"]["von"] == 92 and l["z1"]["bis"] == 104, "Clip-Liste nennt Kennung und Ausschnitt")
 T.put(f"/api/analysen/{aid}/clips/z1?von=91&bis=105", content=clip + b"x")
-check(len(list(balu.MEDIA_SZENEN.glob("*.mp4"))) == 3, "erneuter Upload ersetzt den Clip (weiter 3 Dateien)")
+check(len(list(pfade.MEDIA_SZENEN.glob("*.mp4"))) == 3, "erneuter Upload ersetzt den Clip (weiter 3 Dateien)")
 check({x["key"]: x for x in T.get(f"/api/analysen/{aid}/clips").json()}["z1"]["von"] == 91, "ersetzter Clip hat den neuen Ausschnitt")
 inh = T.get(f"/api/analysen/{aid}").json()
 cid_z1 = [z["clip_id"] for z in inh["zuege"] if z["name"] == "Jugo"][0]
@@ -142,7 +143,7 @@ check(all(x["clip_id"] == cid_z1 for x in ar["events"] + ar["zuege"]), "Annas Sz
 daten2 = {**DATEN, "events": [e for e in DATEN["events"] if e.get("key") != "e2"]}
 r = T.post("/api/analysen", json=daten2)
 check(r.json()["clips"] == 2, "Szene entfernt: ihr Clip verschwindet")
-check(len(list(balu.MEDIA_SZENEN.glob("*.mp4"))) == 2, "Clip-Datei der entfernten Szene ist von der Platte gelöscht")
+check(len(list(pfade.MEDIA_SZENEN.glob("*.mp4"))) == 2, "Clip-Datei der entfernten Szene ist von der Platte gelöscht")
 check(sorted(x["key"] for x in T.get(f"/api/analysen/{aid}/clips").json()) == ["z1", "z3"], "Clips der übrigen Szenen bleiben")
 T.post("/api/analysen", json=DATEN)                                               # Daten-Upload ersetzt Zeilen, Clips bleiben
 check(sorted(x["key"] for x in T.get(f"/api/analysen/{aid}/clips").json()) == ["z1", "z3"], "Daten-Upload lässt Clips unberührt")
@@ -196,8 +197,8 @@ check(O.get(f"/api/analysen/{aid}/video").status_code == 403, "Konto ohne Profil
 # Loeschen
 check(A.post(f"/api/analysen/{aid}/loeschen").status_code == 403, "Spielerin darf nicht loeschen")
 check(T.post(f"/api/analysen/{aid}/loeschen").status_code == 200, "Trainer loescht")
-check(len(list(balu.MEDIA_SPIELE.glob("*.mp4"))) == 0, "Videodatei mit geloescht")
-check(len(list(balu.MEDIA_SZENEN.glob("*"))) == 0, "Clip-Dateien mit geloescht")
+check(len(list(pfade.MEDIA_SPIELE.glob("*.mp4"))) == 0, "Videodatei mit geloescht")
+check(len(list(pfade.MEDIA_SZENEN.glob("*"))) == 0, "Clip-Dateien mit geloescht")
 check(T.get("/api/analysen").json() == [], "Liste leer")
 c = db.verbinde()
 check(c.execute("SELECT COUNT(*) FROM spiel_event").fetchone()[0] == 0

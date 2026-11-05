@@ -34,7 +34,7 @@ clip = db.clip_anlegen(conn, "Kreisanspiel", None, "x.mp4", None, 10.0, None, [a
 conn.close()
 
 gesendet = []                       # (empfaenger, titel, text)
-push.sende = lambda conn, ids, titel, text, url="/": gesendet.append((sorted(ids), titel, text)) or {}
+push.sende = lambda conn, ids, titel, text, url="/", art=None: gesendet.append((sorted(ids), titel, text)) or {}
 
 
 def client(name, pin):
@@ -135,5 +135,48 @@ eigener = next(x for x in client("Trainer", "1111").get("/api/clips").json() if 
 check(eigener["kommentare"] > 0, "Eigene Clips: Kommentarzahl am Clip")
 check(all("kommentare" not in x for x in client("Anna", "2222").get("/api/clips").json()),
       "Spielerin bekommt keine Zaehler (Clipliste unveraendert)")
+
+# "Braucht dich": Faeden, deren letzte Nachricht nicht vom Trainer kommt
+c = db.verbinde()
+clip2 = db.clip_anlegen(c, "Sperre stellen", None, "y.mp4", None, 10.0, None, [anna, bea])
+Z2 = f"clip:{clip2}"
+T2 = client("Trainer", "1111")      # T steckt nach dem Test oben im Ansicht-Modus
+
+
+def schreibe(benutzer, text, antwort_auf=None, ziel=Z2):
+    cur = c.execute("INSERT INTO video_kommentar (ziel, benutzer_id, text, antwort_auf) VALUES (?, ?, ?, ?)",
+                    (ziel, benutzer, text, antwort_auf))
+    c.commit()
+    return cur.lastrowid
+
+
+def offen_z2():
+    return [v for v in T2.get("/api/fragen-offen").json() if v["ziel"] == Z2]
+
+
+check(A.get("/api/fragen-offen").status_code == 403, "Offene Fragen: Spielerin bekommt 403")
+check(TestClient(balu.app).get("/api/fragen-offen").status_code == 401, "Offene Fragen: ohne Login 401")
+check(offen_z2() == [], "Ohne Kommentare ist nichts offen")
+f1 = schreibe(anna_b, "Wann stelle ich die Sperre?")
+f2 = schreibe(bea_b, "Und wer stellt die zweite?")
+o = offen_z2()
+check(len(o) == 1 and o[0]["anzahl"] == 2 and set(o[0]["von"]) == {"Anna", "Bea"},
+      "Zwei unbeantwortete Fragen zählen zusammen als eine Zeile pro Video")
+check(o[0]["titel"] == "Video", "Ohne gemeldeten Titel steht „Video“")
+schreibe(trainer_id, "Beim Anwurf.", f1)
+o = offen_z2()
+check(len(o) == 1 and o[0]["anzahl"] == 1 and o[0]["von"] == ["Bea"], "Beantwortete Frage fällt heraus")
+nachfrage = schreibe(anna_b, "Danke, und danach?", f1)
+check(offen_z2()[0]["anzahl"] == 2, "Nachfrage nach der Trainer-Antwort macht den Faden wieder offen")
+schreibe(trainer_id, "Dann ins Rückraumspiel.", f1)
+schreibe(trainer_id, "Zweite stellt Clara.", f2)
+check(offen_z2() == [], "Alles beantwortet: nichts offen")
+schreibe(trainer_id, "Eigener Kommentar des Trainers")
+check(offen_z2() == [], "Eigene Trainer-Kommentare zählen nicht als Frage")
+c.execute("INSERT INTO video_kommentar (ziel, benutzer_id, text) VALUES ('clip:99999', ?, 'weg')", (anna_b,))
+c.commit()
+check(all(v["ziel"] != "clip:99999" for v in T2.get("/api/fragen-offen").json()),
+      "Fragen zu nicht mehr vorhandenen Videos werden nicht angezeigt")
+c.close()
 
 print("\nAlle Tests gruen.")

@@ -2,8 +2,8 @@
 // aus dem Cache geliefert (auch offline / bei schlechtem Netz kein Warten), und
 // im Hintergrund frisch nachgeladen. Neue Versionen kommen ueber CACHE-Bump +
 // controllerchange-Reload (siehe app.js) trotzdem zuverlaessig an.
-const CACHE = "elo-v74";
-const HUELLE = ["/", "/index.html", "/style.css?v=49", "/local-db.js?v=3", "/sync.js?v=10", "/teams-local.js?v=2", "/app.js?v=73", "/tvg-logo.png?v=1", "/manifest.webmanifest", "/portraits/index.json"];
+const CACHE = "elo-v87";
+const HUELLE = ["/", "/index.html", "/style.css?v=56", "/theme.js?v=1", "/local-db.js?v=3", "/sync.js?v=11", "/teams-local.js?v=2", "/nav.js?v=2", "/home-logik.js?v=3", "/app.js?v=85", "/tvg-logo.png?v=1", "/manifest.webmanifest", "/portraits/index.json"];
 
 // Die Portraits gehoeren zur Huelle, stehen aber nicht fest in der Liste:
 // welche es gibt, sagt /portraits/index.json. So muss hier nichts nachgepflegt
@@ -44,8 +44,22 @@ function cacheFirst(request, cacheKey) {
   });
 }
 
+// Selbst hochgeladene Portraits: die URL traegt ?v=<Version>, ein neues Foto ist
+// also eine neue URL - der Inhalt ist unveraenderlich, Cache zuerst genuegt.
+// Nur Erfolge werden gemerkt (ein 401/404 darf nie als "Foto" im Cache landen).
+function portraitHolen(request) {
+  return caches.match(request).then((cached) => cached || fetch(request).then((resp) => {
+    if (resp.ok) caches.open(CACHE).then((c) => c.put(request, resp.clone())).catch(() => {});
+    return resp;
+  }));
+}
+
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
+  if (e.request.method === "GET" && url.pathname.startsWith("/api/portrait/")) {
+    e.respondWith(portraitHolen(e.request));
+    return;
+  }
   if (e.request.method !== "GET" || url.pathname.startsWith("/api/")) return;
 
   // App-Start (Navigation): immer die gecachte Shell (/index.html) zuerst.
@@ -66,7 +80,7 @@ self.addEventListener("push", (e) => {
   e.waitUntil(self.registration.showNotification(titel, {
     body: d.body || "",
     icon: "/icon-192.png",
-    badge: "/icon-192.png",
+    badge: "/badge-96.png",
     data: { url: d.url || "/" },
   }));
 });

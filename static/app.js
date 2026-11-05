@@ -33,57 +33,33 @@ async function api(pfad, methode = "GET", body = null) {
 }
 
 // ================================================================ Navigation ==
-//  Zwei Ebenen: unten die Überpunkte (#tableiste), oben die Unterpunkte des
-//  aktiven Überpunkts (#subnav). Eine NAV-Konfiguration treibt beides.
+//  Zwei Ebenen: unten die Reiter (#tableiste), oben die Unterpunkte des aktiven
+//  Reiters (#subnav). Aufbau und Namen stehen als reine Daten in nav.js (NavKonfig);
+//  hier steht nur, was beim Öffnen eines Unterpunkts geladen wird.
 //
-//  ROLLEN: 'trainer' sieht alles, 'spieler' nur eine reduzierte Auswahl. Die
-//  Rolle filtert hier NUR die Sichtbarkeit — das ist KEINE Sicherheitsgrenze!
-//  Echte, server-seitig erzwungene Rollen + Login kommen in Phase 4. Bis dahin
-//  ist der Umschalter reine Vorschau.
-const NAV = [
-  { key: "home", label: "Home", rollen: ["trainer", "spieler"], unter: [
-    { key: "home", label: "Übersicht", view: "view-home", init: ladeHome },
-    { key: "liga", label: "Liga", view: "view-liga", init: ladeLiga },
-  ]},
-  // "Ich" gibt es fuer jede, die ein Spielerprofil hat - auch fuer Trainerinnen,
-  // die selbst mitspielen (dann haengt am Zugang eine spieler_id).
-  { key: "ich", label: "Ich", rollen: ["trainer", "spieler"], nurMitProfil: true, unter: [
-    { key: "ich", label: "Mein Profil", view: "view-ich", init: ladeIch },
-    { key: "videos", label: "Videos", view: "view-videos", init: ladeVideos },
-  ]},
-  { key: "training", label: "Training", rollen: ["trainer", "spieler"], unter: [
-    { key: "trainings", label: "Termine", view: "view-trainings", init: ladeTrainingsListe },
-    { key: "aufstellung", label: "Aufstellung", view: "view-aufstellung", init: ladeAufstellung },
-    { key: "teams", label: "Einteilung", view: "view-anwesenheit", nurTrainer: true,
-      init: () => { ladeSpieler().catch(() => {}); ladeTrainings().catch(() => {}); } },
-    { key: "uebungen", label: "Übungen", view: "view-wiki", nurTrainer: true,
-      init: () => ladeWiki("uebung", "Übungen") },
-    { key: "coach", label: "Coach", view: "view-coach", nurTrainer: true, init: starteCoach },
-  ]},
-  { key: "team", label: "Team", rollen: ["trainer"], unter: [
-    { key: "rangliste", label: "Rangliste", view: "view-rangliste", init: ladeRangliste },
-    { key: "kader", label: "Kader", view: "view-kader", init: ladeKader },
-    { key: "statistik", label: "Statistik", view: "view-wiki",
-      init: () => ladeWiki("statistik", "Statistik") },
-    // Auch hier, damit eine Trainerin ohne eigenes Spielerprofil (kein "Ich"-Tab)
-    // die Clips verwalten kann. Dieselbe View, die je Rolle die Bedienelemente zeigt.
-    { key: "videos", label: "Videos", view: "view-videos", init: ladeVideos },
-    { key: "nutzung", label: "Nutzung", view: "view-nutzung", init: ladeNutzung },
-  ]},
-  { key: "taktik", label: "Taktik", rollen: ["trainer", "spieler"], unter: [
-    { key: "playbook", label: "Playbook", view: "view-wiki",
-      init: () => ladeWiki("playbook", "Playbook") },
-    { key: "gegner", label: "Gegner", view: "view-wiki", nurTrainer: true,
-      init: () => ladeWiki("gegner", "Gegnercheck") },
-  ]},
-  { key: "saison", label: "Saison", rollen: ["trainer"], unter: [
-    { key: "orga", label: "Orga", view: "view-wiki",
-      init: () => ladeWiki(["saison", "orga"], "Saison & Orga") },
-    { key: "statspiele", label: "Statistik Spiele", view: "view-statspiele", init: ladeStatistikSpiele },
-    { key: "notizen", label: "Notizen", view: "view-wiki",
-      init: () => ladeWiki(["notiz", "besprechung"], "Notizen") },
-  ]},
-];
+//  ROLLEN: Die Rolle filtert hier NUR die Sichtbarkeit - das ist KEINE
+//  Sicherheitsgrenze. Rollen erzwingt der Server bei jeder Anfrage.
+const INIT = {
+  "home/home": ladeHome, "home/liga": ladeLiga,
+  "ich/ich": ladeIch, "ich/todo": ladeTodo,
+  "konto/mitteilungen": ladeMitteilungen,
+  "training/trainings": ladeTrainingsListe, "training/aufstellung": ladeAufstellung,
+  "training/teams": () => { ladeSpieler().catch(() => {}); ladeTrainings().catch(() => {}); },
+  "training/uebungen": () => ladeWiki("uebung", "Übungen"),
+  "training/coach": starteCoach,
+  "videos/videos": ladeVideos,
+  "team/rangliste": ladeRangliste, "team/kader": ladeKader,
+  "team/statistik": () => ladeWiki("statistik", "Statistik"),
+  "team/videos": ladeVideos, "team/nutzung": ladeNutzung, "team/todos": ladeTodoTeam,
+  "taktik/playbook": () => ladeWiki("playbook", "Playbook"),
+  "taktik/gegner": () => ladeWiki("gegner", "Gegnercheck"),
+  "saison/orga": () => ladeWiki(["saison", "orga"], "Saison & Orga"),
+  "saison/statspiele": ladeStatistikSpiele,
+  "saison/aemter": ladeAemter, "saison/listen": ladeListen,
+  "mannschaft/aemter": ladeAemter, "mannschaft/listen": ladeListen,
+  "saison/notizen": () => ladeWiki(["notiz", "besprechung"], "Notizen"),
+};
+const initFuer = (ober, unter) => INIT[ober + "/" + unter];
 
 let aktRolle = "spieler";  // wird aus /api/me (Server) gesetzt; Default = minimal
 let aktBenutzer = null;    // {name, rolle, spieler_id} des angemeldeten Benutzers
@@ -92,13 +68,8 @@ let aktUnter = "home";     // aktiver Unterpunkt (für „zurück" aus Detailans
 
 const eigeneSpielerId = () => (aktBenutzer && aktBenutzer.spieler_id) || null;
 
-function sichtbareOber() {
-  return NAV.filter((o) => o.rollen.includes(aktRolle)
-                        && (!o.nurMitProfil || eigeneSpielerId()));
-}
-function sichtbareUnter(o) {
-  return o.unter.filter((u) => !(u.nurTrainer && aktRolle !== "trainer"));
-}
+function sichtbareOber() { return NavKonfig.oberFuer(aktRolle, !!eigeneSpielerId()); }
+function sichtbareUnter(o) { return o.unter; }
 
 // ---------------------------------------------------------------- Verlauf ---
 //  Ohne Verlaufseintraege schliesst die Android-Zurueck-Taste in der TWA die
@@ -114,9 +85,8 @@ function verlaufMerken(zustand) {
 
 // View des aktuellen Unterpunkts – dorthin fuehren die "zurueck"-Knoepfe.
 function navView() {
-  const ober = sichtbareOber().find((o) => o.key === aktOber) || sichtbareOber()[0];
-  const unter = sichtbareUnter(ober).find((u) => u.key === aktUnter);
-  return unter && unter.view;
+  const ziel = NavKonfig.finde(aktRolle, !!eigeneSpielerId(), aktOber, aktUnter);
+  return ziel && ziel.unter.view;
 }
 
 window.addEventListener("popstate", (e) => {
@@ -166,29 +136,32 @@ function zeigeView(id) {
   }
 }
 
-// Zu einem Überpunkt wechseln; optional direkt zu einem bestimmten Unterpunkt.
+// Zu einem Reiter wechseln; optional direkt zu einem bestimmten Unterpunkt.
 function gehe(oberKey, unterKey) {
-  const ober = sichtbareOber().find((o) => o.key === oberKey) || sichtbareOber()[0];
+  const profil = !!eigeneSpielerId();
+  const ziel = NavKonfig.finde(aktRolle, profil, oberKey, unterKey)
+            || NavKonfig.finde(aktRolle, profil, "home", "home");
+  const { ober, unter } = ziel;
   aktOber = ober.key;
+  aktUnter = unter.key;
   document.querySelectorAll("#tableiste button").forEach((b) =>
     b.classList.toggle("aktiv", b.dataset.ober === aktOber));
-  const unterListe = sichtbareUnter(ober);
-  const unter = unterListe.find((u) => u.key === unterKey) || unterListe[0];
-  aktUnter = unter && unter.key;
+  const pk = document.getElementById("profil-knopf");
+  if (pk) pk.classList.toggle("aktiv", aktOber === "ich" || aktOber === "konto");
   renderSubnav(ober, aktUnter);
-  if (unter) {
-    _inGehe = true;
-    try { zeigeView(unter.view); } finally { _inGehe = false; }
-    try { unter.init && unter.init(); } catch (_) {}
-  }
+  _inGehe = true;
+  try { zeigeView(unter.view); } finally { _inGehe = false; }
+  const init = initFuer(ober.key, unter.key);
+  try { init && init(); } catch (_) {}
   verlaufMerken({ typ: "nav", ober: aktOber, unter: aktUnter });
   nutzungMelden("bereich", aktOber + "/" + aktUnter);
+  if (aktOber === "videos" && aktRolle === "spieler") videosAlsGesehenMerken();
 }
 
-// Unter-Navigation zeichnen; bei nur einem Unterpunkt ausblenden (kein Nutzen).
+// Unter-Navigation zeichnen; bei nur einem sichtbaren Unterpunkt ausblenden (kein Nutzen).
 function renderSubnav(ober, aktUnterKey) {
   const nav = $("#subnav");
-  const unterListe = sichtbareUnter(ober);
+  const unterListe = NavKonfig.subnav(ober);
   if (unterListe.length <= 1) { nav.innerHTML = ""; nav.classList.add("leer"); return; }
   nav.classList.remove("leer");
   nav.innerHTML = "";
@@ -200,9 +173,6 @@ function renderSubnav(ober, aktUnterKey) {
     nav.appendChild(b);
   }
 }
-
-document.querySelectorAll("#tableiste button").forEach((b) =>
-  b.addEventListener("click", () => gehe(b.dataset.ober)));
 
 // ---------------------------------------------------------------- Login ----
 //  Die Rolle kommt vom SERVER (/api/me). Der lokale `benutzer`-Hint erlaubt
@@ -216,6 +186,19 @@ function setzeBenutzer(me) {
   const el = document.getElementById("benutzer-name");
   if (el) el.textContent = me.name + (aktRolle === "trainer" ? " · Trainer" : "");
   renderAnsicht(me);
+  kopfPortraitZeichnen();
+}
+
+// Der Kreis oben rechts zeigt dasselbe Wappen wie die Aufstellung: das eigene
+// Foto oder, wenn so gewaehlt, den Anfangsbuchstaben.
+function eigenePerson() {
+  const me = aktBenutzer || {};
+  const i = portraitInfo[me.spieler_id] || {};
+  return { id: me.spieler_id || 0, name: i.name || me.name || "?" };
+}
+function kopfPortraitZeichnen() {
+  const el = document.getElementById("profil-initial");
+  if (el) el.innerHTML = `<span class="kopf-rahmen">${wappen(eigenePerson(), 30)}</span>`;
 }
 
 // ---------------------------------------------------------- Ansicht als ----
@@ -347,6 +330,8 @@ async function pruefeStand(sichtbar) {
       const alt = aktBenutzer, me = r.me;
       const geaendert = (alt.spieler_id || null) !== (me.spieler_id || null)
                      || alt.rolle !== me.rolle;
+      // Hat jemand sein Portrait geaendert, soll das ohne Neuladen ankommen.
+      await ladePortraitInfo();
       setzeBenutzer(me);
       if (geaendert) {
         renderBottomNav();
@@ -663,7 +648,8 @@ function vorZeit(iso) {
 
 function nutzungBereichName(key) {
   const [o, u] = String(key).split("/");
-  const ober = NAV.find((x) => x.key === o);
+  // Gleiche Schlüssel gibt es für beide Rollen (Training/Termine); der erste Treffer reicht für den Namen.
+  const ober = NavKonfig.NAV.find((x) => x.key === o && x.unter.some((y) => y.key === u));
   const unter = ober && ober.unter.find((x) => x.key === u);
   return ober && unter ? ober.label + " → " + unter.label : key;
 }
@@ -695,9 +681,9 @@ async function aktualisiereAnsicht() {
     else if (id === "view-rangliste") await ladeRangliste();
     else if (id === "view-anwesenheit") await ladeSpieler();
     else {                                         // andere Seiten: ihr normaler Lader (Bereich/Unterpunkt)
-      const ober = NAV.find((o) => o.key === aktOber);
-      const unter = ober && ober.unter.find((u) => u.key === aktUnter);
-      if (unter && unter.view === id && unter.init) await unter.init();
+      const ziel = NavKonfig.finde(aktRolle, !!eigeneSpielerId(), aktOber, aktUnter);
+      const init = initFuer(aktOber, aktUnter);
+      if (ziel && ziel.unter.view === id && init) await init();
     }
     zeigeAktualisiert();
   } finally { knoepfe.forEach((b) => { b.disabled = false; b.classList.remove("laeuft"); }); }
@@ -804,6 +790,7 @@ function renderNutzung() {
 
 async function pruefeAnmeldung() {
   await ladePortraitIndex();          // vor dem ersten Rendern: Fotos sind da
+  await ladePortraitInfo();
   const r = await ladeMe();
   if (r.status === "ok") { setzeBenutzer(r.me); appStarten(); }
   else if (r.status === "offline" || r.status === "fehler") {
@@ -837,6 +824,7 @@ async function login() {
     const me = await res.json();
     const vorher = benutzerHint();
     if (vorher && vorher.name !== me.name) await cachesLeeren();   // anderes Konto: nichts von vorher zeigen
+    await ladePortraitInfo();               // erst jetzt angemeldet: Portrait-Wahl holen
     setzeBenutzer(me);
     $("#login-pin").value = "";
     appStarten();
@@ -930,24 +918,77 @@ async function pushDeaktivieren() {
   renderPushBox();
 }
 
-async function renderPushBox() {
+// Home: ein kleiner Hinweis, solange Mitteilungen auf diesem Gerät aus sind. "Später" blendet
+// ihn für zwei Wochen aus; alles Weitere steht unter Profil -> Mitteilungen.
+async function renderPushHinweis() {
   const el = document.getElementById("push-box");
   if (!el) return;
   const st = await pushStatus();
-  if (st === "nicht_unterstuetzt") {
-    el.innerHTML = '<span class="push-hint">🔔 Push wird hier nicht unterstützt (am iPhone: App erst „zum Startbildschirm").</span>';
-  } else if (st === "blockiert") {
-    el.innerHTML = '<span class="push-hint">🔔 Benachrichtigungen im Browser blockiert – in den Einstellungen erlauben.</span>';
-  } else if (st === "aktiv") {
-    el.innerHTML = '<span class="push-hint">🔔 aktiv</span>' +
-      '<button id="push-test">Test</button><button id="push-aus">Aus</button>';
-    document.getElementById("push-test").addEventListener("click", pushTest);
-    document.getElementById("push-aus").addEventListener("click", pushDeaktivieren);
-  } else {
-    el.innerHTML = '<button id="push-an" class="primaer">🔔 Benachrichtigungen aktivieren</button>';
-    document.getElementById("push-an").addEventListener("click", pushAktivieren);
-  }
+  let weg = false;
+  try { weg = Number(localStorage.getItem("push_hinweis_bis") || 0) > Date.now(); } catch (_) {}
+  if (st !== "aus" || weg || !aktBenutzer || aktBenutzer.ansicht_als) { el.innerHTML = ""; return; }
+  el.innerHTML = `<div class="push-karte"><span class="pk-icon">${icon("bell")}</span>
+    <span class="pk-text"><b>Mitteilungen anschalten?</b><span>Abfahrt, neue Videos, Feedback – nur was dich betrifft.</span></span>
+    <button type="button" class="primaer" data-push="an">Anschalten</button>
+    <button type="button" class="pk-spaeter" data-push="spaeter">Später</button></div>`;
+  el.querySelector('[data-push="an"]').addEventListener("click", pushAktivieren);
+  el.querySelector('[data-push="spaeter"]').addEventListener("click", () => {
+    try { localStorage.setItem("push_hinweis_bis", String(Date.now() + 14 * 86400000)); } catch (_) {}
+    el.innerHTML = "";
+  });
 }
+
+async function renderPushBox() {
+  renderPushHinweis();
+  const v = document.getElementById("view-mitteilungen");
+  if (v && !v.classList.contains("hidden")) renderMitteilungen();
+}
+
+// ---- Profil -> Mitteilungen: Gerät ein/aus und welche Arten kommen ----
+async function ladeMitteilungen() { await renderMitteilungen(); }
+
+async function renderMitteilungen() {
+  const el = $("#mitteilungen-inhalt");
+  const st = await pushStatus();
+  let kopf;
+  if (st === "aktiv") {
+    kopf = `<div class="mt-karte"><div class="mt-status an">${icon("check")} Auf diesem Gerät eingeschaltet</div>
+      <div class="mt-knoepfe"><button type="button" data-push="test">Testnachricht</button><button type="button" data-push="aus">Ausschalten</button></div></div>`;
+  } else if (st === "blockiert") {
+    kopf = `<div class="mt-karte"><div class="mt-status aus">Im Browser blockiert</div>
+      <p class="hinweis">Erlaube Mitteilungen für diese App in den Einstellungen deines Geräts oder Browsers und öffne diese Seite danach noch einmal.</p></div>`;
+  } else if (st === "nicht_unterstuetzt") {
+    kopf = `<div class="mt-karte"><div class="mt-status aus">Hier nicht möglich</div>
+      <p class="hinweis">Auf dem iPhone klappt das nur, wenn die App auf dem Home-Bildschirm liegt: Teilen-Symbol antippen, „Zum Home-Bildschirm“ wählen und die App von dort öffnen.</p></div>`;
+  } else {
+    kopf = `<div class="mt-karte"><div class="mt-status aus">Auf diesem Gerät aus</div>
+      <button type="button" class="primaer gross" data-push="an">Mitteilungen einschalten</button></div>`;
+  }
+  let arten = null;
+  try { arten = (await api("/api/push/einstellungen")).arten; } catch (_) {}
+  const liste = arten
+    ? `<h3 class="mt-titel">Was du bekommst</h3>` + arten.map((a) => `<label class="mt-art">
+        <span><b>${escape(a.label)}</b><small>${escape(a.text)}</small></span>
+        <input type="checkbox" class="mt-schalter" role="switch" data-art="${escape(a.key)}"${a.an ? " checked" : ""}></label>`).join("")
+    : '<p class="hinweis">Was du bekommst, lässt sich nur mit Verbindung einstellen.</p>';
+  el.innerHTML = kopf + liste;
+  const knopf = (k) => el.querySelector(`[data-push="${k}"]`);
+  if (knopf("an")) knopf("an").addEventListener("click", pushAktivieren);
+  if (knopf("test")) knopf("test").addEventListener("click", pushTest);
+  if (knopf("aus")) knopf("aus").addEventListener("click", pushDeaktivieren);
+}
+
+$("#mitteilungen-inhalt").addEventListener("change", async (e) => {
+  const c = e.target.closest("[data-art]");
+  if (!c) return;
+  try {
+    await api("/api/push/einstellungen", "POST", { art: c.dataset.art, an: c.checked });
+    toast(c.checked ? "Eingeschaltet ✓" : "Ausgeschaltet ✓");
+  } catch (err) {
+    c.checked = !c.checked;                         // Server hat es nicht angenommen: Schalter zurück
+    toast("Nicht gespeichert – Verbindung prüfen.");
+  }
+});
 
 // Trainer: Push-Erinnerung an alle senden, die noch nicht geantwortet haben.
 function renderErinnern(d) {
@@ -982,39 +1023,238 @@ function renderErinnern(d) {
   });
 }
 
-// Bottom-Nav nach Rolle auf-/zubauen (Spieler sieht weniger Überpunkte).
+// ----------------------------------------------------------------- Symbole ----
+//  Eigene Linien-Symbole statt Emoji: sehen auf jedem Gerät gleich aus und
+//  übernehmen die Textfarbe (currentColor), auch im Dunkelmodus. Ohne Netz laden.
+const SYMBOLE = {
+  home: '<path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/>',
+  calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>',
+  video: '<rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3"/>',
+  target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+  clipboard: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9zM9 12h6M9 16h4"/>',
+  users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14c2.8 0 4.5 1.8 4.5 4.5"/>',
+  trophy: '<path d="M8 4h8v6a4 4 0 01-8 0V4z"/><path d="M8 6H4c0 3 1.5 4 4 4M16 6h4c0 3-1.5 4-4 4M12 14v4M8 20h8"/>',
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/>',
+  chart: '<path d="M5 20V11M12 20V4M19 20v-6M3 20h18"/>',
+  checklist: '<path d="M4 6l2 2 3-3M4 14l2 2 3-3M13 7h8M13 15h8"/>',
+  bell: '<path d="M6 16v-5a6 6 0 0112 0v5l2 2H4l2-2zM10 21h4"/>',
+  play: '<path d="M7 4l13 8-13 8z"/>',
+  alert: '<path d="M12 3l10 18H2L12 3zM12 10v5M12 18v.5"/>',
+  notes: '<path d="M6 3h9l4 4v14H6zM9 12h6M9 16h4"/>',
+  check: '<path d="M5 12l5 5 9-10"/>',
+  chevron: '<path d="M9 6l6 6-6 6"/>',
+  refresh: '<path d="M20 11a8 8 0 00-14-4L4 9M4 4v5h5M4 13a8 8 0 0014 4l2-2M20 20v-5h-5"/>',
+};
+const icon = (name) =>
+  `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${SYMBOLE[name] || ""}</svg>`;
+
+// Heutiges Datum als YYYY-MM-DD in Ortszeit (toISOString() rechnet in UTC und
+// kippt kurz nach Mitternacht auf den Vortag).
+const heuteIso = () => new Date().toLocaleDateString("sv-SE");
+
+// Reiter der unteren Leiste nach Rolle aufbauen (Spielerin vier, Trainer fünf).
 function renderBottomNav() {
-  const erlaubt = new Set(sichtbareOber().map((o) => o.key));
-  document.querySelectorAll("#tableiste button").forEach((b) =>
-    b.classList.toggle("weg", !erlaubt.has(b.dataset.ober)));
+  const leiste = $("#tableiste");
+  leiste.innerHTML = "";
+  for (const o of NavKonfig.tabs(aktRolle, !!eigeneSpielerId())) {
+    const b = document.createElement("button");
+    b.dataset.ober = o.key;
+    b.className = o.key === aktOber ? "aktiv" : "";
+    b.innerHTML = `<span class="t-icon">${icon(o.icon)}</span><span class="t-text">${escape(o.label)}</span>`;
+    b.addEventListener("click", () => gehe(o.key));
+    leiste.appendChild(b);
+  }
 }
 
 // ------------------------------------------------------------------ Home ----
+//  Eine Startseite, zwei Gesichter. Spielerin: das Nächste zum Antworten steht groß oben,
+//  darunter was neu für sie ist. Trainer: oben die Liste "Braucht dich".
+//  Welche Termine/Neuigkeiten gezeigt werden, entscheidet home-logik.js (getestet).
+let _homeHeroId = null;      // das große Training oben; steht nicht noch einmal unter "Antwort fehlt"
+
 async function ladeHome() {
-  const el = $("#home-naechstes");
-  el.innerHTML = '<p class="hinweis">Lädt…</p>';
-  let nt = null;
-  try { nt = await Sync.apiOffline("/api/naechstes-training"); } catch (_) {}
-  if (nt && nt.id) {
-    const an = (nt.teilnahme || []).filter((t) => t.status === "anwesend").length;
-    const ab = (nt.teilnahme || []).filter((t) => t.status === "abgesagt").length;
-    const label = nt.datum ? datumKurz(nt.datum) : "";
-    el.innerHTML =
-      `<div class="hk-titel">Nächstes Training</div>
-       <div class="hk-name">${escape(nt.titel || label)}</div>
-       <div class="hk-datum">${label}${nt.uhrzeit ? " · " + escape(nt.uhrzeit) : ""}</div>
-       <div class="hk-zahlen"><span class="zu">${an} zugesagt</span><span class="ab">${ab} abgesagt</span></div>`;
-    el.className = "home-karte klickbar";
-    el.onclick = () => { gehe("training", "trainings"); setTimeout(() => oeffneTraining(nt.id), 0); };
-  } else {
-    el.className = "home-karte";
-    el.onclick = null;
-    el.innerHTML = '<div class="hk-titel">Nächstes Training</div><p class="hinweis">Kein anstehendes Training gefunden.</p>';
-  }
-  renderHomeSpiele();
-  renderHomeOffen();
-  renderHomeSchnell();
+  $("#view-home").classList.toggle("home-trainer", aktRolle === "trainer");
   renderPushBox();
+  renderHomeAufgaben();
+  await renderHomeHero();
+  renderHomeOffen();
+  renderHomeNeu();
+  renderHomeTodo();
+  renderHomeAemter();
+  renderHomeSpiele();
+  renderHomeTabelle();
+  renderHomeSchnell();
+}
+
+async function renderHomeHero() {
+  const el = $("#home-naechstes");
+  let liste = [];
+  try { liste = await Sync.apiOffline("/api/trainings"); } catch (_) {}
+  const t = HomeLogik.naechstesTraining(liste, heuteIso());
+  _homeHeroId = t ? t.id : null;
+  if (!t) {
+    el.className = "home-karte";
+    el.innerHTML = '<div class="hk-titel">Nächstes Training</div><p class="hk-leer">Kein anstehendes Training gefunden.</p>';
+    return;
+  }
+  const d = datumTeile(t.datum);
+  const sid = eigeneSpielerId();
+  const ortTeil = t.ort && !(t.titel || "").includes(t.ort) ? " · " + t.ort : "";
+  el.className = "home-karte hero";
+  el.innerHTML =
+    `<div class="hk-titel">Nächstes Training</div>
+     <div class="hk-name">${escape(HomeLogik.wochentag(t.datum))}, ${escape(d.tag)}${t.uhrzeit ? " · " + escape(t.uhrzeit) : ""}</div>
+     <div class="hk-datum">${escape((t.titel || "Training") + ortTeil)}</div>
+     <div class="hk-zahlen"><span class="zu">${t.anwesend || 0} sagen zu</span>${t.abgesagt ? `<span class="ab">${t.abgesagt} abgesagt</span>` : ""}</div>
+     ${sid ? '<div class="td-rsvp hero-rsvp"></div>' : ""}
+     <button type="button" class="hk-link">${aktRolle === "trainer" ? "Öffnen und Plan" : "Termin öffnen"} ${icon("chevron")}</button>`;
+  if (sid) {
+    // Kurz-Objekt: rsvpSenden mutiert es, cacht es aber bewusst NICHT (siehe renderHomeOffen).
+    rsvpFuellen(el.querySelector(".hero-rsvp"),
+      { id: t.id, teilnahme: t.meine_status ? [{ id: sid, status: t.meine_status, grund: null }] : [] });
+  }
+  el.querySelector(".hk-link").addEventListener("click", () => {
+    gehe("training", "trainings");
+    setTimeout(() => oeffneTraining(t.id), 0);
+  });
+}
+
+const AUFGABE_SYMBOL = { duenn: "alert", offen: "users", nachbereitung: "notes", todos: "checklist", frage: "play" };
+
+// "clip:5" / "szene:12" / "spiel:3" (Ziel eines Kommentars) -> das passende Video oeffnen.
+async function oeffneVideoZiel(ziel, titel) {
+  const [art, kennung] = ziel.split(":"), id = +kennung;
+  try {
+    if (art === "clip") {
+      const clips = await api("/api/clips");
+      const c = clips.find((x) => x.id === id);
+      if (!c) { toast("Dieses Video gibt es nicht mehr."); return; }
+      gehe("videos", "videos");
+      oeffneVideo(c);
+    } else if (art === "szene") {
+      oeffneSzenenClip(id, titel, null);
+    } else if (art === "spiel") {
+      oeffneAnalyseVideo(id, 0, titel, null);
+    }
+  } catch (e) { toast("Konnte das Video nicht öffnen."); }
+}
+
+// Trainer: was ihn gerade braucht, wichtigstes zuerst.
+async function renderHomeAufgaben() {
+  const el = $("#home-aufgaben");
+  if (aktRolle !== "trainer") { el.innerHTML = ""; return; }
+  let liste = [], todos = 0;
+  try { liste = await Sync.apiOffline("/api/trainings"); } catch (_) {}
+  let fragen = [];
+  // Nur To-Dos, deren Woche vorbei ist: waehrend die Spielerin noch probiert, gibt es nichts zu bewerten.
+  try { todos = ((await Sync.apiOffline("/api/todos/team")) || {}).warten_faellig || 0; } catch (_) {}
+  try { fragen = (await Sync.apiOffline("/api/fragen-offen")) || []; } catch (_) {}
+  const aufgaben = HomeLogik.trainerAufgaben({ trainings: liste, todosWartend: todos, fragen, heute: heuteIso() });
+  if (!aufgaben.length) {
+    el.innerHTML = `<div class="ha-karte"><div class="ha-kopf">Braucht dich</div>
+      <p class="ha-leer">${icon("check")} Gerade ist nichts offen.</p></div>`;
+    return;
+  }
+  el.innerHTML = `<div class="ha-karte"><div class="ha-kopf">Braucht dich</div>` +
+    aufgaben.map((a, i) => `<button type="button" class="ha-zeile ${a.stufe}" data-i="${i}">
+      <span class="ha-icon">${icon(AUFGABE_SYMBOL[a.art] || "alert")}</span>
+      <span class="ha-text"><b>${escape(a.titel)}</b><span>${escape(a.sub)}</span></span>
+      <span class="ha-pfeil">${icon("chevron")}</span></button>`).join("") + "</div>";
+  el.querySelectorAll(".ha-zeile").forEach((b) => b.addEventListener("click", () => {
+    const z = aufgaben[+b.dataset.i].ziel;
+    if (z.video) { oeffneVideoZiel(z.video, z.titel); return; }
+    gehe(z.ober, z.unter);
+    if (z.termin) setTimeout(() => oeffneTraining(z.termin), 0);
+  }));
+}
+
+// ---- Neu für dich (Spielerin) ----
+//  "Neu" heißt: Clip oder Analyse mit höherer ID als beim letzten Besuch von "Videos".
+//  Beim ersten Mal wird nur die Grundlinie gemerkt - sonst wäre alles Alte neu.
+const neuGesehenLesen = (sid) => {
+  try { return JSON.parse(localStorage.getItem("neu_gesehen_" + sid) || "null"); } catch (_) { return null; }
+};
+const neuGesehenSchreiben = (sid, g) => { try { localStorage.setItem("neu_gesehen_" + sid, JSON.stringify(g)); } catch (_) {} };
+
+async function neuDaten(sid) {
+  let clips = [], analysen = [];
+  try { clips = (await Sync.apiOffline("/api/clips")) || []; } catch (_) {}
+  try { analysen = (await ladeAnalysen(sid)) || []; } catch (_) {}
+  return { clips, analysen };
+}
+
+function markiereTab(key, neu) {
+  const b = document.querySelector(`#tableiste [data-ober="${key}"]`);
+  if (b) b.classList.toggle("neu", !!neu);
+}
+
+async function renderHomeNeu() {
+  const el = $("#home-neu");
+  const sid = eigeneSpielerId();
+  if (!sid || aktRolle !== "spieler") { el.innerHTML = ""; return; }
+  const { clips, analysen } = await neuDaten(sid);
+  const gesehen = neuGesehenLesen(sid);
+  const r = HomeLogik.neuFuerDich({ clips, analysen, gesehen });
+  if (!gesehen) neuGesehenSchreiben(sid, r.grundlinie);
+  markiereTab("videos", r.anzahl);
+  if (!r.items.length) { el.innerHTML = ""; return; }
+  el.innerHTML = `<div class="hn-karte"><div class="hn-kopf">Neu für dich${r.anzahl > r.items.length ? " · " + r.anzahl : ""}</div>` +
+    r.items.map((i) => `<button type="button" class="hn-zeile" data-art="${i.art}" data-id="${i.id}">
+      <span class="hn-icon">${icon("play")}</span>
+      <span class="hn-text"><b>${escape(i.titel)}</b>${i.sub ? `<span>${escape(i.art === "analyse" ? datumKurz(i.sub) : i.sub)}</span>` : ""}</span>
+      <span class="hn-neu">neu</span></button>`).join("") + "</div>";
+  el.querySelectorAll(".hn-zeile").forEach((b) => b.addEventListener("click", () => {
+    gehe("videos", "videos");
+    if (b.dataset.art === "analyse") oeffneAnalyseDetail(+b.dataset.id);
+  }));
+}
+
+// Wer "Videos" öffnet, hat gesehen, was dort steht.
+async function videosAlsGesehenMerken() {
+  const sid = eigeneSpielerId();
+  if (!sid) return;
+  const { clips, analysen } = await neuDaten(sid);
+  const hoechste = HomeLogik.neuFuerDich({ clips, analysen, gesehen: null }).grundlinie;
+  let g = neuGesehenLesen(sid);
+  g = HomeLogik.alsGesehen(g, "clip", hoechste.clip);
+  g = HomeLogik.alsGesehen(g, "analyse", hoechste.analyse);
+  neuGesehenSchreiben(sid, g);
+  markiereTab("videos", false);
+}
+
+// Wohin "zurück" aus einer Analyse führt: Spielerin -> Videos, Trainer -> Team/Videos.
+const videosOber = () => (aktRolle === "trainer" ? "team" : "videos");
+
+// ---- Wochenziel (Spielerin) ----
+async function renderHomeTodo() {
+  const el = $("#home-todo");
+  if (!eigeneSpielerId() || aktRolle !== "spieler") { el.innerHTML = ""; return; }
+  let d = null;
+  try { d = await Sync.apiOffline("/api/todos"); } catch (_) {}
+  const todos = (d && d.todos) || [];
+  const gewaehlt = todos.find((t) => t.gewaehlt && t.status === "offen");
+  const frei = todos.filter((t) => t.status === "offen" && !t.gewaehlt);
+  if (gewaehlt) {
+    const f = todoLetztesFeedback(gewaehlt);
+    el.innerHTML = `<button type="button" class="ht-karte ziel"><div class="ht-kopf"><b>Dein Ziel diese Woche</b></div>
+      <p class="ht-text">${escape(gewaehlt.text)}</p>
+      ${f && f.feedback ? `<p class="ht-sub">Trainer: ${escape(f.feedback)}</p>` : ""}</button>`;
+  } else if (frei.length) {
+    el.innerHTML = `<button type="button" class="ht-karte ziel"><div class="ht-kopf"><b>Wähle dein Ziel für diese Woche</b></div>
+      <p class="ht-sub">${frei.length === 1 ? "1 Ziel" : frei.length + " Ziele"} zur Auswahl</p></button>`;
+  } else { el.innerHTML = ""; return; }
+  el.querySelector("button").addEventListener("click", () => gehe("ich", "todo"));
+}
+
+// ---- Tabellen-Auszug ----
+async function renderHomeTabelle() {
+  const el = $("#home-tabelle");
+  const d = await ligaHolen();
+  const a = d && HomeLogik.tabellenAuszug(d.tabelle);
+  if (!a) { el.innerHTML = ""; return; }
+  el.innerHTML = `<button type="button" class="ht-karte"><div class="ht-kopf"><b>Tabelle</b><span class="ht-platz">Platz ${a.platz}</span></div>` +
+    a.zeilen.map((z) => `<div class="ht-zeile${z.eigen ? " eigen" : ""}"><span>${z.platz}. ${escape(z.team)}</span><b>${escape(z.punkte)}</b></div>`).join("") + "</button>";
+  el.querySelector("button").addEventListener("click", () => gehe("home", "liga"));
 }
 
 // Die naechsten drei Test-/Ligaspiele. Sie stehen fest oben auf der Startseite:
@@ -1188,10 +1428,8 @@ async function renderHomeOffen() {
   let liste = [];
   try { liste = await Sync.apiOffline("/api/trainings"); } catch (_) { el.innerHTML = ""; return; }
 
-  const heute = new Date().toISOString().slice(0, 10);
-  const offen = (liste || [])
-    .filter((t) => (t.datum || "") >= heute && !t.meine_status)
-    .sort((a, b) => (a.datum || "").localeCompare(b.datum || ""));
+  // Das große Training oben hat seine eigenen Knöpfe, hier stehen nur die übrigen.
+  const offen = HomeLogik.offeneAntworten(liste, heuteIso(), _homeHeroId);
 
   if (!offen.length) {
     el.innerHTML = '<div class="ho-fertig">✓ Für alle kommenden Termine hast du geantwortet.</div>';
@@ -1218,15 +1456,14 @@ async function renderHomeOffen() {
 
 function renderHomeSchnell() {
   const el = $("#home-schnell");
-  const ziele = aktRolle === "spieler"
-    ? [["training", "trainings", "📋", "Trainings"], ["taktik", "playbook", "🎯", "Playbook"]]
-    : [["training", "trainings", "📋", "Trainings"], ["team", "rangliste", "🏆", "Rangliste"],
-       ["training", "coach", "💬", "Coach"], ["taktik", "playbook", "🎯", "Playbook"]];
   el.innerHTML = "";
-  for (const [ober, unter, icon, label] of ziele) {
+  if (aktRolle !== "trainer") return;               // Spielerinnen haben alles in der Leiste unten
+  const ziele = [["team", "rangliste", "chart", "Rangliste"], ["training", "coach", "notes", "Coach"],
+                 ["training", "aufstellung", "users", "Aufstellung"], ["taktik", "playbook", "target", "Playbook"]];
+  for (const [ober, unter, sym, label] of ziele) {
     const b = document.createElement("button");
     b.className = "schnell-kachel";
-    b.innerHTML = `<span class="sk-icon">${icon}</span><span>${label}</span>`;
+    b.innerHTML = `<span class="sk-icon">${icon(sym)}</span><span>${label}</span>`;
     b.addEventListener("click", () => gehe(ober, unter));
     el.appendChild(b);
   }
@@ -1252,7 +1489,10 @@ function datumTeile(iso) {
 
 // Traegt die Einheit? Absolute Zahlen, weil Handball Koerper braucht: unter
 // sechs Zusagen laesst sich kaum sinnvoll trainieren.
+// Spielerinnen sehen nie eine Warnung, und freiwillige Trainings (Freitag, siehe db.FREIWILLIGE_WOCHENTAGE)
+// brauchen keine: dort ist es in Ordnung, wenn nur wenige kommen.
 function terminStufe(t) {
+  if (t.freiwillig || aktRolle !== "trainer") return "ok";
   const zu = t.anwesend || 0;
   if (zu <= 5) return "kritisch";
   if (zu <= 8) return "knapp";
@@ -1352,13 +1592,16 @@ function terminKarte(t, vergangen) {
   const spiel = istSpiel(t);
   const artChip = spiel
     ? `<span class="t-art ${terminArt(t)}">${ART_WORT[terminArt(t)]}` +
-      `${t.heim === 0 ? " · auswärts" : t.heim === 1 ? " · daheim" : ""}</span>` : "";
+      `${t.heim === 0 ? " · auswärts" : t.heim === 1 ? " · daheim" : ""}</span>`
+    : (t.freiwillig ? '<span class="t-art freiwillig">freiwillig</span>' : "");
   const zeitText = spiel ? (spielZeiten(t) || "ohne Uhrzeit")
                          : (t.uhrzeit ? escape(t.uhrzeit) : "ohne Uhrzeit");
   kopf.innerHTML =
     `<span class="t-datum"><b>${d.wt}</b><span>${escape(d.tag)}</span></span>
      <span class="t-mitte"><b>${escape(t.titel || "Training")}</b>${artChip}
        <small>${zeitText}${t.ort ? " · " + escape(t.ort) : ""}` +
+      `${t.hat_nachbereitung && aktRolle === "trainer"
+          ? '<span class="t-planchip" title="Nachbereitung vorhanden">📝</span>' : ""}` +
       `${t.hat_plan && aktRolle === "trainer"
           ? `<span class="t-planchip">PLAN${t.plan_minuten ? " " + t.plan_minuten + "′" : ""}</span>` : ""}${meinChip}</small>
        <span class="t-bar"><i class="zu" style="width:${(zu / kader) * 100}%"></i>` +
@@ -1399,7 +1642,7 @@ async function fuelleTerminDetail(det, t) {
 
   teilnahmeGruppen(det, d);
 
-  if (aktRolle === "trainer") det.appendChild(terminAktionen(t));
+  if (aktRolle === "trainer" || hatRecht("termine")) det.appendChild(terminAktionen(t));
 }
 
 function anhaengen(ziel, el) { if (el) ziel.appendChild(el); }
@@ -1531,10 +1774,12 @@ function terminAktionen(t) {
   const akt = document.createElement("div");
   akt.className = "t-aktionen";
 
+  // Plan und Erinnerung sind Trainer-Sache; wer nur das Amt "Balu-Trainings-App" hat, bekommt das Löschen.
+  const trainer = aktRolle === "trainer";
   const oeffnen = document.createElement("button");
   oeffnen.textContent = "Öffnen & Plan";
   oeffnen.addEventListener("click", () => oeffneTraining(t.id));
-  akt.appendChild(oeffnen);
+  if (trainer) akt.appendChild(oeffnen);
 
   const erinnern = document.createElement("button");
   erinnern.textContent = "🔔 Erinnerung senden";
@@ -1547,7 +1792,7 @@ function terminAktionen(t) {
     } catch (e) { toast("Fehler: " + e.message); }
     finally { erinnern.disabled = false; }
   });
-  akt.appendChild(erinnern);
+  if (trainer) akt.appendChild(erinnern);
 
   // Zweistufig statt Rueckfrage-Dialog: erst scharf machen, dann loeschen.
   const weg = document.createElement("button");
@@ -1591,7 +1836,7 @@ async function terminLoeschen(t) {
 function renderTrainingNeu() {
   const el = document.getElementById("trainings-neu");
   if (!el) return;
-  if (aktRolle !== "trainer") { el.innerHTML = ""; return; }
+  if (aktRolle !== "trainer" && !hatRecht("termine")) { el.innerHTML = ""; return; }
   el.innerHTML =
     `<button id="tn-toggle" class="tn-toggle">＋ Neuer Termin</button>
      <div id="tn-form" class="tn-form hidden">
@@ -1698,6 +1943,7 @@ async function oeffneTraining(id) {
   renderTeilnahme(d);
   renderErinnern(d);
   renderTrainingPlan();
+  renderNachbereitung(d);
   zeigeView("view-training-detail");
 }
 
@@ -1808,6 +2054,199 @@ async function rsvpSenden(status, grund, d) {
 
 // Plan anzeigen. Der Plan ist NUR fuer das Trainerteam - Spielerinnen sehen
 // hier gar nichts, auch keinen Hinweis darauf, dass es einen gibt.
+// ============================================== Spiel-Nachbereitung (Trainer) ==
+//  Drei Textfelder je Spiel: Gedanken, Gegner (fuers Rueckspiel), Ansprache Montag.
+//  Der Server haelt sie in eigener Tabelle (nur Trainer). Hier gilt: nichts geht still
+//  verloren - jede Eingabe landet sofort als Entwurf in localStorage und bleibt dort,
+//  bis der Server das Speichern bestaetigt hat. Scheitert es (Funkloch), bleibt der
+//  Entwurf und die Meldung steht dauerhaft da. Hat ein anderer Trainer inzwischen
+//  gespeichert, antwortet der Server mit 409 und der Nutzer entscheidet.
+const NACHB_FELDER = [
+  ["gedanken", "Meine Gedanken", "Eindruck vom Spiel – was ist hängengeblieben?"],
+  ["gegner", "Gegner (fürs Rückspiel)", "Wie hat der Gegner gespielt, worauf ist zu achten?"],
+  ["ansprache", "Ansprache Montag", "Was will ich im Training zum Spiel und Wochenende sagen?"],
+];
+let nachb = null;   // { tid, basis, vorspiel_id, kandidaten, frueher, konflikt, status }
+let nachbTimer = null;
+
+function nachbEntwurfLesen(tid) {
+  try { return JSON.parse(localStorage.getItem("nachb-entwurf-" + tid) || "null"); } catch (_) { return null; }
+}
+function nachbEntwurfSchreiben(tid, e) {
+  try {
+    if (e) localStorage.setItem("nachb-entwurf-" + tid, JSON.stringify(e));
+    else localStorage.removeItem("nachb-entwurf-" + tid);
+    return true;
+  } catch (_) { return false; }     // privater Modus / Speicher voll: Seite laeuft trotzdem
+}
+
+function nachbWerte() {
+  const w = {};
+  for (const [k] of NACHB_FELDER) w[k] = $("#nachb-" + k).value;
+  return w;
+}
+
+function nachbStatus(text, art) {
+  if (nachb) nachb.status = { text, art };
+  const el = $("#nachb-status");
+  if (el) { el.textContent = text; el.className = "nachb-status " + (art || ""); }
+}
+
+function nachbFrueherHtml(liste) {
+  if (!liste.length) return "";
+  return liste.map((e) => {
+    const teile = [
+      e.gegner ? `<h4>Gegner</h4><p>${escape(e.gegner)}</p>` : "",
+      e.gedanken ? `<h4>Meine Gedanken</h4><p>${escape(e.gedanken)}</p>` : "",
+    ].join("");
+    return `<details class="nachb-frueher" open>
+      <summary>Beim letzten Mal${e.manuell ? " (von dir zugeordnet)" : ""}: ${escape(e.titel || e.gegner_name || "Spiel")}
+        · ${escape(e.datum ? datumKurz(e.datum) : "")}</summary>${teile || '<p class="hinweis">Nur eine Ansprache notiert.</p>'}
+    </details>`;
+  }).join("");
+}
+
+function nachbKonfliktHtml(k) {
+  const a = k.aktuell;
+  return `<div class="nachb-konflikt" role="alert">
+    <b>${escape(a.autor || "Ein anderer Trainer")} hat inzwischen gespeichert.</b>
+    <p class="hinweis">Dein Entwurf ist noch da und nichts ist überschrieben. Die andere Fassung:</p>
+    ${NACHB_FELDER.map(([key, name]) => a[key] ? `<h4>${escape(name)}</h4><p>${escape(a[key])}</p>` : "").join("")}
+    <div class="nachb-knoepfe">
+      <button type="button" data-nachb="meine">Meine Fassung speichern</button>
+      <button type="button" data-nachb="andere">Andere Fassung übernehmen</button>
+    </div></div>`;
+}
+
+function nachbZeichnen(werte) {
+  const el = $("#td-nachb");
+  const kand = nachb.kandidaten.map((c) =>
+    `<option value="${c.id}"${c.id === nachb.vorspiel_id ? " selected" : ""}>${escape(c.datum ? datumKurz(c.datum) : "")} · ${escape(c.gegner || c.titel || "Spiel")}</option>`).join("");
+  el.innerHTML =
+    `<div class="td-plan-kopf">Nachbereitung <span class="nur-trainer">nur für Trainer</span></div>
+     ${nachbFrueherHtml(nachb.frueher)}
+     ${nachb.konflikt ? nachbKonfliktHtml(nachb.konflikt) : ""}
+     ${NACHB_FELDER.map(([k, name, ph]) =>
+       `<label class="nachb-feld"><span>${name}</span>
+        <textarea id="nachb-${k}" rows="4" maxlength="10000" placeholder="${escape(ph)}"></textarea></label>`).join("")}
+     <details class="nachb-vor"><summary>Früheres Spiel gegen diesen Gegner von Hand wählen</summary>
+       <select id="nachb-vorspiel"><option value="">– keins –</option>${kand}</select>
+       <small class="hinweis">Falls der Gegner anders geschrieben ist. Gilt nach dem Speichern.</small></details>
+     <div class="nachb-knoepfe">
+       <button type="button" class="primaer" data-nachb="speichern">Speichern</button>
+       <span id="nachb-status" class="nachb-status"></span>
+     </div>`;
+  for (const [k] of NACHB_FELDER) $("#nachb-" + k).value = werte[k] || "";
+  if (nachb.status) nachbStatus(nachb.status.text, nachb.status.art);
+}
+
+async function renderNachbereitung(d) {
+  const el = $("#td-nachb");
+  nachb = null;
+  if (aktRolle !== "trainer" || !istSpiel(d)) { el.innerHTML = ""; return; }
+  const tid = d.id;
+  const entwurf = nachbEntwurfLesen(tid);
+  let server = null, ladefehler = false;
+  try { server = await api(`/api/trainings/${tid}/nachbereitung`); } catch (_) { ladefehler = true; }
+  if (!aktTraining || aktTraining.id !== tid) return;          // inzwischen ein anderes Spiel offen
+
+  nachb = {
+    tid,
+    basis: entwurf ? entwurf.basis : (server ? server.geaendert_am : null),
+    vorspiel_id: entwurf && "vorspiel_id" in entwurf ? entwurf.vorspiel_id : (server ? server.vorspiel_id : null),
+    kandidaten: server ? server.kandidaten : [],
+    frueher: server ? server.frueher : [],
+    konflikt: null, status: null,
+  };
+  let werte = server || {};
+  if (entwurf) {
+    werte = entwurf;
+    const veraltet = server && (server.geaendert_am || null) !== (entwurf.basis || null);
+    if (veraltet) nachb.konflikt = { aktuell: server };
+    nachb.status = { text: veraltet ? "Entwurf – die gespeicherte Fassung ist neuer, bitte oben entscheiden."
+                                    : "Ungespeicherter Entwurf von diesem Gerät.", art: "warn" };
+  } else if (ladefehler) {
+    nachb.status = { text: "Kein Netz: Du kannst schon schreiben, der Text bleibt als Entwurf auf diesem Gerät. Gespeicherte Notizen und Hinweise aus früheren Spielen lädst du mit Netz.", art: "warn" };
+  }
+  nachbZeichnen(werte);
+}
+
+async function nachbSpeichern(trotzKonflikt) {
+  if (!nachb) return;
+  const tid = nachb.tid, w = nachbWerte();
+  const vs = $("#nachb-vorspiel").value;
+  const vorspiel_id = vs ? Number(vs) : null;
+  const basis = trotzKonflikt && nachb.konflikt ? nachb.konflikt.aktuell.geaendert_am : nachb.basis;
+  // Sicherheitsnetz zuerst: Entwurf mit dem Stand, auf dem er beruht.
+  nachbEntwurfSchreiben(tid, { ...w, vorspiel_id, basis: nachb.basis, zeit: Date.now() });
+  const knopf = document.querySelector('[data-nachb="speichern"]');
+  if (knopf) knopf.disabled = true;
+  nachbStatus("Speichert…", "");
+  try {
+    const res = await fetch(`/api/trainings/${tid}/nachbereitung`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...w, vorspiel_id, basis }),
+    });
+    if (res.status === 409) {
+      const k = await res.json();
+      nachb.konflikt = { aktuell: k.aktuell };
+      nachb.vorspiel_id = vorspiel_id;
+      nachbZeichnen(w);
+      nachbStatus("Nicht gespeichert: Es gibt eine neuere Fassung. Dein Entwurf ist sicher.", "fehler");
+      return;
+    }
+    if (!res.ok) throw new Error((await res.text()) || res.statusText);
+    const d = await res.json();
+    nachbEntwurfSchreiben(tid, null);
+    if (!aktTraining || aktTraining.id !== tid) return;
+    nachb = { ...nachb, basis: d.geaendert_am, vorspiel_id: d.vorspiel_id, kandidaten: d.kandidaten,
+              frueher: d.frueher, konflikt: null, status: null };
+    nachbZeichnen(d);
+    nachbStatus("Gespeichert ✓", "ok");
+    Sync.frischHolen("/api/trainings").catch(() => {});      // 📝 in der Terminliste
+  } catch (e) {
+    nachbStatus(navigator.onLine
+      ? "Nicht gespeichert: " + e.message + " – Entwurf bleibt auf diesem Gerät."
+      : "Nicht gespeichert: kein Netz. Entwurf bleibt auf diesem Gerät, tippe später erneut auf Speichern.", "fehler");
+  } finally {
+    const k2 = document.querySelector('[data-nachb="speichern"]');
+    if (k2) k2.disabled = false;
+  }
+}
+
+$("#td-nachb").addEventListener("input", (e) => {
+  if (!nachb || !e.target.matches("textarea, select")) return;
+  clearTimeout(nachbTimer);
+  const tid = nachb.tid;
+  nachbTimer = setTimeout(() => {
+    if (!nachb || nachb.tid !== tid) return;
+    const vs = $("#nachb-vorspiel").value;
+    const ok = nachbEntwurfSchreiben(tid, { ...nachbWerte(), vorspiel_id: vs ? Number(vs) : null,
+                                            basis: nachb.basis, zeit: Date.now() });
+    nachbStatus(ok ? "Entwurf auf diesem Gerät gesichert – noch nicht gespeichert."
+                   : "Achtung: Entwurf konnte nicht lokal gesichert werden. Bitte speichern.", "warn");
+  }, 400);
+});
+
+$("#td-nachb").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-nachb]");
+  if (!b || !nachb) return;
+  if (b.dataset.nachb === "speichern") nachbSpeichern(false);
+  else if (b.dataset.nachb === "meine") nachbSpeichern(true);
+  else if (b.dataset.nachb === "andere") {
+    const a = nachb.konflikt.aktuell;
+    nachbEntwurfSchreiben(nachb.tid, null);
+    nachb = { ...nachb, basis: a.geaendert_am, vorspiel_id: a.vorspiel_id, kandidaten: a.kandidaten,
+              frueher: a.frueher, konflikt: null, status: null };
+    nachbZeichnen(a);
+    nachbStatus("Andere Fassung übernommen.", "ok");
+  }
+});
+
+window.addEventListener("online", () => {
+  if (nachb && nachbEntwurfLesen(nachb.tid)) toast("Wieder online – Nachbereitung jetzt speichern.");
+});
+
 function renderTrainingPlan() {
   const el = $("#td-plan");
   const d = aktTraining;
@@ -3055,6 +3494,7 @@ function renderIch() {
       <h2>${escape(sp.name)}</h2>
       ${positionsBadges(sp) || '<span class="pk-leer">Für dich ist noch keine Position hinterlegt – sag deinem Trainer Bescheid.</span>'}
     </div></div>`;
+  html += portraitKarteHtml(sp);
 
   // Trainingsbeteiligung: Quote gross, darunter der Balken und die Zahlen.
   if (tr && tr.erfasst) {
@@ -3093,9 +3533,142 @@ function renderIch() {
   html += statistikBlockHtml(ichAnalyse);
   el.innerHTML = html;
   el.querySelectorAll("[data-spiel]").forEach((b) => b.addEventListener("click", () => {
-    gehe("ich", "videos");
+    gehe(videosOber(), "videos");
     oeffneAnalyseDetail(+b.dataset.spiel);
   }));
+  portraitKarteBinden(el, sp);
+}
+
+// ------------------------------------------------------ Mein Portrait ----
+//  Die Spielerin waehlt selbst: eigenes Foto (zugeschnitten im Wappen-Format),
+//  Anfangsbuchstabe statt Foto, oder zurueck zum Standardfoto. Der Zuschnitt
+//  passiert hier im Browser (Canvas) - der Server bekommt ein fertiges, kleines
+//  JPEG und braucht keine Bildbibliothek.
+const PORTRAIT_B = 460, PORTRAIT_H = 552;               // 5:6 wie das Wappen
+
+function portraitKarteHtml(sp) {
+  if (aktBenutzer && aktBenutzer.ansicht_als) return "";   // Trainer-Ansicht ist nur lesend
+  const i = portraitInfo[sp.id] || {};
+  const initial = i.modus === "initial";
+  return `<section class="ich-karte" id="portrait-karte">
+    <div class="ik-kopf">Mein Portrait</div>
+    <div class="pk-zeile">
+      <div class="modus" role="group" aria-label="Darstellung">
+        <button type="button" data-pmodus="foto" aria-pressed="${!initial}">Foto</button>
+        <button type="button" data-pmodus="initial" aria-pressed="${initial}">Buchstabe</button>
+      </div>
+    </div>
+    <div class="pk-zeile">
+      <button type="button" class="sekundaer" id="portrait-neu">${i.v ? "Anderes Foto wählen" : "Eigenes Foto wählen"}</button>
+      ${i.v ? '<button type="button" class="sekundaer" id="portrait-weg">Eigenes Foto entfernen</button>' : ""}
+    </div>
+    <p class="hinweis">${initial
+      ? "Alle sehen von dir nur den Anfangsbuchstaben."
+      : i.v ? "Alle sehen dein eigenes Foto – auch in der Aufstellung."
+            : "Du hast kein eigenes Foto gewählt – es gilt das vom Trainer."}</p>
+    <input type="file" id="portrait-datei" accept="image/*" hidden />
+  </section>`;
+}
+
+function portraitKarteBinden(el, sp) {
+  const karte = el.querySelector("#portrait-karte");
+  if (!karte) return;
+  const aktualisieren = () => { kopfPortraitZeichnen(); renderIch(); };
+  const sende = async (pfad, opts) => {
+    try {
+      const r = await fetch(pfad, opts);
+      if (!r.ok) throw new Error();
+      return await r.json();
+    } catch (_) { toast("Ging nicht – Verbindung prüfen und nochmal versuchen."); return null; }
+  };
+  const merke = (felder) => {
+    portraitInfo[sp.id] = { ...(portraitInfo[sp.id] || { id: sp.id, name: sp.name, v: 0, modus: "foto" }), ...felder };
+    try { localStorage.setItem("portraits-info", JSON.stringify(Object.values(portraitInfo))); } catch (_) {}
+    aktualisieren();
+  };
+
+  karte.querySelectorAll("[data-pmodus]").forEach((b) => b.addEventListener("click", async () => {
+    const modus = b.dataset.pmodus;
+    const r = await sende("/api/ich/portrait-modus", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ modus }) });
+    if (r) merke({ modus: r.modus });
+  }));
+
+  const datei = karte.querySelector("#portrait-datei");
+  karte.querySelector("#portrait-neu").addEventListener("click", () => datei.click());
+  datei.addEventListener("change", () => {
+    const f = datei.files && datei.files[0];
+    datei.value = "";
+    if (f) portraitZuschneiden(f, async (blob) => {
+      const fd = new FormData();
+      fd.append("bild", blob, "portrait.jpg");
+      const r = await sende("/api/ich/portrait", { method: "POST", body: fd });
+      if (r) { merke({ v: r.v, modus: r.modus }); toast("Portrait gespeichert ✓"); }
+    });
+  });
+
+  const weg = karte.querySelector("#portrait-weg");
+  if (weg) weg.addEventListener("click", async () => {
+    if (!confirm("Eigenes Foto entfernen?")) return;
+    const r = await sende("/api/ich/portrait/loeschen", { method: "POST" });
+    if (r) merke({ v: 0 });
+  });
+}
+
+// Zuschnitt-Dialog: Bild mit dem Finger verschieben, per Regler zoomen. Die
+// Vorschau steckt in der Wappenform - so sieht man genau, was uebrig bleibt.
+async function portraitZuschneiden(datei, fertig) {
+  let bild;
+  try { bild = await createImageBitmap(datei, { imageOrientation: "from-image" }); }
+  catch (_) { toast("Das Bild konnte nicht gelesen werden."); return; }
+
+  const dlg = document.createElement("div");
+  dlg.className = "pz-dialog";
+  dlg.innerHTML = `<div class="pz-box" role="dialog" aria-label="Portrait zuschneiden">
+      <div class="pz-vorschau"><canvas width="${PORTRAIT_B}" height="${PORTRAIT_H}"></canvas></div>
+      <label class="pz-zoom">Ausschnitt
+        <input type="range" min="1" max="3" step="0.01" value="1" aria-label="Zoom" /></label>
+      <p class="hinweis">Mit dem Finger verschieben, mit dem Regler vergrößern.</p>
+      <div class="pz-knoepfe">
+        <button type="button" class="sekundaer" data-abbrechen>Abbrechen</button>
+        <button type="button" class="primaer" data-ok>Übernehmen</button>
+      </div></div>`;
+  document.body.appendChild(dlg);
+  const cv = dlg.querySelector("canvas"), g = cv.getContext("2d");
+  const regler = dlg.querySelector("input");
+  const basis = Math.max(PORTRAIT_B / bild.width, PORTRAIT_H / bild.height);   // "cover"
+  let zoom = 1, ox = 0, oy = 0;          // Versatz des Bildmittelpunkts in Canvas-Pixeln
+
+  const zeichnen = () => {
+    const s = basis * zoom, w = bild.width * s, h = bild.height * s;
+    // Bild muss die ganze Flaeche decken -> Versatz begrenzen
+    const mx = (w - PORTRAIT_B) / 2, my = (h - PORTRAIT_H) / 2;
+    ox = Math.max(-mx, Math.min(mx, ox));
+    oy = Math.max(-my, Math.min(my, oy));
+    g.fillStyle = "#fff"; g.fillRect(0, 0, PORTRAIT_B, PORTRAIT_H);
+    g.drawImage(bild, (PORTRAIT_B - w) / 2 + ox, (PORTRAIT_H - h) / 2 + oy, w, h);
+  };
+  zeichnen();
+
+  regler.addEventListener("input", () => { zoom = +regler.value; zeichnen(); });
+  let griff = null;
+  cv.addEventListener("pointerdown", (e) => { griff = { x: e.clientX, y: e.clientY }; cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener("pointermove", (e) => {
+    if (!griff) return;
+    const f = PORTRAIT_B / cv.getBoundingClientRect().width;       // Bildschirm- -> Canvas-Pixel
+    ox += (e.clientX - griff.x) * f; oy += (e.clientY - griff.y) * f;
+    griff = { x: e.clientX, y: e.clientY };
+    zeichnen();
+  });
+  const los = () => { griff = null; };
+  cv.addEventListener("pointerup", los); cv.addEventListener("pointercancel", los);
+
+  const zu = () => { bild.close && bild.close(); dlg.remove(); };
+  dlg.querySelector("[data-abbrechen]").addEventListener("click", zu);
+  dlg.addEventListener("click", (e) => { if (e.target === dlg) zu(); });
+  dlg.querySelector("[data-ok]").addEventListener("click", () => {
+    cv.toBlob((blob) => { zu(); if (blob) fertig(blob); }, "image/jpeg", 0.85);
+  });
 }
 
 // ========================================================= Spielanalysen ==
@@ -3236,7 +3809,7 @@ async function oeffneAnalyseDetail(aid) {
   if (ganzes) ganzes.addEventListener("click", () => oeffneAnalyseVideo(a.id, 0, "TVG – " + a.gegner, null));
 }
 
-$("#btn-analyse-zurueck").addEventListener("click", () => mitScrollRueckkehr(() => gehe("ich", "videos")));
+$("#btn-analyse-zurueck").addEventListener("click", () => mitScrollRueckkehr(() => gehe(videosOber(), "videos")));
 
 let analyseZurueckView = null;
 
@@ -3446,7 +4019,7 @@ function szenenKlick(e) {
     const s = (szenenDaten.spiele || []).flatMap((g) => g.szenen).find((x) => x.id === t.dataset.sid);
     if (!s) return;
     oeffneSzenenClip(+t.dataset.clip, s.id + " · " + s.label,
-      { text: s.label + " (" + s.id + ")", farbe: s.ampel || "grau", kommentar: "",
+      { text: s.label + " (" + s.id + ")", farbe: s.ampel || "grau", kommentar: s.kommentar || "",
         zeit: [s.spiel, s.zeit].filter(Boolean).join(" · ") });
     return;
   }
@@ -4021,13 +4594,44 @@ async function ladePortraitIndex() {
   } catch (_) { /* offline: der gespiegelte Index reicht */ }
 }
 
+// Die Spielerinnen waehlen ihr Portrait selbst (eigenes Foto oder nur der
+// Anfangsbuchstabe). Das steht je Spielerin in der Datenbank, nach ID:
+//   { id, name, v: Version des eigenen Fotos (0 = keins), modus: "foto"|"initial" }
+// Entscheidung in wappen(): modus "initial" -> Buchstabe; eigenes Foto -> das;
+// sonst das Standardfoto aus index.json; sonst Buchstabe.
+let portraitInfo = {};
+function portraitInfoSetzen(liste) {
+  portraitInfo = {};
+  (liste || []).forEach((p) => { portraitInfo[p.id] = p; });
+}
+async function ladePortraitInfo() {
+  try { portraitInfoSetzen(JSON.parse(localStorage.getItem("portraits-info") || "[]")); } catch (_) {}
+  try {
+    const r = await fetch("/api/portraits", { cache: "no-store" });
+    if (!r.ok) return false;                         // nicht angemeldet: Spiegel genuegt
+    const liste = await r.json();
+    const neu = JSON.stringify(liste);
+    const geaendert = neu !== localStorage.getItem("portraits-info");
+    localStorage.setItem("portraits-info", neu);
+    portraitInfoSetzen(liste);
+    return geaendert;
+  } catch (_) { return false; }                      // offline: Spiegel genuegt
+}
+function portraitUrl(sp) {
+  const i = portraitInfo[sp.id];
+  if (i && i.modus === "initial") return null;
+  if (i && i.v) return `/api/portrait/${i.id}?v=${i.v}`;
+  const datei = portraitBild(sp.name);
+  return datei ? "/portraits/" + encodeURIComponent(datei) : null;
+}
+
 // Portrait im Wappen: Foto, wenn eins da ist - sonst die Initialen.
 // Die Initialen bleiben im Markup und werden sichtbar, falls das Bild fehlt.
 function wappen(sp, groesse) {
   const t = [["#3467C9", "#16376F"], ["#2F62BD", "#122F5E"], ["#4A7BD4", "#1B3F7E"]][sp.id % 3];
-  const datei = portraitBild(sp.name);
-  const foto = datei
-    ? `<img class="pf" src="/portraits/${encodeURIComponent(datei)}" alt=""` +
+  const url = portraitUrl(sp);
+  const foto = url
+    ? `<img class="pf" src="${url}" alt=""` +
       ` loading="lazy" decoding="async" onerror="this.remove()" />`
     : "";
   return `<span class="wappen" style="--w:${groesse}px;--c1:${t[0]};--c2:${t[1]}">` +
@@ -4377,6 +4981,186 @@ $("#form-spieler").addEventListener("submit", async (e) => {
     ladeKader();
     toast(name + " hinzugefügt");
   } catch (err) { toast("Fehler: " + err.message); }
+});
+
+// ============================================================ Wochen-To-Dos ==
+//  Spielerin (Ich -> To Do): wählt aus den Zielen, die der Trainer für sie angelegt
+//  hat, eins für die Woche. Trainer (Team -> To-Dos): legt Ziele an, sieht die Wahl
+//  und gibt am Wochenende Feedback: „bleibt“ (weiter daran arbeiten) oder „erledigt“.
+//  Nur online – Schreiben ohne Netz meldet einen Fehler statt still zu verschwinden.
+let todoDaten = null;          // Antwort von /api/todos
+let todoTeam = null;           // Antwort von /api/todos/team
+const todoAufgeklappt = new Set();   // spieler_id der geöffneten Blöcke (überlebt Neuzeichnen)
+
+function todoDatum(iso) {
+  const d = new Date(iso + "T00:00:00");
+  return isNaN(d) ? iso : d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
+}
+function todoFehler(e) {
+  try { const j = JSON.parse(e.message); if (j && j.detail) return j.detail; } catch (_) {}
+  return "Keine Verbindung – bitte später nochmal.";
+}
+// Jüngstes Feedback eines To-Dos (die Wochenliste ist neueste-zuerst sortiert)
+const todoLetztesFeedback = (t) => t.wochen.find((w) => w.ergebnis);
+
+async function ladeTodo() {
+  const el = $("#todo-inhalt");
+  if (!todoDaten) el.innerHTML = '<p class="hinweis">Lädt…</p>';
+  try {
+    todoDaten = await api("/api/todos");
+    renderTodo();
+  } catch (_) {
+    if (!todoDaten) el.innerHTML = '<p class="hinweis">Deine To-Dos konnten nicht geladen werden – dafür brauchst du eine Verbindung.</p>';
+  }
+}
+
+function renderTodo() {
+  const el = $("#todo-inhalt");
+  const { todos, woche, max_wahl: maxWahl } = todoDaten;
+  if (!todos.length) {
+    el.innerHTML = '<p class="hinweis">Dein Trainer hat noch keine To-Dos für dich angelegt.</p>';
+    return;
+  }
+  const feedback = (t) => {
+    const f = todoLetztesFeedback(t);
+    return f && f.feedback
+      ? `<div class="todo-feedback"><b>Trainer</b> (Woche ab ${todoDatum(f.woche)}): ${escape(f.feedback)}</div>` : "";
+  };
+  const gewaehlt = todos.filter((t) => t.gewaehlt);
+  const voll = gewaehlt.length >= maxWahl;
+  const wahl = gewaehlt.filter((t) => t.status === "offen").map((t) => `<div class="todo-zeile todo-gewaehlt">
+      <span class="todo-haken">☐</span>
+      <div class="todo-text">${escape(t.text)}${feedback(t)}</div>
+      ${t.wochen.some((w) => w.woche === woche && w.ergebnis) ? "" :
+        `<button type="button" class="todo-knopf" data-todo-waehlen="${t.id}" data-an="0">Zurücknehmen</button>`}
+    </div>`).join("");
+  const offen = todos.filter((t) => t.status === "offen" && !t.gewaehlt).map((t) => `<div class="todo-zeile">
+      <span class="todo-haken">☐</span>
+      <div class="todo-text">${escape(t.text)}${feedback(t)}</div>
+      <button type="button" class="todo-knopf primaer" data-todo-waehlen="${t.id}" data-an="1" ${voll ? "disabled" : ""}>Wählen</button>
+    </div>`).join("");
+  const fertig = todos.filter((t) => t.status === "erledigt").map((t) => `<div class="todo-zeile todo-fertig">
+      <span class="todo-haken">☑</span>
+      <div class="todo-text">${escape(t.text)}${feedback(t)}</div>
+    </div>`).join("");
+  el.innerHTML = `<p class="hinweis">Wähle für die Woche ab ${todoDatum(woche)} ${maxWahl === 1 ? "ein To-Do" : "bis zu " + maxWahl + " To-Dos"}. Im Training schaut dein Trainer, wie es lief.</p>`
+    + `<h3 class="todo-titel">Diese Woche</h3>`
+    + (wahl || '<p class="hinweis">Noch nichts gewählt.</p>')
+    + (offen ? `<h3 class="todo-titel">Zur Auswahl</h3>${offen}` : "")
+    + (fertig ? `<h3 class="todo-titel">Geschafft</h3>${fertig}` : "");
+}
+
+$("#todo-inhalt").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-todo-waehlen]");
+  if (!b || b.disabled) return;
+  b.disabled = true;
+  try {
+    todoDaten = await api(`/api/todos/${b.dataset.todoWaehlen}/waehlen`, "POST", { gewaehlt: b.dataset.an === "1" });
+    renderTodo();
+  } catch (err) { toast(todoFehler(err)); b.disabled = false; }
+});
+
+async function ladeTodoTeam() {
+  const el = $("#todo-team-inhalt");
+  if (!todoTeam) el.innerHTML = '<p class="hinweis">Lädt…</p>';
+  try {
+    todoTeam = await api("/api/todos/team");
+    renderTodoTeam();
+  } catch (_) {
+    if (!todoTeam) el.innerHTML = '<p class="hinweis">To-Dos konnten nicht geladen werden – dafür brauchst du eine Verbindung.</p>';
+  }
+}
+
+function todoTeamZeile(t, woche) {
+  const w = t.wochen.find((x) => x.woche === t.offene_woche);
+  let status = "";
+  if (t.status === "erledigt") status = '<span class="todo-chip fertig">✓ erledigt</span>';
+  else if (t.gewaehlt) status = '<span class="todo-chip gewaehlt">diese Woche gewählt</span>';
+  const fb = !w ? "" : `<div class="todo-fbbox" data-todo="${t.id}" data-woche="${w.woche}">
+      <small>Gewählt für die Woche ab ${todoDatum(w.woche)}${w.woche === woche ? " (läuft noch)" : ""}</small>
+      <textarea rows="2" maxlength="1000" placeholder="Kurzes Feedback: Wie lief es?"></textarea>
+      <div class="todo-fbknoepfe">
+        <button type="button" data-todo-fb="bleibt">Bleibt noch</button>
+        <button type="button" class="primaer" data-todo-fb="erledigt">Erledigt ✓</button>
+      </div></div>`;
+  const letztes = todoLetztesFeedback(t);
+  const alt = letztes && letztes.feedback
+    ? `<div class="todo-feedback">Dein Feedback (${todoDatum(letztes.woche)}, ${letztes.ergebnis === "erledigt" ? "erledigt" : "bleibt"}): ${escape(letztes.feedback)}</div>` : "";
+  return `<div class="todo-zeile ${t.status === "erledigt" ? "todo-fertig" : ""}">
+      <span class="todo-haken">${t.status === "erledigt" ? "☑" : "☐"}</span>
+      <div class="todo-text">${escape(t.text)} ${status}${alt}${fb}</div>
+      <div class="todo-aktionen">
+        ${t.status === "erledigt" ? `<button type="button" data-todo-offen="${t.id}" title="Wieder öffnen">↺</button>` : ""}
+        <button type="button" data-todo-edit="${t.id}" title="Text ändern">✎</button>
+        <button type="button" data-todo-del="${t.id}" title="Löschen">🗑</button>
+      </div></div>`;
+}
+
+function renderTodoTeam() {
+  const el = $("#todo-team-inhalt");
+  const { spielerinnen, woche, warten } = todoTeam;
+  const kopf = `<p class="hinweis">Woche ab ${todoDatum(woche)} · ${warten ? `<b>${warten} warten auf Feedback</b>` : "kein Feedback offen"}</p>`;
+  el.innerHTML = kopf + spielerinnen.map((s) => {
+    const offeneFb = s.todos.filter((t) => t.offene_woche).length;
+    const offen = todoAufgeklappt.has(s.spieler_id) || offeneFb > 0;
+    const gewaehlt = s.todos.filter((t) => t.gewaehlt).map((t) => t.text);
+    return `<details class="todo-block" data-sid="${s.spieler_id}" ${offen ? "open" : ""}>
+      <summary><b>${escape(s.name)}</b>
+        <small>${s.todos.length ? `${s.todos.filter((t) => t.status === "offen").length} offen` : "keine To-Dos"}${gewaehlt.length ? " · gewählt: " + escape(gewaehlt.join(", ")) : ""}</small>
+        ${offeneFb ? `<span class="todo-chip warte">${offeneFb} Feedback</span>` : ""}</summary>
+      ${s.todos.map((t) => todoTeamZeile(t, woche)).join("")}
+      <form class="todo-neu" data-sid="${s.spieler_id}">
+        <input type="text" maxlength="200" placeholder="Neues To-Do, z. B. Fangen mit zwei Händen" required />
+        <button type="submit" class="primaer">+</button>
+      </form></details>`;
+  }).join("");
+}
+
+async function todoTeamSenden(pfad, body) {
+  try {
+    todoTeam = await api(pfad, "POST", body || {});
+    renderTodoTeam();
+    return true;
+  } catch (err) { toast(todoFehler(err)); return false; }
+}
+
+$("#todo-team-inhalt").addEventListener("toggle", (e) => {
+  const d = e.target;
+  if (!d.classList || !d.classList.contains("todo-block")) return;
+  const sid = +d.dataset.sid;
+  if (d.open) todoAufgeklappt.add(sid); else todoAufgeklappt.delete(sid);
+}, true);
+
+$("#todo-team-inhalt").addEventListener("submit", async (e) => {
+  const f = e.target.closest(".todo-neu");
+  if (!f) return;
+  e.preventDefault();
+  const feld = f.querySelector("input");
+  todoAufgeklappt.add(+f.dataset.sid);
+  if (await todoTeamSenden("/api/todos", { spieler_id: +f.dataset.sid, text: feld.value })) toast("To-Do angelegt");
+});
+
+$("#todo-team-inhalt").addEventListener("click", async (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  const find = (name) => todoTeam.spielerinnen.flatMap((s) => s.todos).find((t) => t.id === +b.dataset[name]);
+  if (b.dataset.todoFb) {
+    const box = b.closest(".todo-fbbox");
+    const ok = await todoTeamSenden(`/api/todos/${box.dataset.todo}/feedback`, {
+      woche: box.dataset.woche, text: box.querySelector("textarea").value, ergebnis: b.dataset.todoFb });
+    if (ok) toast(b.dataset.todoFb === "erledigt" ? "Abgehakt – die Spielerin sieht es ✓" : "Bleibt offen");
+  } else if (b.dataset.todoDel) {
+    const t = find("todoDel");
+    if (t && confirm(`„${t.text}“ löschen? Auch der Verlauf dazu geht verloren.`)) {
+      await todoTeamSenden(`/api/todos/${t.id}/loeschen`);
+    }
+  } else if (b.dataset.todoEdit) {
+    const t = find("todoEdit");
+    const neu = t && prompt("To-Do ändern:", t.text);
+    if (neu && neu.trim() && neu !== t.text) await todoTeamSenden(`/api/todos/${t.id}/aendern`, { text: neu });
+  } else if (b.dataset.todoOffen) {
+    await todoTeamSenden(`/api/todos/${b.dataset.todoOffen}/aendern`, { status: "offen" });
+  }
 });
 
 // -------------------------------------------------------------- Hilfsmittel ----
@@ -4796,11 +5580,344 @@ $("#btn-mic").addEventListener("click", async () => {
   }
 });
 
+// ================================================================== Ämter ====
+//  Ämter der Mannschaft (aemter.py). Hier wird nur gezeigt, was die Rolle oder das Amt erlaubt;
+//  die Rechte prüft der Server bei jedem Aufruf. Wie bei den To-Dos geht das Schreiben nur online.
+//  Reiter "Mannschaft" (Spielerin) bzw. Saison (Trainer) mit zwei Seiten:
+//    Ämter   wer hat welches Amt, was heißt das; der Trainer vergibt sie
+//    Listen  Trikots, Leibchen, Getränke, Bussle: wer ist dran, wer wie oft
+let aemterDaten = null;                 // Antwort von /api/aemter
+const aemterBearbeiten = new Set();     // Ämter, die der Trainer gerade bearbeitet
+const aemterEntwurf = new Map();        // ungespeicherter Beschreibungstext je Amt
+const listenDaten = new Map();          // amt_id -> Antwort von /api/aemter/:id/liste
+const listenOffen = new Set();          // aufgeklappte Listen; bleibt beim Neuzeichnen
+const listenGesehen = new Set();        // Listen, deren Startzustand (auf/zu) schon gesetzt wurde
+
+const hatRecht = (r) => !!(aktBenutzer && (aktBenutzer.rechte || []).includes(r));
+const amtOber = () => (aktRolle === "trainer" ? "saison" : "mannschaft");
+const amtFehler = (e) => {
+  try { return JSON.parse(e.message).detail || e.message; } catch (_) { return e.message; }
+};
+
+async function ladeAemter() {
+  const el = $("#aemter-inhalt");
+  if (!aemterDaten) el.innerHTML = '<p class="hinweis">Lädt…</p>';
+  try {
+    aemterDaten = await api("/api/aemter");
+    renderAemter();
+  } catch (_) {
+    if (!aemterDaten) el.innerHTML = '<p class="hinweis">Die Ämter konnten nicht geladen werden – dafür brauchst du eine Verbindung.</p>';
+  }
+}
+
+function amtKarte(a) {
+  const sid = eigeneSpielerId();
+  const verwalten = aemterDaten.kann_verwalten;
+  const edit = verwalten && aemterBearbeiten.has(a.id);
+  const namen = a.inhaber.length
+    ? a.inhaber.map((i) => `<span class="amt-chip${i.spieler_id === sid ? " ich" : ""}">${escape(i.name)}</span>`).join("")
+    : '<span class="amt-leer">noch niemand</span>';
+  let editor = "";
+  if (edit) {
+    const hat = new Set(a.inhaber.map((i) => i.spieler_id));
+    const text = aemterEntwurf.has(a.id) ? aemterEntwurf.get(a.id) : a.beschreibung;
+    editor = `<div class="amt-editor">
+      <label>Beschreibung<textarea rows="3" maxlength="500" data-amt-text="${a.id}">${escape(text)}</textarea></label>
+      <button type="button" class="todo-knopf primaer" data-amt-speichern="${a.id}">Beschreibung speichern</button>
+      <div class="amt-wahl-titel">Wer hat das Amt? Antippen zum Vergeben oder Entziehen.</div>
+      <div class="amt-inhaber">${aemterDaten.kader.map((k) =>
+        `<button type="button" class="amt-chip wahl${hat.has(k.id) ? " an" : ""}" data-amt-inhaber="${a.id}" data-sp="${k.id}" data-an="${hat.has(k.id) ? 0 : 1}">${escape(k.name)}</button>`).join("")}</div>
+    </div>`;
+  }
+  return `<article class="amt-karte${a.meine ? " meine" : ""}">
+    <div class="amt-kopf"><h3>${escape(a.name)}</h3>${verwalten
+      ? `<button type="button" class="amt-edit" data-amt-edit="${a.id}">${edit ? "Fertig" : "Bearbeiten"}</button>` : ""}</div>
+    <p class="amt-text">${a.beschreibung ? escape(a.beschreibung) : '<span class="amt-leer">Noch keine Beschreibung.</span>'}</p>
+    <div class="amt-inhaber">${namen}</div>
+    ${(a.rechte || []).length ? `<p class="amt-recht">Gibt das Recht: ${escape(a.rechte.join(", "))}</p>` : ""}
+    ${a.hat_liste ? `<button type="button" class="amt-link" data-amt-liste="${a.id}">Liste ansehen ›</button>` : ""}
+    ${editor}</article>`;
+}
+
+function renderAemter() {
+  const el = $("#aemter-inhalt");
+  const alle = aemterDaten.aemter;
+  const meine = alle.filter((a) => a.meine);
+  const rest = alle.filter((a) => !a.meine);
+  const neu = aemterDaten.kann_verwalten
+    ? `<details class="amt-neu"><summary>＋ Neues Amt</summary>
+         <input id="amt-neu-name" type="text" maxlength="60" placeholder="Name, z. B. Zeugwart" />
+         <textarea id="amt-neu-text" rows="2" maxlength="500" placeholder="Was macht das Amt?"></textarea>
+         <button type="button" class="todo-knopf primaer" data-amt-neu>Amt anlegen</button>
+       </details>` : "";
+  el.innerHTML = neu
+    + (meine.length ? `<h3 class="todo-titel">Deine Ämter</h3>${meine.map(amtKarte).join("")}` : "")
+    + `<h3 class="todo-titel">${meine.length ? "Weitere Ämter" : "Alle Ämter"}</h3>${rest.map(amtKarte).join("")}`;
+}
+
+// Nach einer Änderung an den eigenen Ämtern holt die App sich /api/me neu (Profil-Menü, Rechte).
+async function meNeuLaden() {
+  try { setzeBenutzer(await api("/api/me")); } catch (_) {}
+}
+
+$("#aemter-inhalt").addEventListener("input", (e) => {
+  const t = e.target.closest("[data-amt-text]");
+  if (t) aemterEntwurf.set(Number(t.dataset.amtText), t.value);
+});
+
+$("#aemter-inhalt").addEventListener("click", async (e) => {
+  const b = e.target.closest("button");
+  if (!b || b.disabled) return;
+  const d = b.dataset;
+  if (d.amtEdit) {
+    const id = Number(d.amtEdit);
+    if (aemterBearbeiten.has(id)) aemterBearbeiten.delete(id); else aemterBearbeiten.add(id);
+    renderAemter();
+    return;
+  }
+  if (d.amtListe) { listenOffen.add(Number(d.amtListe)); listenGesehen.add(Number(d.amtListe)); gehe(amtOber(), "listen"); return; }
+  b.disabled = true;
+  try {
+    if (d.amtInhaber) {
+      await api(`/api/aemter/${d.amtInhaber}/inhaber`, "POST", { spieler_id: Number(d.sp), da: d.an === "1" });
+      if (Number(d.sp) === eigeneSpielerId()) meNeuLaden();
+    } else if (d.amtSpeichern) {
+      const id = Number(d.amtSpeichern);
+      const text = aemterEntwurf.has(id) ? aemterEntwurf.get(id) : (aemterDaten.aemter.find((a) => a.id === id) || {}).beschreibung || "";
+      await api(`/api/aemter/${id}/beschreibung`, "POST", { beschreibung: text });
+      aemterEntwurf.delete(id);
+      toast("Beschreibung gespeichert ✓");
+    } else if (b.hasAttribute("data-amt-neu")) {
+      const name = $("#amt-neu-name").value.trim();
+      if (!name) { toast("Bitte einen Namen eintragen."); b.disabled = false; return; }
+      await api("/api/aemter", "POST", { name, beschreibung: $("#amt-neu-text").value.trim() });
+      toast("Amt angelegt ✓");
+    } else { b.disabled = false; return; }
+    aemterDaten = await api("/api/aemter");
+    renderAemter();
+  } catch (err) { toast("Fehler: " + amtFehler(err)); b.disabled = false; }
+});
+
+// ---- Listen --------------------------------------------------------------
+async function ladeListen() {
+  const el = $("#listen-inhalt");
+  if (!listenDaten.size) el.innerHTML = '<p class="hinweis">Lädt…</p>';
+  try {
+    aemterDaten = await api("/api/aemter");
+    const mit = aemterDaten.aemter.filter((a) => a.hat_liste);
+    const daten = await Promise.all(mit.map((a) => api(`/api/aemter/${a.id}/liste`)));
+    mit.forEach((a, i) => {
+      listenDaten.set(a.id, daten[i]);
+      if (!listenGesehen.has(a.id)) {                  // Startzustand: aufgeklappt, wenn ich die Liste pflege
+        listenGesehen.add(a.id);
+        if (daten[i].darf_pflegen) listenOffen.add(a.id);
+      }
+    });
+    renderListen();
+  } catch (_) {
+    if (!listenDaten.size) el.innerHTML = '<p class="hinweis">Die Listen konnten nicht geladen werden – dafür brauchst du eine Verbindung.</p>';
+  }
+}
+
+function listenTermin(a, d, t) {
+  const sid = eigeneSpielerId();
+  const dt = datumTeile(t.datum);
+  const darf = d.darf_pflegen;
+  const fahrten = a.typ === "fahrten";
+  const hat = new Set(t.zugeteilt.map((z) => z.spieler_id));
+  const x = (id) => `<button type="button" class="chip-x" data-lt-weg="${id}" aria-label="Entfernen">×</button>`;
+  const namen = t.zugeteilt.map((z) => {
+    const ich = z.spieler_id === sid ? " ich" : "";
+    if (fahrten || !darf) return `<span class="amt-chip${ich}">${!fahrten && z.erledigt ? "☑ " : ""}${escape(z.name)}${darf ? x(z.spieler_id) : ""}</span>`;
+    return `<span class="amt-chip${ich}${z.erledigt ? " fertig" : ""}"><button type="button" class="chip-haken" data-lt-erledigt="${z.spieler_id}" data-an="${z.erledigt ? 0 : 1}" title="${z.erledigt ? "Wieder öffnen" : "Abhaken"}">${z.erledigt ? "☑" : "☐"} ${escape(z.name)}</button>${x(z.spieler_id)}</span>`;
+  }).join("") || `<span class="amt-leer">${fahrten ? "niemand fährt selbst" : "noch niemand eingeteilt"}</span>`;
+  const bussleText = t.status === "da" ? "Bussle da" : t.status === "nicht_da" ? "Bussle nicht da" : "Bussle: noch nicht geklärt";
+  const bussle = !fahrten ? "" : darf
+    ? `<div class="lt-bussle">
+         <button type="button" class="${t.status === "da" ? "an" : ""}" data-lt-bussle="da">Bussle da</button>
+         <button type="button" class="${t.status === "nicht_da" ? "an nein" : ""}" data-lt-bussle="nicht_da">Bussle nicht da</button>
+       </div>`
+    : `<div class="lt-bussle"><span class="amt-chip${t.status === "da" ? " an" : t.status === "nicht_da" ? " nein" : ""}">${bussleText}</span></div>`;
+  const frage = fahrten ? "Wer fährt selbst?" : "Wer ist dran?";
+  const wahl = !darf ? "" : `<div class="lt-wahl">
+      <select aria-label="${frage}"><option value="">${frage}</option>${
+        d.zaehler.filter((z) => !hat.has(z.spieler_id)).map((z) => `<option value="${z.spieler_id}">${escape(z.name)} (${z.anzahl}×)</option>`).join("")}</select>
+      <button type="button" class="todo-knopf primaer" data-lt-zuteilen>${fahrten ? "Eintragen" : "Einteilen"}</button>
+    </div>`;
+  const wo = t.heim === 0 && t.abfahrt ? ` · Abfahrt ${escape(t.abfahrt)}` : "";
+  return `<div class="liste-termin" data-training="${t.training_id}">
+      <div class="lt-kopf"><b>${dt.wt} ${dt.tag}</b><span>${escape(t.titel || "")}${wo}</span></div>
+      ${bussle}
+      ${fahrten ? '<div class="amt-wahl-titel">Fährt selbst mit dem Auto</div>' : ""}
+      <div class="amt-inhaber">${namen}</div>${wahl}</div>`;
+}
+
+function listenKarte(a) {
+  const d = listenDaten.get(a.id);
+  if (!d) return "";
+  const sid = eigeneSpielerId();
+  const heute = heuteIso();
+  const kommend = d.termine.filter((t) => t.datum >= heute);
+  const vorbei = d.termine.filter((t) => t.datum < heute).reverse();
+  const dran = kommend.find((t) => t.zugeteilt.some((z) => z.spieler_id === sid));
+  const dd = dran ? datumTeile(dran.datum) : null;
+  const hinweis = dran ? `du: ${dd.wt} ${dd.tag}` : (d.darf_pflegen ? "du pflegst diese Liste" : "");
+  const zaehler = d.zaehler.map((z) =>
+    `<span class="amt-chip${z.spieler_id === sid ? " ich" : ""}" title="${z.offen ? z.offen + " noch nicht abgehakt" : ""}">${escape(z.name)} <b>${z.anzahl}×</b>${z.offen ? ' <i class="offen">●</i>' : ""}</span>`).join("");
+  return `<details class="liste-karte" data-amt="${a.id}" ${listenOffen.has(a.id) ? "open" : ""}>
+    <summary><span class="lk-name">${escape(a.name)}</span>${hinweis ? `<small>${escape(hinweis)}</small>` : ""}</summary>
+    <p class="amt-text">${escape(a.beschreibung)}</p>
+    <div class="amt-wahl-titel">Wie oft dran seit dem 1. Juli · wer am seltensten, steht vorne</div>
+    <div class="amt-inhaber">${zaehler}</div>
+    <h4 class="lk-titel">Kommende Termine</h4>
+    ${kommend.length ? kommend.map((t) => listenTermin(a, d, t)).join("") : '<p class="hinweis">Keine Termine in den nächsten Wochen.</p>'}
+    ${vorbei.length ? `<details class="lk-vorbei"><summary>Zuletzt (${vorbei.length})</summary>${vorbei.map((t) => listenTermin(a, d, t)).join("")}</details>` : ""}
+  </details>`;
+}
+
+function renderListen() {
+  const el = $("#listen-inhalt");
+  const mit = aemterDaten.aemter.filter((a) => a.hat_liste);
+  el.innerHTML = mit.length ? mit.map(listenKarte).join("") : '<p class="hinweis">Es gibt noch keine Listen.</p>';
+}
+
+// "toggle" sprudelt nicht nach oben, darum im Capture-Modus lauschen.
+$("#listen-inhalt").addEventListener("toggle", (e) => {
+  const k = e.target;
+  if (!k.classList || !k.classList.contains("liste-karte")) return;
+  const id = Number(k.dataset.amt);
+  if (k.open) listenOffen.add(id); else listenOffen.delete(id);
+}, true);
+
+$("#listen-inhalt").addEventListener("click", async (e) => {
+  const b = e.target.closest("button");
+  const zeile = b && b.closest(".liste-termin");
+  if (!b || b.disabled || !zeile) return;
+  const amtId = Number(b.closest(".liste-karte").dataset.amt);
+  const training_id = Number(zeile.dataset.training);
+  const d = b.dataset;
+  let pfad, body;
+  if (d.ltZuteilen !== undefined) {
+    const sp = zeile.querySelector("select").value;
+    if (!sp) { toast("Bitte eine Spielerin auswählen."); return; }
+    pfad = "zuteilung"; body = { training_id, spieler_id: Number(sp), da: true };
+  } else if (d.ltWeg) {
+    pfad = "zuteilung"; body = { training_id, spieler_id: Number(d.ltWeg), da: false };
+  } else if (d.ltErledigt) {
+    pfad = "erledigt"; body = { training_id, spieler_id: Number(d.ltErledigt), erledigt: d.an === "1" };
+  } else if (d.ltBussle) {
+    const jetzt = (listenDaten.get(amtId).termine.find((t) => t.training_id === training_id) || {}).status;
+    pfad = "bussle"; body = { training_id, status: jetzt === d.ltBussle ? null : d.ltBussle };   // zweites Antippen nimmt es zurück
+  } else return;
+  b.disabled = true;
+  try {
+    await api(`/api/aemter/${amtId}/${pfad}`, "POST", body);
+    listenDaten.set(amtId, await api(`/api/aemter/${amtId}/liste`));
+    renderListen();
+  } catch (err) { toast("Fehler: " + amtFehler(err)); b.disabled = false; }
+});
+
+// Home: "Du bist dran" mit den Aufgaben aus den Listen (nur Spielerinnen).
+async function renderHomeAemter() {
+  const el = $("#home-aemter");
+  if (!eigeneSpielerId() || aktRolle !== "spieler") { el.innerHTML = ""; return; }
+  let liste = [];
+  try { liste = (await api("/api/aemter/meine-aufgaben")).aufgaben; } catch (_) {}
+  if (!liste.length) { el.innerHTML = ""; return; }
+  const heute = heuteIso();
+  const zeilen = liste.slice(0, 3).map((a) => {
+    const dt = datumTeile(a.datum);
+    const was = a.typ === "fahrten" ? "du fährst selbst mit dem Auto" : "du bist dran";
+    const offen = a.typ === "zuteilung" && a.datum < heute && !a.erledigt ? " · noch offen" : "";
+    return `<p class="ht-text"><b>${escape(a.amt)}</b> · ${was}<br><span class="ht-sub">${dt.wt} ${dt.tag} · ${escape(a.titel || "")}${offen}</span></p>`;
+  }).join("");
+  el.innerHTML = `<button type="button" class="ht-karte ziel"><div class="ht-kopf"><b>Du bist dran</b></div>${zeilen}</button>`;
+  el.querySelector("button").addEventListener("click", () => gehe("mannschaft", "listen"));
+}
+
+// ============================================================ Profil-Menü ====
+//  Der Kreis oben rechts öffnet Profil, To-Dos, Mitteilungen, Darstellung und Abmelden.
+//  Das ersetzt den eigenen Reiter "Ich" und die Leiste mit "Abmelden" auf Home.
+function profilMenueOeffnen() {
+  baueProfilMenue();
+  $("#profil-menue").classList.remove("hidden");
+  $("#profil-knopf").setAttribute("aria-expanded", "true");
+}
+function profilMenueSchliessen() {
+  $("#profil-menue").classList.add("hidden");
+  $("#profil-knopf").setAttribute("aria-expanded", "false");
+}
+
+function baueProfilMenue() {
+  const me = aktBenutzer || {};
+  const sid = eigeneSpielerId();
+  const position = (ichDaten && ichDaten.spieler && ichDaten.spieler.position_angriff) || "";
+  $("#pm-kopf").innerHTML =
+    `${wappen(eigenePerson(), 40)}
+     <span><b>${escape(me.name || "")}</b><small>${aktRolle === "trainer" ? "Trainer" : "Spielerin"}${position ? " · " + escape(position) : ""}</small>${
+       (me.aemter || []).length ? `<small class="pm-aemter">${escape(me.aemter.map((a) => a.name).join(" · "))}</small>` : ""}</span>`;
+  const eintraege = [];
+  if (sid) {
+    eintraege.push(["user", "Mein Profil", () => gehe("ich", "ich")]);
+    eintraege.push(["checklist", "Meine To-Dos", () => gehe("ich", "todo")]);
+    eintraege.push(["chart", "Meine Statistik", () => {
+      gehe("ich", "ich");
+      setTimeout(() => { const e = $("#ich-statistik"); if (e) e.scrollIntoView({ behavior: "smooth" }); }, 500);
+    }]);
+  }
+  eintraege.push(["users", (me.aemter || []).length ? "Meine Ämter" : "Ämter", () => gehe(amtOber(), "aemter")]);
+  eintraege.push(["bell", "Mitteilungen", () => gehe("konto", "mitteilungen")]);
+  const liste = $("#pm-liste");
+  liste.innerHTML = "";
+  for (const [sym, text, aktion] of eintraege) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "pm-zeile pm-knopf";
+    b.innerHTML = `<span class="pm-icon">${icon(sym)}</span><span class="pm-label">${escape(text)}</span>` +
+      (text === "Mitteilungen" ? '<small class="pm-status"></small>' : "") + `<span class="pm-pfeil">${icon("chevron")}</span>`;
+    b.addEventListener("click", () => { profilMenueSchliessen(); aktion(); });
+    liste.appendChild(b);
+  }
+  pushStatus().then((st) => {
+    const el = liste.querySelector(".pm-status");
+    if (el) el.textContent = st === "aktiv" ? "an" : st === "aus" ? "aus" : "";
+  });
+  markiereDarstellung();
+}
+
+$("#profil-knopf").addEventListener("click", () =>
+  $("#profil-menue").classList.contains("hidden") ? profilMenueOeffnen() : profilMenueSchliessen());
+$("#profil-menue").addEventListener("click", (e) => { if (e.target.closest("[data-schliessen]")) profilMenueSchliessen(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") profilMenueSchliessen(); });
+$("#pm-sync").addEventListener("click", () => { profilMenueSchliessen(); document.getElementById("server-punkt").click(); });
+$("#logout-btn").addEventListener("click", profilMenueSchliessen);
+
+// ---- Darstellung: Auto / Hell / Dunkel (theme.js) ----
+const _systemDunkel = window.matchMedia ? matchMedia("(prefers-color-scheme: dark)") : { matches: false };
+const _speicher = () => { try { return window.localStorage; } catch (_) { return null; } };
+let darstellung = Theme.laden(_speicher());
+
+function markiereDarstellung() {
+  document.querySelectorAll("#pm-darstellung button").forEach((b) =>
+    b.setAttribute("aria-pressed", String(b.dataset.darstellung === darstellung)));
+}
+function setzeDarstellung(wahl) {
+  darstellung = Theme.speichern(_speicher(), wahl);
+  Theme.anwenden(document, darstellung, _systemDunkel.matches);
+  markiereDarstellung();
+}
+document.querySelectorAll("#pm-darstellung button").forEach((b) =>
+  b.addEventListener("click", () => setzeDarstellung(b.dataset.darstellung)));
+// Folgt das Gerät automatisch, soll auch ein Wechsel von Hell auf Dunkel am Abend ankommen.
+if (_systemDunkel.addEventListener) {
+  _systemDunkel.addEventListener("change", () => Theme.anwenden(document, darstellung, _systemDunkel.matches));
+}
+
 // Start
 // Sichtbare Versionsnummer im Kopf — was drin ist, steht in CHANGELOG.md.
 // Bei jeder Aenderung: hier hochzaehlen, Eintrag im CHANGELOG, sw.js CACHE
 // bumpen und die ?v= der geaenderten Dateien in index.html.
-const APP_VERSION = "v0.62.0";
+const APP_VERSION = "v0.70.1";
 const versionEl = document.getElementById("version");
 if (versionEl) versionEl.textContent = APP_VERSION;
 
@@ -4829,6 +5946,8 @@ function malePunkt() {
     if (t) t.textContent = "synchron";
     d.title = "Mit Server verbunden – alles synchron";
   }
+  const pm = document.getElementById("pm-sync-text");
+  if (pm && t) pm.textContent = t.textContent.charAt(0).toUpperCase() + t.textContent.slice(1) + (_offen ? ` · ${_offen} offen` : "");
 }
 document.addEventListener("server:status", (e) => { _serverOnline = e.detail.online; malePunkt(); });
 // sync.js laeuft VOR app.js und pingt sofort. Kommt die Antwort, bevor dieser Code zuhoert

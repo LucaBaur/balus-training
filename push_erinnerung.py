@@ -32,7 +32,9 @@ def _datum_de(iso: str) -> str:
 
 def erinnere(conn, tage: int, trocken: bool) -> dict:
     ziel = (date.today() + timedelta(days=tage)).isoformat()
-    trainings = [t for t in db.trainings_liste(conn) if t.get("datum") == ziel]
+    # Freiwillige Trainings (Freitag) bekommen keine automatische Erinnerung; die Erinnerung, die der
+    # Trainer im Termin von Hand auslöst, bleibt davon unberührt.
+    trainings = [t for t in db.trainings_liste(conn) if t.get("datum") == ziel and not t.get("freiwillig")]
     offen_gesamt = gesendet = 0
     for t in trainings:
         offen = db.offene_spieler_benutzer(conn, t["id"])
@@ -44,7 +46,7 @@ def erinnere(conn, tage: int, trocken: bool) -> dict:
         wann = _datum_de(ziel) + (f" {t['uhrzeit']}" if t.get("uhrzeit") else "")
         text = f"{label}{ort} am {wann}: Bitte in der App zu- oder absagen."
         if not trocken:
-            res = push.sende(conn, offen, "Training – bitte zu-/absagen", text, url="/")
+            res = push.sende(conn, offen, "Training – bitte zu-/absagen", text, url="/", art="termine")
             gesendet += res.get("gesendet", 0)
     return {"trainings": len(trainings), "offen": offen_gesamt, "gesendet": gesendet}
 

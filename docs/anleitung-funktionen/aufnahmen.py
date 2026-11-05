@@ -78,6 +78,19 @@ def unter(page, label: str):
     page.wait_for_timeout(600)
 
 
+def profil_menue(page):
+    """Das Menü hinter dem Kreis oben rechts öffnen."""
+    page.click("#profil-knopf")
+    page.wait_for_timeout(700)
+
+
+def profil(page, eintrag: str):
+    """Einen Eintrag im Profil-Menü antippen (Mein Profil, Meine To-Dos, Mitteilungen ...)."""
+    profil_menue(page)
+    page.click(f'#pm-liste button:has-text("{eintrag}")')
+    page.wait_for_timeout(1200)
+
+
 def szene(name: str):
     """Dekorator: eine Szene darf scheitern, ohne die übrigen zu stoppen."""
     def deko(fn):
@@ -102,19 +115,28 @@ def trainer(browser):
 
     @szene("home")
     def _():
-        foto(page, "02-home")
+        foto(page, "02-home", 1500)
+    _()
+
+    @szene("profil-menue-trainer")
+    def _():
+        profil_menue(page)
+        foto(page, "40b-profil-menue-trainer", 500)
+        page.keyboard.press("Escape"); page.wait_for_timeout(300)
     _()
 
     @szene("ansehen-als")
     def _():
-        page.select_option("#ansicht-select", label="Ansehen als: Lena"); page.wait_for_timeout(1500)
+        profil_menue(page)
+        page.select_option("#ansicht-select", label="Ansehen als: Lena"); page.wait_for_timeout(1800)
         foto(page, "02b-ansehen-als", 800)
-        page.select_option("#ansicht-select", index=0); page.wait_for_timeout(1200)
+        profil_menue(page)
+        page.select_option("#ansicht-select", index=0); page.wait_for_timeout(1500)
     _()
 
     @szene("liga")
     def _():
-        unter(page, "Liga"); foto(page, "03-liga", 1500)
+        page.evaluate("gehe('home', 'liga')"); page.wait_for_timeout(600); foto(page, "03-liga", 1500)
     _()
 
     @szene("termine")
@@ -184,7 +206,7 @@ def trainer(browser):
 
     @szene("kader")
     def _():
-        unter(page, "Kader"); foto(page, "16-kader", 1200)
+        ober(page, "team"); unter(page, "Kader"); foto(page, "16-kader", 1200)
     _()
 
     @szene("team-statistik")
@@ -195,6 +217,19 @@ def trainer(browser):
     @szene("team-videos")
     def _():
         unter(page, "Videos"); foto(page, "18-team-videos", 1500)
+    _()
+
+    @szene("team-todos")
+    def _():
+        unter(page, "To-Dos"); foto(page, "26-team-todos", 1500)
+        # Lenas Eintrag aufklappen: dort steht das schon gegebene Feedback ("Bleibt noch")
+        page.evaluate("[...document.querySelectorAll('#todo-team-inhalt *')]"
+                      ".find(e => e.children.length === 0 && e.textContent.trim() === 'Lena').click()")
+        page.wait_for_timeout(700)
+        page.evaluate("[...document.querySelectorAll('#todo-team-inhalt *')]"
+                      ".find(e => e.children.length === 0 && e.textContent.trim() === 'Lena')"
+                      ".scrollIntoView({block: 'start'}); window.scrollBy(0, -170)")
+        foto(page, "27-team-todos-feedback", 600)
     _()
 
     @szene("nutzung")
@@ -229,7 +264,18 @@ def spielerin(browser):
 
     @szene("spielerin-home")
     def _():
-        foto(page, "30-spielerin-home")
+        foto(page, "30-spielerin-home", 1500)
+    _()
+
+    @szene("home-weiter")
+    def _():
+        # "Neu für dich" erscheint erst, wenn es Neueres gibt als beim letzten Besuch von "Videos":
+        # für das Bild die Grundlinie zurücksetzen.
+        page.evaluate("localStorage.setItem('neu_gesehen_' + aktBenutzer.spieler_id, JSON.stringify({clip: 0, analyse: 0}))")
+        page.evaluate("gehe('home', 'home')"); page.wait_for_timeout(2500)
+        page.evaluate("window.scrollTo(0, 560)")
+        foto(page, "30b-home-weiter", 600)
+        page.evaluate("window.scrollTo(0, 0)")
     _()
 
     @szene("spielerin-termin")
@@ -243,14 +289,45 @@ def spielerin(browser):
 
     @szene("profil")
     def _():
-        ober(page, "ich"); unter(page, "Mein Profil"); foto(page, "33-profil", 1500)
+        profil(page, "Mein Profil"); foto(page, "33-profil", 1500)
+    _()
+
+    @szene("todo")
+    def _():
+        profil(page, "Meine To-Dos"); foto(page, "36-todo", 1200)
     _()
 
     @szene("videos")
     def _():
-        unter(page, "Videos"); foto(page, "34-videos", 1500)
+        ober(page, "videos"); foto(page, "34-videos", 1500)
         page.locator("#view-videos :text('HSG Beispielstadt'):visible").first.click(); page.wait_for_timeout(1500)
         foto(page, "35-analyse", 800)
+    _()
+
+    @szene("profil-menue")
+    def _():
+        ober(page, "home"); page.wait_for_timeout(600)
+        profil_menue(page)
+        foto(page, "40-profil-menue", 500)
+        page.keyboard.press("Escape"); page.wait_for_timeout(300)
+    _()
+
+    @szene("mitteilungen")
+    def _():
+        # Die Aufnahme läuft ohne Service Worker, dort käme der Gerätestatus nie zurück. Für das Bild gilt
+        # deshalb "auf diesem Gerät eingeschaltet" - der Zustand, den man nach dem Einschalten sieht.
+        page.evaluate("window.pushStatus = async () => 'aktiv'")
+        profil(page, "Mitteilungen")
+        page.wait_for_selector(".mt-art", timeout=8000)
+        foto(page, "41-mitteilungen", 800)
+    _()
+
+    @szene("dunkel")
+    def _():
+        ober(page, "home"); page.wait_for_timeout(600)
+        page.evaluate("setzeDarstellung('dunkel')"); page.wait_for_timeout(600)
+        foto(page, "42-home-dunkel", 800)
+        page.evaluate("setzeDarstellung('hell')")
     _()
 
 

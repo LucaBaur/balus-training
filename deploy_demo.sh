@@ -92,7 +92,7 @@ if [ $TROCKEN -eq 1 ]; then printf '\n== Trockenlauf: nichts auf den Server gesc
 # -------------------------------------------------------------------- Hochladen ----
 schritt "3/4 Code kopieren und Dienst einrichten"
 shopt -s nullglob
-DATEIEN=(*.py requirements.txt static docs/anleitung-funktionen/demo_server.py tests/liga_beispiel.json)
+DATEIEN=(*.py daten routen requirements.txt static docs/anleitung-funktionen/demo_server.py tests/liga_beispiel.json)
 shopt -u nullglob
 "${SSH[@]}" "mkdir -p \"\$HOME/$DIR\" \"\$HOME/$DIR/leer\""
 # Ohne Spielerinnen-Fotos und Sicherungen; den Foto-Index ersetzen wir unten durch eine leere Liste.

@@ -27,6 +27,7 @@ BASIS = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(BASIS))
 
 import app as balu  # noqa: E402
+from routen import pfade  # noqa: E402
 import auth  # noqa: E402
 import db  # noqa: E402
 import liga  # noqa: E402
@@ -36,12 +37,12 @@ HOST = os.environ.get("DEMO_HOST", "127.0.0.1")
 PORT = int(os.environ.get("DEMO_PORT", "8299"))
 tmp = Path(tempfile.mkdtemp(prefix="balu_demo_"))
 DB = tmp / "demo.db"
-balu.MEDIA_CLIPS = tmp / "clips"
-balu.MEDIA_CLIPS.mkdir()
-balu.MEDIA_SPIELE = tmp / "spiele"
-balu.MEDIA_SPIELE.mkdir()
-balu.MEDIA_SZENEN = tmp / "szenen"
-balu.MEDIA_SZENEN.mkdir()
+pfade.MEDIA_CLIPS = tmp / "clips"
+pfade.MEDIA_CLIPS.mkdir()
+pfade.MEDIA_SPIELE = tmp / "spiele"
+pfade.MEDIA_SPIELE.mkdir()
+pfade.MEDIA_SZENEN = tmp / "szenen"
+pfade.MEDIA_SZENEN.mkdir()
 _verbinde = db.verbinde
 db.verbinde = lambda pfad=DB: _verbinde(pfad)
 
@@ -211,7 +212,7 @@ def seed() -> dict:
                          (HEUTE - timedelta(days=9)).isoformat(), "Liga", events, zuege, trainer_id)
     aid2 = db.analyse_speichern(conn, "demo-spiel-2", "TSV Vorbild",
                          (HEUTE - timedelta(days=16)).isoformat(), "Liga", [], zuege2, trainer_id)
-    (balu.MEDIA_SPIELE / "demo-spiel-1.mp4").write_bytes(bytes(2048))    # Platzhalter, wird nicht abgespielt
+    (pfade.MEDIA_SPIELE / "demo-spiel-1.mp4").write_bytes(bytes(2048))    # Platzhalter, wird nicht abgespielt
     db.analyse_datei_setzen(conn, aid, "demo-spiel-1.mp4")
 
     # Zwei Szenen-Clips (Platzhalterdateien, in der Liste zählt nur der Eintrag)
@@ -219,20 +220,20 @@ def seed() -> dict:
             ("Tempogegenstoß 1. Halbzeit", "Mitte läuft früh an, Außen startet sofort.", ["Lena", "Zoe"]),
             ("Kreisanspiel gegen 6:0", "Sperre am Kreis sauber gestellt.", ["Greta", "Sophie"])]):
         datei = f"demo-{n}.mp4"
-        (balu.MEDIA_CLIPS / datei).write_bytes(bytes(1024))
+        (pfade.MEDIA_CLIPS / datei).write_bytes(bytes(1024))
         db.clip_anlegen(conn, titel, notiz, datei, (HEUTE - timedelta(days=9)).isoformat(),
                         12.0, trainer_id, [ids[w] for w in wer])
 
     # Szenen-Clips zu den Spielzuegen beider Spiele und zwei Ereignissen (Platzhalterdateien).
     # Mehrere Spielzuege heissen "Kreisel" bzw. "2. Welle" - genau der Fall, den IDs und Filter loesen.
-    balu.MEDIA_SZENEN.mkdir(exist_ok=True)
+    pfade.MEDIA_SZENEN.mkdir(exist_ok=True)
     szene = {}                                                        # (analyse_id, key) -> clip-id
     clip_plan = ([(aid, z_["key"], z_["t_start"], z_["t_ende"]) for z_ in zuege]
                  + [(aid, e_["key"], e_["t"], e_["t"]) for e_ in events[:2]]
                  + [(aid2, z_["key"], z_["t_start"], z_["t_ende"]) for z_ in zuege2])
     for a_id, key, von, bis in clip_plan:
         datei = f"demo-{a_id}-{key}.mp4"
-        (balu.MEDIA_SZENEN / datei).write_bytes(bytes(1024))
+        (pfade.MEDIA_SZENEN / datei).write_bytes(bytes(1024))
         db.szene_clip_speichern(conn, a_id, key, datei, von - 3, bis + 5)
         szene[(a_id, key)] = conn.execute(
             "SELECT id FROM spiel_szene_clip WHERE analyse_id = ? AND szene_key = ?", (a_id, key)).fetchone()["id"]
@@ -245,6 +246,22 @@ def seed() -> dict:
         "Greta": [(aid, "z3", "komplett"), (aid2, "z2", "komplett")],
         "Ida": [(aid, "z5", "angetippt")],
     }
+
+    # Wochen-To-Dos: Lena hat ihr Ziel gewählt und Feedback bekommen; bei Mia und Greta wartet das Feedback
+    # noch (daraus wird "2 To-Dos warten auf Feedback" auf der Startseite des Trainers); Sophie hat eins geschafft.
+    woche = db.woche_montag()
+    lena = ids["Lena"]
+    fangen = db.todo_anlegen(conn, lena, "Fangen mit zwei Händen")
+    db.todo_anlegen(conn, lena, "Sprungwurf aus dem Stand")
+    db.todo_anlegen(conn, lena, "Abwehr: Füße bewegen")
+    db.todo_waehlen(conn, fangen, lena, True)
+    db.todo_feedback(conn, fangen, woche, "Schon besser, noch bei hohen Bällen üben.", "bleibt")
+    for name, text in (("Mia", "Sprungwurf aus dem Stand"), ("Greta", "Abwehr: Füße bewegen")):
+        t_id = db.todo_anlegen(conn, ids[name], text)
+        db.todo_waehlen(conn, t_id, ids[name], True)
+    sophie_todo = db.todo_anlegen(conn, ids["Sophie"], "Nach dem Wurf sofort zurücklaufen")
+    db.todo_waehlen(conn, sophie_todo, ids["Sophie"], True)
+    db.todo_feedback(conn, sophie_todo, woche, "Sitzt, super.", "erledigt")
 
     # Nutzung: ein paar Besuche, damit die Nutzungsseite etwas zeigt
     for i, name in enumerate(("Lena", "Mia", "Sophie", "Zoe", "Ida", "Greta")):
