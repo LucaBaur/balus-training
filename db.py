@@ -15,6 +15,7 @@ from daten.chat import *          # noqa: F401,F403
 from daten.clips import *         # noqa: F401,F403
 from daten.core import *          # noqa: F401,F403
 from daten.kommentare import *    # noqa: F401,F403
+from daten.migrationen import *   # noqa: F401,F403
 from daten.nachbereitung import * # noqa: F401,F403
 from daten.nutzung import *       # noqa: F401,F403
 from daten.push import *          # noqa: F401,F403

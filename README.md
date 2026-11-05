@@ -352,7 +352,7 @@ des Sync-Ordners (`SP_SYNC_DIR`, Standard `~/anytype-sync`).
 | `elo.py`          | ELO-Berechnung (individuell gegen Gegnerteam-Schnitt)       |
 | `teams.py`        | Faire Team-Aufteilung (min. ELO-Differenz, Torhüter-Pflicht)|
 | `db.py`           | Fassade: reicht alles aus `daten/` unter dem Namen `db` durch (`db.funktion(...)` überall wie gewohnt) |
-| `daten/`          | SQLite-Datenhaltung nach Themen: `schema`, `core` (Verbindung, Migrationen), `spieler`, `spiele` (ELO), `termine`, `wiki`, `todos`, `clips`, `analysen`, `nutzung`, `kommentare`, `nachbereitung`, `push`, `benutzer`, `chat`, `zeit` |
+| `daten/`          | SQLite-Datenhaltung nach Themen: `schema`, `core` (Verbindung, Start), `migrationen` (versioniertes Schema), `spieler`, `spiele` (ELO), `termine`, `wiki`, `todos`, `clips`, `analysen`, `nutzung`, `kommentare`, `nachbereitung`, `push`, `benutzer`, `chat`, `zeit` |
 | `app.py`          | Baut die Anwendung zusammen: Middleware, Datenbank, Router, PWA-Auslieferung |
 | `routen/`         | Die JSON-Endpunkte, ein `APIRouter` je Bereich (`termine`, `todos`, `videos`, `analysen`, `mannschaft`, …). `gemeinsam.py` hat Datenbankverbindung und Rollenprüfung, `pfade.py` die Ablageorte |
 | `static/`         | PWA (index.html, app.js, style.css, manifest, sw, Icons)    |

@@ -19,6 +19,21 @@ Zahl, Fehlerbehebungen und Design-Feinschliff die letzte.
 
 ---
 
+## v0.70.2 — 2026-11-05
+
+**Datenbank-Änderungen sind jetzt nummeriert, in der App ändert sich nichts.** Bisher lief bei jedem Start eine
+lange Liste von „füge Spalte hinzu, falls sie fehlt“-Aufrufen. Jetzt merkt sich die Datenbank selbst, welchen Stand
+sie hat (`PRAGMA user_version`), und neue Änderungen laufen genau einmal.
+
+- **`daten/migrationen.py`:** Jede Änderung ist eine nummerierte Funktion. Sie läuft in einer eigenen Transaktion:
+  Geht etwas schief, bleibt die Datenbank unverändert, und der Dienst startet nicht (dann spielt `deploy.sh`
+  zurück). Die bisherige Liste ist als Migration 1 übernommen; die Datenbank auf dem Server holt sie beim ersten
+  Start einmal nach, ohne Daten zu ändern.
+- **Neue Regel für Entwickler:** Änderungen an bestehenden Tabellen kommen als Migration 2, 3 … dazu (Anleitung oben in
+  der Datei). Neue Tabellen dürfen weiter in `schema.py` stehen.
+- Neuer Test `tests/migration_test.py`: frische und bestehende Datenbanken, Wiederholung, Fehlschlag mit Rückrollen,
+  Datenbank neuer als der Code, zwei Verbindungen gleichzeitig.
+
 ## v0.70.1 — 2026-11-05
 
 **Aufgeräumt im Hintergrund, in der App ändert sich nichts.** Der Server-Code lag in zwei sehr großen Dateien

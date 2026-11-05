@@ -5917,7 +5917,7 @@ if (_systemDunkel.addEventListener) {
 // Sichtbare Versionsnummer im Kopf — was drin ist, steht in CHANGELOG.md.
 // Bei jeder Aenderung: hier hochzaehlen, Eintrag im CHANGELOG, sw.js CACHE
 // bumpen und die ?v= der geaenderten Dateien in index.html.
-const APP_VERSION = "v0.70.1";
+const APP_VERSION = "v0.70.2";
 const versionEl = document.getElementById("version");
 if (versionEl) versionEl.textContent = APP_VERSION;
 
