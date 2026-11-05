@@ -1,14 +1,15 @@
-// Prueft die Geraeteerkennung (geraetInfo in static/app.js) mit typischen
+// Prueft die Geraeteerkennung (geraetInfo in static/core/tracking.js) mit typischen
 // User-Agents: Android-Chrome (reduzierter UA + userAgentData), iPhone-Safari,
 // installierte iPhone-App, Samsung Internet, Windows, iPad. Start: node tests/geraet.test.mjs
 import fs from "node:fs";
 import vm from "node:vm";
 
-const src = fs.readFileSync(new URL("../static/app.js", import.meta.url), "utf8");
+const src = fs.readFileSync(new URL("../static/core/tracking.js", import.meta.url), "utf8");
 const start = src.indexOf("let _geraet = null;");
 const ende = src.indexOf("const geraetKurz");
 if (start < 0 || ende < 0) { console.error("FEHLER geraetInfo nicht gefunden"); process.exit(1); }
-const code = src.slice(start, ende);
+// "export" gibt es nur in Modulen; vm fuehrt Skripte aus, darum fuer den Ausschnitt entfernen.
+const code = src.slice(start, ende).replace(/^export /gm, "");
 
 async function erkenne({ ua, hoch = null, touch = 0, standalone = false, referrer = "", sw = true, screen = [412, 915], nav = {} }) {
   const ctx = {

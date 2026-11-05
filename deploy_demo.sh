@@ -126,8 +126,8 @@ echo "  Dienst $SERVICE laeuft"
 
 # ------------------------------------------------------------------- Pruefung ----
 schritt "4/4 Pruefung"
-SOLL="$(grep -o 'APP_VERSION = "[^"]*"' static/app.js | cut -d'"' -f2)"
-IST="$("${SSH[@]}" "curl -s --max-time 10 'http://127.0.0.1:$PORT/app.js'" | grep -o 'APP_VERSION = "[^"]*"' | cut -d'"' -f2)"
+SOLL="$(grep -o 'APP_VERSION = "[^"]*"' static/core/version.js | cut -d'"' -f2)"
+IST="$("${SSH[@]}" "curl -s --max-time 10 'http://127.0.0.1:$PORT/core/version.js'" | grep -o 'APP_VERSION = "[^"]*"' | cut -d'"' -f2)"
 CODE="$("${SSH[@]}" "curl -s --max-time 10 -o /dev/null -w '%{http_code}' 'http://127.0.0.1:$PORT/'")"
 echo "  Demo: HTTP $CODE   App-Version: $IST (lokal: $SOLL)"
 [ "$CODE" = 200 ] && [ "$IST" = "$SOLL" ] || abbruch "Demo antwortet nicht wie erwartet"

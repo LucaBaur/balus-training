@@ -316,7 +316,10 @@ def spielerin(browser):
     def _():
         # Die Aufnahme läuft ohne Service Worker, dort käme der Gerätestatus nie zurück. Für das Bild gilt
         # deshalb "auf diesem Gerät eingeschaltet" - der Zustand, den man nach dem Einschalten sieht.
-        page.evaluate("window.pushStatus = async () => 'aktiv'")
+        # (pushStatus ist ein Modul-Interna und von aussen nicht ueberschreibbar: stattdessen den Service-Worker-Bereitschafts-
+        # Zustand vortaeuschen, den pushStatus ausliest.)
+        page.evaluate("Object.defineProperty(navigator.serviceWorker, 'ready', { configurable: true, "
+                      "get: () => Promise.resolve({ pushManager: { getSubscription: async () => ({}) } }) })")
         profil(page, "Mitteilungen")
         page.wait_for_selector(".mt-art", timeout=8000)
         foto(page, "41-mitteilungen", 800)

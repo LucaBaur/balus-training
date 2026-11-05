@@ -25,8 +25,13 @@ app = FastAPI(title="Balu's Training")
 
 @app.middleware("http")
 async def sw_kein_cache(request, call_next):
+    """Skripte, Styles und Seiten immer beim Server nachfragen ("no-cache" heisst: speichern ja,
+    aber vor jeder Nutzung per ETag pruefen - bei Unveraendertem kommt nur ein kurzes 304).
+    Noetig, weil die ES-Module (main.js, core/, features/) einander ohne ?v= importieren;
+    ein Cache-Bump per URL ist dort nicht moeglich."""
     resp = await call_next(request)
-    if request.url.path == "/sw.js":
+    pfad = request.url.path
+    if pfad == "/" or pfad.endswith((".js", ".css", ".html")):
         resp.headers["Cache-Control"] = "no-cache"
     return resp
 

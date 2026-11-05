@@ -59,8 +59,8 @@ Das Playbook ist heute nur Text (Markdown). Ein Spielzug ist visuell.
 - [ ] SpielerPlus ablösen: Einladungen für Neue, Weg für Spielerinnen ohne Push
 - [ ] Barrierefreiheit: Beschriftungen für Bedienelemente, Kontraste prüfen,
       Fokus per Tastatur
-- [ ] `app.js` (über 5000 Zeilen) in ES-Module aufteilen (Termine, Videos,
-      Playbook, Trainer), ohne sichtbare Änderung
+- [x] `app.js` (über 5000 Zeilen) in ES-Module aufteilen (Termine, Videos,
+      Playbook, Trainer), ohne sichtbare Änderung — v0.70.3, `static/main.js` + `core/` + `features/`
 - [ ] Nutzertest mit drei Spielerinnen: je eine Aufgabe („Sag fürs nächste Spiel
       ab“, „Finde den Spielzug Kreisel“), beobachten, wo es hakt
 

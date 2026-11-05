@@ -1,17 +1,18 @@
-// Prueft die reinen Hilfsfunktionen der Ansicht Team -> Nutzung (static/app.js,
+// Prueft die reinen Hilfsfunktionen der Ansicht Team -> Nutzung (static/features/nutzung.js,
 // Abschnitt zwischen den Markern "Nutzung-Hilfen"): dauerText, verweilSegment,
 // nutzungVideoLabel, gruppiereNachSpiel. Start: node tests/nutzung_ui.test.mjs
 import fs from "node:fs";
 import vm from "node:vm";
 
-const src = fs.readFileSync(new URL("../static/app.js", import.meta.url), "utf8");
+const src = fs.readFileSync(new URL("../static/features/nutzung.js", import.meta.url), "utf8");
 const start = src.indexOf("// ---- Nutzung-Hilfen (rein, getestet");
 const ende = src.indexOf("// ---- Ende Nutzung-Hilfen");
 if (start < 0 || ende < 0) { console.error("FEHLER Abschnitt 'Nutzung-Hilfen' nicht gefunden"); process.exit(1); }
 
 const ctx = {};
 vm.createContext(ctx);
-vm.runInContext(src.slice(start, ende)
+// "export" gibt es nur in Modulen; vm fuehrt Skripte aus, darum fuer den Ausschnitt entfernen.
+vm.runInContext(src.slice(start, ende).replace(/^export /gm, "")
   + "\nthis.dauerText = dauerText; this.verweilSegment = verweilSegment;"
   + "\nthis.nutzungVideoLabel = nutzungVideoLabel; this.gruppiereNachSpiel = gruppiereNachSpiel;"
   + "\nthis.anzahlDauer = anzahlDauer; this.filtereSzenen = filtereSzenen;"

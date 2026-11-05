@@ -1,7 +1,7 @@
 # Changelog — Balu's Training
 
 Die Versionsnummer steht **im Kopf der App** (klein neben „Balu's Training") und
-kommt aus `APP_VERSION` in `static/app.js`. Wer wissen will, ob ein Gerät den
+kommt aus `APP_VERSION` in `static/core/version.js`. Wer wissen will, ob ein Gerät den
 aktuellen Stand hat, vergleicht die Zahl dort mit der obersten hier.
 
 Schema: **v0.<Funktionsstand>.<Korrektur>** — neue Funktion erhöht die mittlere
@@ -9,15 +9,44 @@ Zahl, Fehlerbehebungen und Design-Feinschliff die letzte.
 
 ## Bei jeder neuen Version
 
-1. `APP_VERSION` in `static/app.js` hochzählen.
+1. `APP_VERSION` in `static/core/version.js` hochzählen.
 2. Hier oben einen Abschnitt mit Datum anlegen und **schreiben, was geändert
    wurde** (in der Sprache des Teams, nicht in Commit-Sprache).
 3. `CACHE` in `static/sw.js` hochzählen (`elo-vN`) — sonst bekommen die Geräte
    den neuen Stand nicht.
-4. Für jede geänderte Datei das `?v=` in `static/index.html` erhöhen.
+4. Für jede geänderte klassische Datei das `?v=` in `static/index.html` **und** in
+   `HUELLE` (`static/sw.js`) erhöhen. Die Module in `core/` und `features/` tragen
+   kein `?v=` (siehe v0.70.3); bei ihnen genügt der `CACHE`-Bump. Neue Moduldatei:
+   in `HUELLE` eintragen (`tests/huelle.test.mjs` meldet es, wenn man es vergisst).
 5. Mit `bash deploy.sh` deployen (testet erst, lädt nur bei grün hoch).
 
 ---
+
+## v0.70.3 — 2026-11-05
+
+**Die App-Datei ist aufgeteilt, in der App ändert sich nichts.** Die eine Datei `static/app.js` (rund 6000 Zeilen,
+alles darin) ist jetzt in 31 kleine Dateien nach Themen zerlegt, sogenannte ES-Module:
+
+- **`static/main.js`:** der Einstieg. Er lädt alles, legt fest, was beim Öffnen eines Unterpunkts geladen wird, und startet die App.
+- **`static/core/`** (Grundgerüst): `api` (Server-Aufrufe), `ui` (kleine Hilfen wie Toast, Datum), `router`
+  (Reiter und Navigation), `konto` (Anmeldung), `tracking` (Nutzungsdaten, Fehlerberichte), `menue` (Profilmenü),
+  `statuspunkt`, `aktualisieren`, `portraits`, `version`.
+- **`static/features/`** (je ein Bereich): `termine`, `videos`, `plan`, `wiki`, `home`, `aufstellung`, `einteilung`,
+  `spieler`, `aemter`, `coach`, `analysen`, `ich`, `nutzung`, `nachbereitung`, `todos`, `statistik-spiele`, `kader`,
+  `liga`, `push`, `mitteilungen`.
+- Die Aufteilung ist **maschinell** erfolgt (keine Zeile von Hand umgeschrieben): ein Werkzeug hat anhand des Codes
+  berechnet, welche Funktion wen braucht, und die `import`-/`export`-Zeilen erzeugt. Bis auf ein paar Datums-Konstanten
+  und zwei Hilfsfunktionen zum Setzen gemeinsamer Werte ist der Inhalt unverändert.
+- **Neu im Betrieb:** Der Server liefert Skripte, Styles und Seiten mit „Cache-Control: no-cache“ aus
+  (Nachfragen bei jedem Laden, bei Unverändertem nur eine kurze Antwort). Das war nötig, weil die Module sich
+  untereinander ohne `?v=` laden. Der Offline-Betrieb ist gleich geblieben: alle Module stehen in der Hülle des
+  Service Workers.
+- **Tests:** neu `tests/huelle.test.mjs` (alle Module in der Hülle, jeder Import hat einen Export, jedes Modul wird
+  vom Einstieg aus geladen, `?v=` stimmt überein). `deploy.sh` prüft die Module als Module und liest die Version
+  aus `core/version.js`. Die beiden Tests, die Textausschnitte aus `app.js` lasen, lesen jetzt `tracking.js` bzw.
+  `nutzung.js`. Dazu `tests/ui_smoke.py`: klickt im echten Chrome durch alle Reiter (nicht Teil des Deploys).
+- Geprüft: gleicher Rundgang vor und nach dem Umbau (42 Ansichten als Trainer und Spielerin) mit identischem Inhalt
+  und ohne Fehler; Neuladen ohne Netz läuft mit den Modulen aus dem Cache.
 
 ## v0.70.2 — 2026-11-05
 

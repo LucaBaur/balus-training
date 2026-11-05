@@ -1,9 +1,16 @@
 // Cache-first Service Worker fuer eine OFFLINE-App: die App-Huelle wird sofort
 // aus dem Cache geliefert (auch offline / bei schlechtem Netz kein Warten), und
 // im Hintergrund frisch nachgeladen. Neue Versionen kommen ueber CACHE-Bump +
-// controllerchange-Reload (siehe app.js) trotzdem zuverlaessig an.
-const CACHE = "elo-v88";
-const HUELLE = ["/", "/index.html", "/style.css?v=56", "/theme.js?v=1", "/local-db.js?v=3", "/sync.js?v=11", "/teams-local.js?v=2", "/nav.js?v=2", "/home-logik.js?v=3", "/app.js?v=85", "/tvg-logo.png?v=1", "/manifest.webmanifest", "/portraits/index.json"];
+// controllerchange-Reload (siehe main.js) trotzdem zuverlaessig an.
+const CACHE = "elo-v89";
+// Klassische Skripte tragen ?v= (steht so in index.html). Die ES-Module (main.js, core/, features/)
+// werden von main.js ohne ?v= importiert; der Server liefert sie mit "Cache-Control: no-cache",
+// und der CACHE-Bump oben holt sie neu. tests/huelle.test.mjs prueft, dass diese Liste vollstaendig ist.
+const HUELLE = ["/", "/index.html", "/style.css?v=56", "/theme.js?v=1", "/local-db.js?v=3", "/sync.js?v=11", "/teams-local.js?v=2", "/nav.js?v=2", "/home-logik.js?v=3",
+  "/main.js?v=88",
+  "/core/aktualisieren.js", "/core/api.js", "/core/konto.js", "/core/menue.js", "/core/portraits.js", "/core/router.js", "/core/statuspunkt.js", "/core/tracking.js", "/core/ui.js", "/core/version.js",
+  "/features/aemter.js", "/features/analysen.js", "/features/aufstellung.js", "/features/coach.js", "/features/einteilung.js", "/features/home.js", "/features/ich.js", "/features/kader.js", "/features/liga.js", "/features/mitteilungen.js", "/features/nachbereitung.js", "/features/nutzung.js", "/features/plan.js", "/features/push.js", "/features/spieler.js", "/features/statistik-spiele.js", "/features/termine.js", "/features/todos.js", "/features/videos.js", "/features/wiki.js",
+  "/tvg-logo.png?v=1", "/manifest.webmanifest", "/portraits/index.json"];
 
 // Die Portraits gehoeren zur Huelle, stehen aber nicht fest in der Liste:
 // welche es gibt, sagt /portraits/index.json. So muss hier nichts nachgepflegt

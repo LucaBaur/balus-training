@@ -355,7 +355,7 @@ des Sync-Ordners (`SP_SYNC_DIR`, Standard `~/anytype-sync`).
 | `daten/`          | SQLite-Datenhaltung nach Themen: `schema`, `core` (Verbindung, Start), `migrationen` (versioniertes Schema), `spieler`, `spiele` (ELO), `termine`, `wiki`, `todos`, `clips`, `analysen`, `nutzung`, `kommentare`, `nachbereitung`, `push`, `benutzer`, `chat`, `zeit` |
 | `app.py`          | Baut die Anwendung zusammen: Middleware, Datenbank, Router, PWA-Auslieferung |
 | `routen/`         | Die JSON-Endpunkte, ein `APIRouter` je Bereich (`termine`, `todos`, `videos`, `analysen`, `mannschaft`, …). `gemeinsam.py` hat Datenbankverbindung und Rollenprüfung, `pfade.py` die Ablageorte |
-| `static/`         | PWA (index.html, app.js, style.css, manifest, sw, Icons)    |
+| `static/`         | PWA (index.html, `main.js` als Einstieg, style.css, manifest, sw, Icons); `core/` = Grundgerüst, `features/` = ein Modul je Bereich |
 | `portraits/`      | Original-Fotos der Spielerinnen (groß, unverändert)         |
 | `static/portraits/` | Zugeschnittene Portraits für die App + `index.json`        |
 | `portraits.py`    | Baut aus den Originalen die Bilder für die App              |
@@ -529,7 +529,7 @@ Spielerinnen; wer keins hat, bekommt weiterhin die Initialen.
   alle Bilder gleich.
 - **Zugeordnet wird über den Namen**, nicht über die Datenbank-ID:
   `static/portraits/index.json` bildet den Namens-Slug (`Franzi O.` →
-  `franzi-o`) auf die Datei ab; `app.js` bildet denselben Slug.
+  `franzi-o`) auf die Datei ab; `core/portraits.js` bildet denselben Slug.
 
 Neues Foto einpflegen:
 

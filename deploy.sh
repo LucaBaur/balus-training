@@ -48,8 +48,12 @@ abbruch() { printf '\nABBRUCH: %s\n' "$1"; exit 1; }
 
 # ------------------------------------------------------------------ 1 Tests ----
 schritt "1/5 Tests"
-for f in static/*.js; do
-  node --check "$f" || abbruch "Syntaxfehler in $f"
+for f in static/*.js static/core/*.js static/features/*.js; do
+  case "$f" in
+    # ES-Module: Node haelt .js sonst fuer CommonJS und lehnt "import" ab, darum als Modul ueber stdin.
+    static/main.js|static/core/*|static/features/*) node --check --input-type=module < "$f" || abbruch "Syntaxfehler in $f" ;;
+    *) node --check "$f" || abbruch "Syntaxfehler in $f" ;;
+  esac
 done
 echo "  ok  JavaScript-Syntax"
 for t in tests/*.test.mjs; do
@@ -67,7 +71,7 @@ schritt "2/5 Vergleich mit dem Server"
 
 shopt -s nullglob
 DATEIEN=(*.py daten/*.py routen/*.py requirements.txt CHANGELOG.md README.md
-         static/*.js static/*.css static/*.html static/*.webmanifest static/*.png static/*.svg static/portraits/*)
+         static/*.js static/core/*.js static/features/*.js static/*.css static/*.html static/*.webmanifest static/*.png static/*.svg static/portraits/*)
 shopt -u nullglob
 
 normal() { sed 's/^\([0-9a-f]\{32\}\) [ *]/\1 /'; }       # "hash *name" / "hash  name" -> "hash name"
@@ -142,7 +146,7 @@ trap zurueck ERR
 # ---------------------------------------------------------------- 4 Hochladen ----
 schritt "4/5 Hochladen"
 # static/ zuerst, Backend zuletzt: der Neustart kommt erst, wenn alles Passende da ist.
-"${SSH[@]}" "cd '$DIR' && mkdir -p daten routen"      # Pakete db (daten/) und app (routen/) beim ersten Mal anlegen
+"${SSH[@]}" "cd '$DIR' && mkdir -p daten routen static/core static/features"      # Pakete db (daten/) und app (routen/) beim ersten Mal anlegen
 for f in "${ZU_LADEN[@]}"; do case "$f" in static/*) scp -qp "$f" "$DEPLOY_HOST:$DIR/$f"; echo "  hoch  $f" ;; esac; done
 for f in "${ZU_LADEN[@]}"; do case "$f" in static/*) ;; *) scp -qp "$f" "$DEPLOY_HOST:$DIR/$f"; echo "  hoch  $f" ;; esac; done
 
@@ -161,8 +165,8 @@ else
   echo "  nur static/ - kein Neustart noetig"
 fi
 
-SOLL="$(grep -o 'APP_VERSION = "[^"]*"' static/app.js | cut -d'"' -f2)"
-IST="$("${SSH[@]}" "curl -s --max-time 10 '$URL/app.js'" | grep -o 'APP_VERSION = "[^"]*"' | cut -d'"' -f2)"
+SOLL="$(grep -o 'APP_VERSION = "[^"]*"' static/core/version.js | cut -d'"' -f2)"
+IST="$("${SSH[@]}" "curl -s --max-time 10 '$URL/core/version.js'" | grep -o 'APP_VERSION = "[^"]*"' | cut -d'"' -f2)"
 CODE="$("${SSH[@]}" "curl -s --max-time 10 -o /dev/null -w '%{http_code}' '$URL/'")"
 [ "${DEPLOY_SIMULIERE_FEHLER:-}" = 1 ] && IST="simulierter-fehler"      # nur zum Testen des Rueckspielens
 echo "  Startseite: HTTP $CODE   App-Version ausgeliefert: $IST (lokal: $SOLL)"
