@@ -22,6 +22,41 @@ Zahl, Fehlerbehebungen und Design-Feinschliff die letzte.
 
 ---
 
+## v0.71.0 — 2026-11-06
+
+**Neu: die Mannschaftskasse.** Das Amt „Kassenwart“ hat jetzt etwas zu tun: ein Kassenbuch in der App
+(Spielerinnen: Mannschaft → Kasse, Trainer: Saison → Kasse).
+
+- **Buchen** (Kassenwartin und Trainer): *Strafe/Beitrag* (eine Spielerin schuldet der Kasse Geld), *Einzahlung*
+  (sie zahlt), *Ausgabe* (z. B. Getränke) und *Einnahme* (z. B. Spende). Dazu Betrag, Text und Datum. Bei offenen
+  Beträgen steht ein Knopf „Zahlung eintragen“, der das Formular passend vorausfüllt.
+- **Stornieren statt löschen:** Eine falsche Buchung wird storniert, bleibt durchgestrichen sichtbar und zählt nicht
+  mehr. So bleibt nachvollziehbar, was passiert ist.
+- **Anzeige:** Alle sehen den Kassenstand, die Buchungen der Kasse (Ausgaben, Einnahmen) und die **offenen Strafen
+  der ganzen Mannschaft** (Name und Betrag, nur echte Schulden, kein Guthaben). *Wofür* jemand etwas schuldet,
+  also die einzelnen Posten, sieht nur sie selbst. Kassenwartin und Trainer sehen jede Buchung.
+- **Helferinnen:** Eine ehemalige Spielerin, die noch ein Konto hat und hilft (z. B. als Kassenwartin oder bei Social
+  Media), wird nicht mehr wie eine Spielerin behandelt: Sie bekommt keine Erinnerung „bitte zu-/absagen“, sieht auf Home
+  und in den Terminen keine Zu-/Absage-Knöpfe (der Server sperrt sie ebenfalls), steht in keiner Teilnehmerliste und
+  nicht in der Nutzungsübersicht. Bei den Ämtern ist sie auswählbar. Technisch: Spieler-Eintrag nicht aktiv, Konto
+  aktiv. Neu in `/api/me`: `im_kader`.
+- **Rechte:** Das Recht „kasse“ hängt am Amt Kassenwart (wie „termine“ am Amt Balu-Trainings-App). Wer das Amt
+  verliert, kann nicht mehr buchen. Im „Ansicht als“-Modus bleibt alles gesperrt.
+- **Sicher gerechnet:** Beträge werden in ganzen Cent geführt (nie als Kommazahl), Eingaben wie „12,50“ oder
+  „1.234,56“ werden dafür umgerechnet; über 10.000 € wird abgelehnt (Tippfehler-Schutz). Ein doppelt gesendetes
+  Formular bucht nur einmal (Funkloch beim Absenden).
+- Der Text des Amts „Kassenwart“ sagt nicht mehr „noch nicht in der App“ (Migration 2; ein vom Trainer geänderter Text
+  bleibt).
+- **Tests:** `tests/helferin_test.py` (ehemalige Spielerin mit Amt), `tests/kasse_test.py` (Rechte, Prüfungen, Rechnen, doppelt gesendet, Storno, wer was sieht, Migration),
+  `tests/kasse-logik.test.mjs` (Euro-Anzeige und -Eingabe), `tests/ui_kasse.py` (kompletter Ablauf im echten Chrome),
+  `tests/nav.test.mjs` erweitert.
+- **Strafenkatalog:** Beim Buchen einer Strafe gibt es die Auswahl „Aus dem Strafenkatalog“ (22 Posten aus dem
+  Frauen-Strafenkatalog). Sie füllt Text und Betrag vor; bei Posten „je Minute“ oder „je Teil“ gibt man die Anzahl an,
+  ein Haken „Trainer“ verdoppelt den Betrag. Bei Kasten-Strafen bleibt der Betrag leer, den trägt die Kassenwartin
+  selbst ein. Alles bleibt danach änderbar. Unter der Kasse stehen die Regeln (Trainer ×2, Anfechtung, Zins) zum Nachlesen.
+- Noch nicht dabei (später): Zins pro Tag automatisch, eine Forderung an alle auf einmal, Mitteilung bei neuer Strafe,
+  Export, Saisonabschluss.
+
 ## v0.70.3 — 2026-11-05
 
 **Die App-Datei ist aufgeteilt, in der App ändert sich nichts.** Die eine Datei `static/app.js` (rund 6000 Zeilen,

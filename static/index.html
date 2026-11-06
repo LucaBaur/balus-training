@@ -22,7 +22,7 @@
       try { Theme.anwenden(document, wahl, dunkel); } catch (e) {}
     })();
   </script>
-  <link rel="stylesheet" href="/style.css?v=56" />
+  <link rel="stylesheet" href="/style.css?v=57" />
   <title>Balu's Training</title>
 </head>
 <body>
@@ -141,6 +141,12 @@
     <section id="view-listen" class="view hidden">
       <h2>Listen</h2>
       <div id="listen-inhalt"></div>
+    </section>
+
+    <!-- Mannschaft -> Kasse: Kassenstand, eigene Schulden; Kassenwart/Trainer buchen -->
+    <section id="view-kasse" class="view hidden">
+      <h2>Kasse</h2>
+      <div id="kasse-inhalt"></div>
     </section>
 
     <!-- Team -> To-Dos (Trainer): Ziele je Spielerin, Wahl der Woche, Feedback -->
@@ -359,6 +365,7 @@
   <script src="/teams-local.js?v=2"></script>
   <script src="/nav.js?v=2"></script>
   <script src="/home-logik.js?v=3"></script>
-  <script type="module" src="/main.js?v=88"></script>
+  <script src="/kasse-logik.js?v=1"></script>
+  <script type="module" src="/main.js?v=89"></script>
 </body>
 </html>

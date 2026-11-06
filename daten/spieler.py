@@ -36,6 +36,23 @@ def aktive_spieler(conn: sqlite3.Connection) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def ist_im_kader(conn: sqlite3.Connection, spieler_id: int | None) -> bool | None:
+    """Gehoert die Person zum aktiven Kader? None, wenn es gar keine Spielerin ist (z. B. der Trainer).
+    Eine HELFERIN ist eine ehemalige Spielerin (aktiv = 0), die noch ein Konto hat, etwa fuer ein Amt."""
+    if not spieler_id:
+        return None
+    r = conn.execute("SELECT aktiv FROM spieler WHERE id = ?", (spieler_id,)).fetchone()
+    return bool(r["aktiv"]) if r else None
+
+
+def amt_kandidaten(conn: sqlite3.Connection) -> list[dict]:
+    """Wer ein Amt bekommen kann: der aktive Kader plus Helferinnen (ehemalige mit Konto)."""
+    rows = conn.execute(
+        "SELECT * FROM spieler s WHERE s.aktiv = 1 OR EXISTS "
+        "(SELECT 1 FROM benutzer b WHERE b.spieler_id = s.id AND b.aktiv = 1) ORDER BY s.name").fetchall()
+    return [dict(r) for r in rows]
+
+
 def portrait_liste(conn: sqlite3.Connection) -> list[dict]:
     """Je aktiver Spielerin: Name (Schluessel fuers Standardfoto), Version des
     selbst hochgeladenen Fotos und gewaehlte Darstellung."""

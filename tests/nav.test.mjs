@@ -45,12 +45,21 @@ test("Trainer: Home, Training, Team, Taktik, Saison - mit und ohne Profil", () =
 test("Aemter: Spielerin im Reiter Mannschaft, Trainer unter Saison - dieselben Seiten", () => {
   const s = Nav.finde("spieler", true, "mannschaft", "listen");
   assert.equal(s.unter.view, "view-listen");
-  assert.deepEqual(labels(Nav.subnav(s.ober)), ["Ämter", "Listen"]);
+  assert.deepEqual(labels(Nav.subnav(s.ober)), ["Ämter", "Listen", "Kasse"]);
   const t = Nav.finde("trainer", true, "saison", "aemter");
   assert.equal(t.unter.view, "view-aemter");
   assert.ok(labels(Nav.subnav(t.ober)).includes("Listen"));
   assert.equal(Nav.finde("trainer", true, "mannschaft", "aemter"), null);   // sechs Reiter waeren zu viel
   assert.equal(Nav.finde("spieler", true, "saison", "aemter"), null);       // Saison bleibt Trainer-Sache
+});
+
+test("Kasse: für Spielerin (Mannschaft) und Trainer (Saison) erreichbar, gleiche Ansicht", () => {
+  const s = Nav.finde("spieler", true, "mannschaft", "kasse");
+  const t = Nav.finde("trainer", true, "saison", "kasse");
+  assert.equal(s.unter.view, "view-kasse");
+  assert.equal(t.unter.view, "view-kasse");
+  assert.equal(s.unter.key, "kasse");              // kein Zurückfallen auf den ersten Unterpunkt
+  assert.equal(Nav.finde("spieler", false, "mannschaft", "kasse"), null);   // ohne Profil gibt es den Reiter nicht
 });
 
 test("jeder Reiter hat ein Symbol", () => {

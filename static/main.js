@@ -5,6 +5,7 @@ import { ladeSpieler, ladeTrainings } from "./features/einteilung.js";
 import { ladeHome } from "./features/home.js";
 import { ladeIch } from "./features/ich.js";
 import { ladeKader, restoreAnytypeStatus } from "./features/kader.js";
+import { ladeKasse } from "./features/kasse.js";
 import { pruefeAnmeldung } from "./core/konto.js";
 import { ladeLiga } from "./features/liga.js";
 import { ladeMitteilungen } from "./features/mitteilungen.js";
@@ -45,8 +46,8 @@ setzeInit({
   "taktik/gegner": () => ladeWiki("gegner", "Gegnercheck"),
   "saison/orga": () => ladeWiki(["saison", "orga"], "Saison & Orga"),
   "saison/statspiele": ladeStatistikSpiele,
-  "saison/aemter": ladeAemter, "saison/listen": ladeListen,
-  "mannschaft/aemter": ladeAemter, "mannschaft/listen": ladeListen,
+  "saison/aemter": ladeAemter, "saison/listen": ladeListen, "saison/kasse": ladeKasse,
+  "mannschaft/aemter": ladeAemter, "mannschaft/listen": ladeListen, "mannschaft/kasse": ladeKasse,
   "saison/notizen": () => ladeWiki(["notiz", "besprechung"], "Notizen"),
 });
 if ("serviceWorker" in navigator) {

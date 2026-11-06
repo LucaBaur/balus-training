@@ -103,7 +103,8 @@ def nutzung_auswertung(conn: sqlite3.Connection, tage: int = 30) -> dict:
         return datetime.strptime(z, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
 
     konten = conn.execute(
-        "SELECT id, name, spieler_id FROM benutzer WHERE rolle = 'spieler' AND aktiv = 1 ORDER BY name"
+        "SELECT id, name, spieler_id FROM benutzer WHERE rolle = 'spieler' AND aktiv = 1 "
+        "AND (spieler_id IS NULL OR spieler_id IN (SELECT id FROM spieler WHERE aktiv = 1)) ORDER BY name"   # ohne Helferinnen
     ).fetchall()
     rows: dict[int, list] = {k["id"]: [] for k in konten}
     for r in conn.execute("SELECT benutzer_id, zeit, typ, ziel, info, dauer_s FROM nutzung ORDER BY zeit"):

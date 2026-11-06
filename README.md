@@ -50,6 +50,17 @@ Heute gibt das Amt „Balu-Trainings-App“ das Recht, Trainings und Spiele anzu
 dem 1. Juli dran war, und tragen beim Bussle „da / nicht da“ und die Selbstfahrerinnen ein. Der Trainer vergibt
 die Ämter (Trainer: Saison → Ämter). **Wer welches Amt hat, steht nur in der Datenbank**, nie im Code oder Repo.
 
+**Kasse** (Mannschaft → Kasse, beim Trainer Saison → Kasse) – Das Amt „Kassenwart“ gibt das Recht `kasse` und führt
+ein **Kassenbuch** (`daten/kasse.py`, `routen/kasse.py`, Tabelle `kasse_buchung`). Vier Arten: *Strafe/Beitrag*
+(Spielerin schuldet), *Einzahlung* (Spielerin zahlt), *Ausgabe*, *Einnahme*. Daraus entstehen der Kassenstand
+(Forderungen zählen erst, wenn bezahlt wird) und „wer schuldet wie viel“. Regeln, die immer gelten: Beträge sind
+**ganze Cent** (nie Kommazahlen), Buchungen werden **nie gelöscht, nur storniert** (bleiben sichtbar), ein
+Token macht doppeltes Absenden harmlos. Alle sehen Kassenstand, die Buchungen der Kasse und die offenen Strafen
+aller (Name + Betrag); die einzelnen Posten einer Spielerin sieht nur sie selbst, die Kassenwartin und der Trainer.
+**Helferinnen** (ehemalige Spielerin, `spieler.aktiv = 0`, mit aktivem Konto) können Ämter haben, bekommen aber keine
+Zu-/Absage und keine Erinnerungen (`db.ist_im_kader`, `db.amt_kandidaten`). Gerechnet und formatiert wird in `static/kasse-logik.js`.
+Bewusst noch nicht dabei: Strafenkatalog, Sammelforderung an alle, Mitteilung bei neuer Strafe, Export.
+
 **Home** – Übersicht mit dem nächsten Training (Zu-/Absage direkt dort), den nächsten drei
 Spielen und Abkürzungen; dazu **Liga** mit Tabelle und Spielplan der Bezirksoberliga
 (Daten vom Verband, zwischengespeichert, mit Hinweis wenn die Quelle nicht erreichbar ist).

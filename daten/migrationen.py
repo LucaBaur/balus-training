@@ -105,9 +105,25 @@ def m001_bestand(conn: sqlite3.Connection) -> None:
                  "ON video_clip_spieler(spieler_id)")
 
 
+KASSENWART_TEXT_ALT = "Führt die Mannschaftskasse. Die Kasse selbst ist noch nicht in der App."
+KASSENWART_TEXT_NEU = "Führt die Mannschaftskasse: bucht Strafen, Einzahlungen, Ausgaben und Einnahmen und zeigt den Kassenstand."
+
+
+def m002_kassenwart_text(conn: sqlite3.Connection) -> None:
+    """Die Kasse ist jetzt in der App: der Standardtext des Amts Kassenwart stimmt nicht mehr.
+    Nur ersetzen, wenn der Trainer ihn nicht selbst geaendert hat. Die Tabelle `amt` legt erst
+    `aemter.starte` an, die nach den Migrationen laeuft - auf einer frischen Datenbank gibt es sie hier
+    noch nicht (dort setzt AEMTER_START den neuen Text gleich)."""
+    if conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'amt'").fetchone() is None:
+        return
+    conn.execute("UPDATE amt SET beschreibung = ? WHERE schluessel = 'kassenwart' AND beschreibung = ?",
+                 (KASSENWART_TEXT_NEU, KASSENWART_TEXT_ALT))
+
+
 # (Nummer, Name, Funktion) - Nummern fortlaufend ab 1, neue Eintraege nur ans Ende.
 MIGRATIONEN: list[tuple[int, str, Callable[[sqlite3.Connection], None]]] = [
     (1, "bestand", m001_bestand),
+    (2, "kassenwart_text", m002_kassenwart_text),
 ]
 
 

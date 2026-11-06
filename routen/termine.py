@@ -260,6 +260,8 @@ def api_teilnahme(tid: int, a: TeilnahmeAnfrage, hintergrund: BackgroundTasks,
     sid = benutzer.get("spieler_id")
     if not sid:
         raise HTTPException(403, "Dein Konto ist mit keiner Spielerin verknüpft.")
+    if not db.ist_im_kader(conn, sid):
+        raise HTTPException(403, "Du gehörst nicht zum aktuellen Kader, darum gibt es für dich keine Zu-/Absage.")
     if a.status not in ("anwesend", "abgesagt", "unsicher"):
         raise HTTPException(400, "Ungültiger Status.")
     grund = (a.grund or "").strip() or None

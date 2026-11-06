@@ -25,8 +25,9 @@ from datetime import date, timedelta
 # Rechte, die ein Amt vergeben kann. Die Zuordnung Amt -> Recht steht bewusst hier im Code und
 # nicht in der Datenbank: Wer Rechte ändern will, ändert Code (und wird dabei getestet), die
 # Oberfläche kann sie nicht verschieben. Der Trainer hat jedes Recht ohnehin.
-RECHTE = {"termine": "Trainings und Spiele anlegen und löschen"}
-AMT_RECHTE: dict[str, tuple[str, ...]] = {"balu_app": ("termine",)}
+RECHTE = {"termine": "Trainings und Spiele anlegen und löschen",
+          "kasse": "Mannschaftskasse führen (Strafen, Zahlungen, Ausgaben buchen und stornieren)"}
+AMT_RECHTE: dict[str, tuple[str, ...]] = {"balu_app": ("termine",), "kassenwart": ("kasse",)}
 
 # Auf welche Termine sich eine Liste bezieht.
 GILT_FUER = ("training", "spiele", "alle")
@@ -37,7 +38,7 @@ AEMTER_START = [
     ("kapitaen", "Kapitän", "Sprecherin der Mannschaft und Ansprechperson für Trainer und Schiedsrichter.", "titel", "alle"),
     ("mannschaftsrat", "Mannschaftsrat", "Kümmert sich um organisatorische Fragen, wenn etwas ansteht.", "titel", "alle"),
     ("spielplanung", "Spielplanung", "Plant vor der Saison die Hallenzeiten und spricht Termine ab.", "titel", "alle"),
-    ("kassenwart", "Kassenwart", "Führt die Mannschaftskasse. Die Kasse selbst ist noch nicht in der App.", "titel", "alle"),
+    ("kassenwart", "Kassenwart", "Führt die Mannschaftskasse: bucht Strafen, Einzahlungen, Ausgaben und Einnahmen und zeigt den Kassenstand.", "titel", "alle"),
     ("balu_app", "Balu-Trainings-App", "Legt Trainings und Spiele in der App an (früher SpielerPlus).", "titel", "alle"),
     ("leibchen", "Leibchen", "Bestimmt, wer die Leibchen nach dem Training mit nach Hause nimmt und wäscht.", "zuteilung", "training"),
     ("waschliste", "Waschliste", "Bestimmt, wer nach dem Spiel die Trikots mit nach Hause nimmt und wäscht.", "zuteilung", "spiele"),

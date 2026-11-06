@@ -304,6 +304,13 @@ check(len(gesendet) == 1 and gesendet[0]["art"] == "warnungen", "Montag: dieselb
 tage_fr = (4 - HEUTE.weekday()) % 7 or 7          # bis zum nächsten Freitag
 tage_mo = (0 - HEUTE.weekday()) % 7 or 7          # bis zum nächsten Montag
 conn = db.verbinde()
+# Liegt an dem Tag schon ein anderer Termin (z. B. ein Ligaspiel, das nie freiwillig ist), eine Woche weiter:
+# sonst zählt dieser Termin mit und der Test hängt vom Wochentag ab, an dem er läuft (an einem Freitag fiel es auf).
+belegt = {t["datum"] for t in db.trainings_liste(conn)}
+while tag(tage_fr) in belegt:
+    tage_fr += 7
+while tag(tage_mo) in belegt:
+    tage_mo += 7
 fr_id, _ = db.training_anlegen(conn, tag(tage_fr), "Training Freitag", None, uhrzeit="19:00")
 mo_id, _ = db.training_anlegen(conn, tag(tage_mo), "Training Montag", None, uhrzeit="20:00")
 check(db.offene_spieler_benutzer(conn, fr_id) and db.offene_spieler_benutzer(conn, mo_id),

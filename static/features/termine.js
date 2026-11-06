@@ -504,6 +504,7 @@ function renderRSVP(d) {
 export function rsvpFuellen(el, d) {
   const sid = aktBenutzer && aktBenutzer.spieler_id;
   if (!sid) { el.innerHTML = ""; return; }          // Trainer / kein Spielerprofil
+  if (aktBenutzer.im_kader === false) { el.innerHTML = ""; return; }   // Helferin (ehemalige Spielerin mit Amt): keine Zu-/Absage
   const meine = (d.teilnahme || []).find((t) => t.id === sid);
   const status = meine ? meine.status : null;
   const lab = { anwesend: "Zugesagt ✓", abgesagt: "Abgesagt", unsicher: "Unsicher" };

@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 
 import auth
 import db
-from routen import (analysen, anytype, coach, einteilung, fotos, kommentare, konto, mannschaft,
+from routen import (analysen, anytype, coach, einteilung, fotos, kasse, kommentare, konto, mannschaft,
                     mitteilungen, nutzung, pfade, spieler, spielerplus, system, tabelle,
                     termine, todos, videos, wiki)
 
@@ -62,7 +62,7 @@ _c.close()
 # ueberlappen koennten (feste Pfade vor solchen mit {Platzhalter}); die Routen
 # stehen jeweils in ihrem eigenen Modul in der richtigen Reihenfolge.
 for modul in (konto, nutzung, kommentare, todos, tabelle, spieler, fotos, anytype, termine,
-              mannschaft, mitteilungen, spielerplus, wiki, einteilung, coach, videos,
+              mannschaft, kasse, mitteilungen, spielerplus, wiki, einteilung, coach, videos,
               analysen, system):
     app.include_router(modul.router)
 

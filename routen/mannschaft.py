@@ -63,7 +63,7 @@ class AmtBussle(BaseModel):
 
 @router.get("/api/aemter")
 def api_aemter(conn=Depends(hole_conn), benutzer=Depends(require_user)):
-    kader = [{"id": s["id"], "name": s["name"]} for s in db.aktive_spieler(conn)]
+    kader = [{"id": s["id"], "name": s["name"]} for s in db.amt_kandidaten(conn)]   # inkl. Helferinnen
     return {"aemter": aemter.alle(conn, benutzer.get("spieler_id"), benutzer["rolle"] == "trainer"),
             "kader": kader, "kann_verwalten": benutzer["rolle"] == "trainer"}
 

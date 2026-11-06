@@ -372,4 +372,28 @@ CREATE TABLE IF NOT EXISTS spiel_nachbereitung (
     geaendert_am TEXT    NOT NULL DEFAULT (datetime('now')),
     autor        TEXT
 );
+
+-- Mannschaftskasse (Amt Kassenwart). Ein Kassenbuch: Buchungen werden nie geloescht, nur storniert,
+-- damit die Kasse nachvollziehbar bleibt. Betraege sind GANZE CENT (nie Gleitkomma), immer positiv;
+-- die Richtung steckt in der Art:
+--   forderung  Spielerin schuldet der Kasse etwas (Strafe, Beitrag)   - bewegt kein Bargeld
+--   einzahlung Spielerin zahlt in die Kasse                           - Kasse +, Schuld -
+--   ausgabe    Die Kasse zahlt etwas (Getraenke, Rundenabschluss)     - Kasse -
+--   einnahme   Sonstiges Geld in der Kasse (Spende, Flohmarkt)        - Kasse +
+-- 'token' macht doppeltes Absenden harmlos (gleiches Token = dieselbe Buchung). Der Fremdschluessel ohne
+-- CASCADE verhindert, dass eine Spielerin mit Buchungen versehentlich geloescht wird.
+CREATE TABLE IF NOT EXISTS kasse_buchung (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    art          TEXT    NOT NULL CHECK (art IN ('forderung','einzahlung','ausgabe','einnahme')),
+    betrag_cent  INTEGER NOT NULL CHECK (betrag_cent > 0),
+    text         TEXT    NOT NULL,
+    datum        TEXT    NOT NULL,                       -- YYYY-MM-DD, Tag der Buchung (nicht der Eingabe)
+    spieler_id   INTEGER REFERENCES spieler(id),         -- nur bei forderung / einzahlung
+    erstellt_am  TEXT    NOT NULL DEFAULT (datetime('now')),
+    erstellt_von TEXT    NOT NULL,
+    token        TEXT    UNIQUE,
+    storniert_am TEXT,
+    storniert_von TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_kasse_spieler ON kasse_buchung(spieler_id);
 """

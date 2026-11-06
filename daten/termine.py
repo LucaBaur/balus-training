@@ -303,6 +303,7 @@ def offene_spieler_benutzer(conn: sqlite3.Connection, training_id: int) -> list[
     rows = conn.execute(
         "SELECT b.id FROM benutzer b "
         "WHERE b.rolle = 'spieler' AND b.aktiv = 1 AND b.spieler_id IS NOT NULL "
+        "AND b.spieler_id IN (SELECT id FROM spieler WHERE aktiv = 1) "      # keine Helferinnen (ehemalige mit Konto)
         "AND b.spieler_id NOT IN ("
         "  SELECT spieler_id FROM training_teilnahme "
         "  WHERE training_id = ? AND quelle IN ('app', 'trainer'))",

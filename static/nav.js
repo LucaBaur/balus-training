@@ -70,12 +70,14 @@
       u("notizen", "Notizen", "view-wiki"),
       u("aemter", "Ämter", "view-aemter"),
       u("listen", "Listen", "view-listen"),
+      u("kasse", "Kasse", "view-kasse"),
     ]},
     // Ämter der Mannschaft. Spielerinnen haben dafür einen eigenen Reiter, der Trainer erreicht
     // dieselben Seiten unter Saison (sechs Reiter wären zu viel).
     { key: "mannschaft", label: "Mannschaft", icon: "users", rollen: ["spieler"], nurMitProfil: true, unter: [
       u("aemter", "Ämter", "view-aemter"),
       u("listen", "Listen", "view-listen"),
+      u("kasse", "Kasse", "view-kasse"),
     ]},
   ];
 

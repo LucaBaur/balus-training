@@ -251,6 +251,8 @@ export async function renderHomeOffen() {
       : "";
     return;
   }
+  // Helferin (ehemalige Spielerin mit Amt): sie antwortet nicht auf Termine, also fehlt auch nichts.
+  if (aktBenutzer.im_kader === false) { el.innerHTML = ""; return; }
 
   let liste = [];
   try { liste = await Sync.apiOffline("/api/trainings"); } catch (_) { el.innerHTML = ""; return; }

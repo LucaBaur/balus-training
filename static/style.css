@@ -1657,3 +1657,30 @@ button.sekundaer {
 .lt-bussle button.an { background: var(--tvg); color: #fff; }
 .lt-bussle button.an.nein { background: var(--warn); }
 .pm-kopf .pm-aemter { color: var(--tvg); font-size: .78rem; }
+
+/* ---- Kasse (Mannschaft -> Kasse) ---- */
+.kasse-stand { display: grid; gap: 2px; }
+.kasse-label { font-size: .78rem; color: var(--grau); text-transform: uppercase; letter-spacing: .04em; }
+.kasse-zahl { font-size: 1.9rem; color: var(--tvg-900); font-variant-numeric: tabular-nums; }
+.kasse-zahl.minus { color: var(--warn); }
+.kasse-klein { color: var(--grau); }
+.kasse-mein { margin: 8px 0 0; padding: 6px 10px; border-radius: 8px; background: var(--ok-bg); border: 1px solid var(--ok-linie); }
+.kasse-mein.schuld { background: var(--warn-bg); border-color: var(--warn-linie); color: var(--warn-text); }
+.kasse-neu label { display: grid; gap: 4px; font-size: .82rem; color: var(--grau); margin-top: 8px; }
+.kasse-neu select, .kasse-neu input { width: 100%; padding: 8px; border: 1px solid var(--linie-2); border-radius: 8px; background: var(--karte); color: var(--text); font: inherit; }
+.kasse-check { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.kasse-check input { width: auto; }
+.kasse-regeln { margin-top: 14px; font-size: .85rem; color: var(--grau); }
+.kasse-regeln summary { cursor: pointer; font-weight: 600; }
+.kasse-regeln li { margin: 4px 0; }
+.kasse-hinweis { margin: 6px 0 0; font-size: .8rem; color: var(--grau); }
+.kasse-liste { background: var(--karte); border: 1px solid var(--linie); border-radius: 12px; margin-bottom: 8px; }
+.kasse-zeile { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-top: 1px solid var(--linie); }
+.kasse-zeile:first-child { border-top: 0; }
+.kasse-text { flex: 1; min-width: 0; display: grid; gap: 1px; overflow-wrap: anywhere; }
+.kasse-text small { color: var(--grau); }
+.kasse-betrag { font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; }
+.kasse-betrag.plus { color: var(--tvg); }
+.kasse-betrag.minus { color: var(--warn); }
+.kasse-betrag.forderung { color: var(--ocker-text); }
+.kasse-zeile.storniert .kasse-text b, .kasse-zeile.storniert .kasse-betrag { text-decoration: line-through; opacity: .55; }

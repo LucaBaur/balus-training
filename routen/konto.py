@@ -78,6 +78,8 @@ def _me(benutzer: dict, conn=None) -> dict:
     if conn is not None:        # Ämter und Rechte: das Frontend blendet damit nur Knöpfe ein, der Server prüft selbst
         me["aemter"] = aemter.meine_aemter(conn, benutzer.get("spieler_id"))
         me["rechte"] = sorted(_rechte(conn, benutzer))
+        # False = Helferin (ehemalige Spielerin mit Konto): das Frontend blendet Zu-/Absage aus, der Server sperrt sie
+        me["im_kader"] = db.ist_im_kader(conn, benutzer.get("spieler_id"))
     return me
 
 
