@@ -2,7 +2,7 @@
 // aus dem Cache geliefert (auch offline / bei schlechtem Netz kein Warten), und
 // im Hintergrund frisch nachgeladen. Neue Versionen kommen ueber CACHE-Bump +
 // controllerchange-Reload (siehe main.js) trotzdem zuverlaessig an.
-const CACHE = "elo-v90";
+const CACHE = "elo-v91";
 // Klassische Skripte tragen ?v= (steht so in index.html). Die ES-Module (main.js, core/, features/)
 // werden von main.js ohne ?v= importiert; der Server liefert sie mit "Cache-Control: no-cache",
 // und der CACHE-Bump oben holt sie neu. tests/huelle.test.mjs prueft, dass diese Liste vollstaendig ist.

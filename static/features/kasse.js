@@ -138,6 +138,16 @@ const REGELN = `<details class="kasse-regeln"><summary>Regeln zur Kasse</summary
   <li>Strafen sind anfechtbar: Die Spielerin sagt etwas vor der ganzen Mannschaft, dann wird demokratisch abgestimmt. Stimmt die Mannschaft zu, verdoppelt sich die Strafe, sonst verfällt sie.</li>
   <li>Kasten = ½ Radler, ¼ Bier, ¼ Antialk.</li></ul></details>`;
 
+// Der Strafenkatalog zum Nachlesen: Posten und Preise sehen alle, nicht nur die Buchenden.
+function katalogAnzeige(d) {
+  const posten = d.katalog || [];
+  if (!posten.length) return "";
+  return `<details class="kasse-regeln kasse-katalog"><summary>Strafenkatalog</summary><div class="kasse-liste">${posten.map((k) => `<div class="kasse-zeile">
+    <span class="kasse-text"><b>${escape(k.label)}</b></span>
+    <span class="kasse-betrag">${k.cent === null ? "Kasten" : KasseLogik.euro(k.cent) + (k.einheit ? " je " + escape(k.einheit) : "")}</span></div>`).join("")}</div>
+    <p class="kasse-hinweis">Für Trainer gilt alles ×2.</p></details>`;
+}
+
 function renderKasse() {
   // Den Zustand „aufgeklappt“ vor dem Neuzeichnen aus dem DOM lesen, nicht aus einem Ereignis: das
   // „toggle“-Ereignis kommt asynchron und ein früheres Neuzeichnen würde noch den alten Wert sehen.
@@ -152,7 +162,7 @@ function renderKasse() {
     + (darf ? formular(d) : "")
     + '<h3 class="todo-titel">Offene Strafen – wer schuldet wie viel?</h3>' + offenListe(d, darf)
     + `<h3 class="todo-titel">${darf ? "Alle Buchungen" : "Deine Buchungen und die der Kasse"}</h3>` + liste
-    + REGELN
+    + katalogAnzeige(d) + REGELN
     + (darf ? '<p class="hinweis">Gebucht wird nie gelöscht: Eine falsche Buchung wird storniert und bleibt zur Kontrolle sichtbar.</p>' : "");
 }
 

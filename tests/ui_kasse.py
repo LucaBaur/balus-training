@@ -125,6 +125,12 @@ def main():
                    "Lena sieht die Liste der offenen Strafen, sich selbst als „(du)“ markiert")
             pruefe("2,00 €" in stand(s), "Lena sieht denselben Kassenstand (2,00 €)")
 
+            pruefe(l.query_selector(".kasse-katalog") is not None, "Lena sieht den Abschnitt „Strafenkatalog“")
+            l.click(".kasse-katalog summary"); l.wait_for_timeout(200)
+            k = l.inner_text(".kasse-katalog").replace(" ", " ")
+            pruefe("Glatte Rote Karte" in k and "45,00 €" in k and "3,00 € je Min" in k and "Kasten" in k,
+                   "…mit Posten, Preisen, „je Min“ und Kasten-Posten")
+
             # ---- Helferin: ehemalige Spielerin mit Amt sieht keine Zu-/Absage ---------------------------------
             def zusage_knoepfe(seite):
                 seite.click('#tableiste button[data-ober="home"]'); seite.wait_for_timeout(1200)

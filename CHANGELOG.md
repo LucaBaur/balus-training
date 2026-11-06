@@ -22,6 +22,11 @@ Zahl, Fehlerbehebungen und Design-Feinschliff die letzte.
 
 ---
 
+## v0.71.1 — 2026-11-06
+
+- **Strafenkatalog für alle:** In der Kasse gibt es den aufklappbaren Abschnitt „Strafenkatalog“ mit allen Posten und
+  Preisen. Bisher sah ihn nur, wer buchen darf. Jetzt weiß jede Spielerin vorher, was etwas kostet.
+
 ## v0.71.0 — 2026-11-06
 
 **Neu: die Mannschaftskasse.** Das Amt „Kassenwart“ hat jetzt etwas zu tun: ein Kassenbuch in der App
