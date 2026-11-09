@@ -120,6 +120,16 @@ def nutzung_auswertung(conn: sqlite3.Connection, tage: int = 30) -> dict:
                 "app_version": g["app_version"], "sw": bool(g["sw"]),
                 "zuletzt": _utc_z(g["zuletzt"])})
 
+    # Push: je Konto die Zahl der Geraete mit Abo und die abgeschalteten Arten (fehlt eine Zeile, ist die Art an).
+    push_geraete: dict[int, int] = {k["id"]: 0 for k in konten}
+    for r in conn.execute("SELECT benutzer_id, COUNT(*) AS n FROM push_abo GROUP BY benutzer_id"):
+        if r["benutzer_id"] in push_geraete:
+            push_geraete[r["benutzer_id"]] = r["n"]
+    push_aus: dict[int, list[str]] = {k["id"]: [] for k in konten}
+    for r in conn.execute("SELECT benutzer_id, art FROM push_praeferenz WHERE an = 0 ORDER BY art"):
+        if r["benutzer_id"] in push_aus:
+            push_aus[r["benutzer_id"]].append(r["art"])
+
     # Szenen und wer sie komplett gesehen hat - fuer IMMER, nicht nur im 30-Tage-Fenster:
     # ein vor 40 Tagen angeschauter Spielzug darf nicht als "nicht gesehen" erscheinen.
     katalog = _szenen_katalog(conn)
@@ -158,6 +168,7 @@ def nutzung_auswertung(conn: sqlite3.Connection, tage: int = 30) -> dict:
             "nicht_gesehen": sorted(nicht_gesehen, key=lambda n: (-n["analyse_id"], n["t"] or 0)),
             "offen": len(nicht_gesehen),
             "geraete": geraete[k["id"]],
+            "push": {"geraete": push_geraete[k["id"]], "aus": push_aus[k["id"]]},
         })
     return {"tage": tage, "seit": (erste.replace(" ", "T") + "Z") if erste else None,
             "konten": ausgabe, "fehler": _fehler_gruppiert(conn, grenze)}

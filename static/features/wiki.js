@@ -2,6 +2,7 @@ import { api } from "../core/api.js";
 import { aktRolle } from "../core/konto.js";
 import { aktOber, aktUnter, gehe, zeigeView } from "../core/router.js";
 import { $, escape, mdLite, toast } from "../core/ui.js";
+import { zeigeSpielzug } from "./spielzug.js";
 
 // -------------------------------------------------------------- Wiki/Seiten --
 //  Eine Ansicht für alle Freitext-Bereiche (Playbook/Gegner/Übungen/Statistik/
@@ -223,8 +224,16 @@ async function oeffneSeite(id) {
 function renderSeite() {
   const s = aktSeite;
   $("#wd-titel").textContent = s.titel;
-  $("#wd-body").innerHTML = s.markdown ? mdLite(s.markdown)
+  // Playbook: Beschreibung steht ÜBER der Spielzug-Grafik. Ohne Text bleibt der Kasten für Spielerinnen
+  // weg (leer = per CSS unsichtbar), Trainer bekommen einen Hinweis.
+  const leerText = s.kategorie === "playbook"
+    ? (aktRolle === "trainer" ? '<p class="hinweis">Noch keine Beschreibung. Mit „Inhalt hinzufügen“ unten ergänzen: Worum geht es, was wollen wir erreichen?</p>' : "")
     : '<p class="hinweis">Diese Seite ist leer.</p>';
+  $("#wd-body").innerHTML = s.markdown ? mdLite(s.markdown) : leerText;
+  // Playbook-Spielzug: Halbfeld mit Schritten, Abwehr-Verzweigung und Videos (falls vorhanden).
+  const ansicht = $("#wd-ansicht");
+  ansicht.innerHTML = "";
+  if (s.kategorie === "playbook") zeigeSpielzug(ansicht, s, () => aktSeite === s);
   const akt = $("#wd-aktionen");
   akt.innerHTML = "";
   if (aktRolle !== "trainer") return;
@@ -251,7 +260,8 @@ function startSeiteEdit() {
   const ta = document.createElement("textarea");
   ta.className = "plan-editor";
   ta.rows = 16;
-  ta.value = s.markdown || "";
+  // Neuer Playbook-Text: die zwei Leitfragen vorbelegen (nur im Feld, gespeichert wird erst per Knopf).
+  ta.value = s.markdown || (s.kategorie === "playbook" ? window.SpielzugLogik.BESCHREIBUNG_VORLAGE : "");
   ta.placeholder = "Inhalt (Markdown: ## Überschrift, - Liste, **fett**) …";
   const leiste = document.createElement("div");
   leiste.className = "plan-edit-leiste";

@@ -92,6 +92,22 @@ check(anna_k["zuletzt"].endswith("Z"), "Zeitpunkt als UTC mit Z")
 check(bea_k["zuletzt"] is None and bea_k["besuche"] == 0, "Bea: noch nie aktiv")
 check(d["seit"] is not None, "Erfassung seit gesetzt")
 
+# Push-Stand je Konto
+check(anna_k["push"] == {"geraete": 0, "aus": []} and bea_k["push"] == {"geraete": 0, "aus": []},
+      "Push: ohne Abo steht 0 Geraete da")
+c = db.verbinde()
+anna_b = c.execute("SELECT id FROM benutzer WHERE name = 'Anna'").fetchone()["id"]
+db.push_abo_speichern(c, anna_b, "https://push.example/a1", "k", "a")
+db.push_abo_speichern(c, anna_b, "https://push.example/a2", "k", "a")        # zweites Geraet
+db.push_praeferenz_setzen(c, anna_b, "videos", False)
+db.push_praeferenz_setzen(c, anna_b, "termine", True)                         # an zaehlt nicht als "aus"
+c.close()
+d = T.get("/api/nutzung").json()
+anna_k = next(k for k in d["konten"] if k["name"] == "Anna")
+bea_k = next(k for k in d["konten"] if k["name"] == "Bea")
+check(anna_k["push"] == {"geraete": 2, "aus": ["videos"]}, "Push: Anna hat 2 Geraete, Videos abgeschaltet")
+check(bea_k["push"]["geraete"] == 0, "Push: Bea weiterhin ohne Abo")
+
 # Videozentrierte Sicht: ein echter Clip fuer Anna UND Bea, nur Anna schaut ihn
 c = db.verbinde()
 clip = db.clip_anlegen(c, "Kreisanspiel 2", None, "x.mp4", None, 10.0, None, [anna, bea])

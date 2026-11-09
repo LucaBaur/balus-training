@@ -262,7 +262,9 @@ def bestands_db(name, text):
 
 
 c1 = bestands_db("alt.db", migrationen.KASSENWART_TEXT_ALT)
-check(migrationen.migriere(c1) == [2] and amt_text(c1) == migrationen.KASSENWART_TEXT_NEU,
+# Alle Migrationen ab 2 laufen (neue Migrationen kommen hinten dazu, die Zahl hier nicht fest verdrahten).
+NACH_1 = list(range(2, migrationen.letzte_version() + 1))
+check(migrationen.migriere(c1) == NACH_1 and amt_text(c1) == migrationen.KASSENWART_TEXT_NEU,
       "Migration 2 ersetzt den alten Standardtext des Kassenwarts")
 check(migrationen.migriere(c1) == [], "…und läuft nicht ein zweites Mal")
 c2 = bestands_db("eigen.db", "Unser Text, vom Trainer geschrieben")
@@ -271,7 +273,7 @@ check(amt_text(c2) == "Unser Text, vom Trainer geschrieben", "Ein vom Trainer ge
 roh = sqlite3.connect(tmp / "leer.db")
 roh.row_factory = sqlite3.Row
 roh.executescript(db.SCHEMA)
-check(migrationen.migriere(roh) == [1, 2], "Migration 2 überlebt eine Datenbank ohne Tabelle „amt“ (frischer Start)")
+check(migrationen.migriere(roh) == [1] + NACH_1, "Migration 2 überlebt eine Datenbank ohne Tabelle „amt“ (frischer Start)")
 c1.close(); c2.close(); roh.close()
 
 print("\nalles ok")

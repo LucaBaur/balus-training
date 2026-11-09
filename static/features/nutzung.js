@@ -96,6 +96,17 @@ export function aktualisiertText(ts, jetzt, online) {
   if (min < 60) return "aktualisiert vor " + min + " Min.";
   return "Stand von " + uhr(ts);
 }
+// Push-Stand eines Kontos: {aktiv, text, klasse}. `push` kommt vom Server ({geraete, aus: [Art, ...]}).
+// "aktiv" heisst: mindestens ein Geraet hat Mitteilungen erlaubt. Abgeschaltete Arten stehen dabei.
+const PUSH_ARTEN = { termine: "Termine", aemter: "Ämter", videos: "Videos", rueckmeldungen: "Rückmeldungen", warnungen: "Warnungen" };
+export function pushStand(push) {
+  const n = push && push.geraete ? push.geraete : 0;
+  if (!n) return { aktiv: false, text: "Push aus", klasse: "aus" };
+  const aus = ((push && push.aus) || []).map((a) => PUSH_ARTEN[a] || a);
+  const geraete = n === 1 ? "1 Gerät" : n + " Geräte";
+  return { aktiv: true, klasse: "an",
+           text: "Push an · " + geraete + (aus.length ? " · ohne " + aus.join(", ") : "") };
+}
 // ---- Ende Nutzung-Hilfen ----
 // Trainer-Seite: Team -> Nutzung.
 let nutzungDaten = null;
@@ -153,6 +164,8 @@ function renderNutzungSpielerin(k, tage) {
   const zahlen = k.zuletzt
     ? `${pl(k.tage, "Tag", "Tage")} · ${pl(k.besuche, "Besuch", "Besuche")} · <b>${escape(dauerText(k.sekunden_gesamt))}</b>${gerat}`
     : "noch nicht in der App";
+  const ps = pushStand(k.push);
+  const pushZeile = `<span class="nk-zahlen nk-push ${ps.klasse}">${ps.aktiv ? "🔔" : "🔕"} ${escape(ps.text)}</span>`;
   const offen = k.offen ? `<span class="nk-offen"><b>${k.offen}</b> ${k.offen === 1 ? "Spielzug" : "Spielzüge"} nicht gesehen</span>` : "";
   let detail = "";
   if (k.bereiche.length) {
@@ -172,7 +185,7 @@ function renderNutzungSpielerin(k, tage) {
   return `<details class="nutz-karte${k.zuletzt ? "" : " nie"}">
     <summary><span class="nk-name">${escape(k.name)}</span>
       <span class="nk-zuletzt" title="${k.zuletzt ? escape(new Date(k.zuletzt).toLocaleString("de-DE")) : ""}">${escape(vorZeit(k.zuletzt))}</span>
-      <span class="nk-zahlen">${zahlen}</span>${offen ? `<span class="nk-zahlen">${offen}</span>` : ""}</summary>
+      <span class="nk-zahlen">${zahlen}</span>${pushZeile}${offen ?`<span class="nk-zahlen">${offen}</span>` : ""}</summary>
     <div class="nk-detail">${detail}</div></details>`;
 }
 function renderNutzung() {
@@ -181,7 +194,13 @@ function renderNutzung() {
   const konten = [...d.konten].sort((a, b) =>
     (b.zuletzt || "").localeCompare(a.zuletzt || "") || a.name.localeCompare(b.name));
   const seit = d.seit ? new Date(d.seit).toLocaleDateString("de-DE") : "–";
-  let html = `<p class="hinweis">Zähler der letzten ${d.tage} Tage, nur Spielerinnen. Erfasst seit ${seit}. `
+  const mitPush = konten.filter((k) => pushStand(k.push).aktiv);
+  const ohnePush = konten.filter((k) => !pushStand(k.push).aktiv).map((k) => k.name);
+  let html = `<p class="nutz-push"><b>Push-Mitteilungen:</b> ${mitPush.length} von ${konten.length} Spielerinnen haben sie an`
+           + (ohnePush.length ? `. Noch ohne: ${escape(ohnePush.join(", "))}.` : " ✓")
+           + ` <small>„An“ heißt: mindestens ein Gerät hat Mitteilungen erlaubt. Ob eine Nachricht dort ankommt, `
+           + `sieht der Server nicht.</small></p>`
+           + `<p class="hinweis">Zähler der letzten ${d.tage} Tage, nur Spielerinnen. Erfasst seit ${seit}. `
            + `„Zuletzt aktiv“ zählt auch ältere Besuche. Die Dauer wird erst seit Version 0.59 gemessen `
            + `(nur bei geöffneter App, höchstens 30 Min. am Stück); davor steht „–“. „Nicht gesehen“ heißt: `
            + `nicht komplett angeschaut (mindestens 60 %), unabhängig vom Zeitraum. Die Spielzüge selbst stehen `

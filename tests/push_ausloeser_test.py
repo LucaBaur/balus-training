@@ -40,6 +40,9 @@ import app as balu  # noqa: E402
 from routen import pfade  # noqa: E402
 import auth  # noqa: E402
 import db  # noqa: E402
+import daten.termine as _termine  # noqa: E402
+
+_termine.AUTO_ZUSAGE_AB = "2999-12-31"   # diese Tests pruefen das Opt-in-Verhalten (auto_zusage_test.py das neue)
 import push  # noqa: E402
 import push_erinnerung  # noqa: E402
 import push_spieltag  # noqa: E402

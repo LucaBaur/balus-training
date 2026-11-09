@@ -329,10 +329,33 @@ Ausgelöst werden sie in `benachrichtigung.py` (neuer Clip, neue Videoanalyse, a
 Zusagen, Zuteilung bei einem Amt, Art `aemter`) und in den Cronjobs `push_spieltag.py` (Abfahrt/Anwurf am Vortag
 und am Spieltag) und `push_amt_erinnerung.py` (alle zehn Minuten; eine Stunde vor Training, Abfahrt oder Anwurf
 „heute nicht vergessen“: Mitbring-Ämter wie Tape und Harz/Öl, dazu Getränke, Leibchen, Trikots und Fahrten für
-die, die dafür eingeteilt sind; Wer abgesagt hat, bekommt nichts). Versendet wird über
+die, die dafür eingeteilt sind; wer abgesagt hat, bekommt diese Erinnerung nicht, sondern gleich beim Absagen
+„Du hast abgesagt – wer übernimmt?“ aus `benachrichtigung.amt_uebergabe`, je Termin und Person einmal). Versendet wird über
 `push.sende(..., art=...)`; dort wird nach den Einstellungen der Person gefiltert (Tabelle `push_praeferenz`,
 Menü Profil → Mitteilungen). Einmal-Nachrichten merkt sich `push_gesendet`, damit ein zweiter Lauf nichts doppelt
 sendet. Cron siehe CHANGELOG v0.65.0.
+
+## Automatische Zusage und Absagefrist (ab 09.11.2026)
+
+Bei normalen Trainings (nicht freiwillig, keine Spiele) sind alle aktiven Spielerinnen automatisch zugesagt
+(`training_teilnahme.quelle = 'auto'`). Die Zeilen entstehen sofort, wenn ein Training angelegt wird
+(`db.training_anlegen`, `trainings_termine.py`) oder eine Spielerin neu oder wieder aktiv wird
+(`db.spieler_anlegen`, `db.spieler_aktualisieren`); alles läuft über `db.auto_zusagen`, das idempotent ist. Es gibt
+keinen Cronjob dafür. Von Hand abgleichen (einmalig beim Umschalten oder falls etwas fehlt):
+`cd ~/elo && ~/anytype-sync/.venv/bin/python auto_zusagen.py` (`--trocken` zählt nur). Absagen und „unsicher“ gehen in der App nur
+bis 24 Stunden vor Beginn (`db.absage_frist`, im Termin als `absage_frist`); der Server lehnt spätere mit 403 ab,
+Zusagen geht immer, der Trainer kann jederzeit eintragen. Der Stichtag steht in `AUTO_ZUSAGE_AB`
+(`daten/termine.py`). Rückweg zum alten Verhalten: `AUTO_ZUSAGE_AB` weit in die Zukunft setzen, `sp_import.py` wieder
+eintragen; bestehende `auto`-Zeilen bleiben stehen und lassen sich löschen
+(`DELETE FROM training_teilnahme WHERE quelle = 'auto'`).
+
+## Zeiten ändern und Wochenmuster
+
+Das Training ist ein Objekt; eine neue Zeit ändert nur `uhrzeit`/`ort`, nie das Objekt (Zu-/Absagen, Plan, Ämter
+bleiben). In der App: Termin → „✏️ Zeit ändern“, entweder nur dieser Termin (`db.termin_aendern`) oder ab einem
+Datum alle Trainings dieses Wochentags samt Wochenmuster (`db.serie_aendern`). Das Wochenmuster (Montag, Donnerstag)
+steht in der Tabelle `trainings_regel`; `trainings_termine.py` (Cron 06:00, 14 Tage voraus) legt neue Trainings danach
+an. Startwerte: `db.REGELN_START`. Erlaubt ist das mit dem Recht „termine“ (Trainer, Amt „Balu-Trainings-App“).
 
 ## SpielerPlus-Brücke
 

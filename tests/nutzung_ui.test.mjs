@@ -17,9 +17,9 @@ vm.runInContext(src.slice(start, ende).replace(/^export /gm, "")
   + "\nthis.nutzungVideoLabel = nutzungVideoLabel; this.gruppiereNachSpiel = gruppiereNachSpiel;"
   + "\nthis.anzahlDauer = anzahlDauer; this.filtereSzenen = filtereSzenen;"
   + "\nthis.namenMitZahl = namenMitZahl; this.gruppiereNachName = gruppiereNachName;"
-  + "\nthis.szenenStatus = szenenStatus; this.aktualisiertText = aktualisiertText;", ctx);
+  + "\nthis.szenenStatus = szenenStatus; this.aktualisiertText = aktualisiertText; this.pushStand = pushStand;", ctx);
 const { dauerText, verweilSegment, nutzungVideoLabel, gruppiereNachSpiel, anzahlDauer,
-        filtereSzenen, namenMitZahl, gruppiereNachName, szenenStatus, aktualisiertText } = ctx;
+        filtereSzenen, namenMitZahl, gruppiereNachName, szenenStatus, aktualisiertText, pushStand } = ctx;
 
 let fehler = 0;
 function check(name, ist, soll) {
@@ -141,6 +141,14 @@ check("Aktualisiert: Uhrzeit mit fuehrender Null", aktualisiertText(new Date("20
 check("Aktualisiert: offline nennt die Uhrzeit des letzten Stands", aktualisiertText(vor(120), jetzt, false), "offline – Stand von 14:28");
 check("Aktualisiert: offline und nie geladen", aktualisiertText(null, jetzt, false), "offline – noch nicht geladen");
 check("Aktualisiert: Zeitstempel in der Zukunft (Uhr falsch) wird wie 'gerade' behandelt", aktualisiertText(jetzt + 5000, jetzt, true), "gerade aktualisiert");
+
+// ------------------------------------------------------------- pushStand ----
+check("Push: kein Abo = aus", pushStand({ geraete: 0, aus: [] }), { aktiv: false, text: "Push aus", klasse: "aus" });
+check("Push: Feld fehlt (alter Server) = aus", pushStand(undefined).aktiv, false);
+check("Push: ein Geraet", pushStand({ geraete: 1, aus: [] }).text, "Push an · 1 Gerät");
+check("Push: mehrere Geraete", pushStand({ geraete: 2, aus: [] }).text, "Push an · 2 Geräte");
+check("Push: abgeschaltete Arten mit Namen", pushStand({ geraete: 1, aus: ["videos", "aemter"] }).text,
+  "Push an · 1 Gerät · ohne Videos, Ämter");
 
 if (fehler) { console.error("\n" + fehler + " Test(s) fehlgeschlagen"); process.exit(1); }
 console.log("\nAlle Tests bestanden");

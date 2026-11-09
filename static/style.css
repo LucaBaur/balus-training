@@ -1062,6 +1062,8 @@ button.sekundaer {
 .markdown th { background: var(--tint); font-weight: 700; }
 .markdown tbody tr:nth-child(even) { background: var(--tint-0); }
 .wd-body { background: var(--karte); border-radius: 12px; padding: 14px 16px; }
+.wd-body:empty { display: none; }
+.wd-body:not(:empty) { margin-bottom: 14px; }
 
 /* ==========================================================================
    Breitbild: aufgeklappter Z Fold (Innenschirm) und PC-Monitor.
@@ -1271,6 +1273,15 @@ button.sekundaer {
 .nk-titel .an-punkt.leer { background: transparent; }
 .nk-dauer { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .nk-offen { color: var(--warn); }
+.t-aendern { display: grid; gap: 8px; width: 100%; padding: 8px 0; }
+.t-aendern label { display: grid; gap: 2px; font-size: 0.85rem; color: var(--grau); }
+.t-aendern input { font: inherit; padding: 6px 8px; }
+.t-aendern .ta-knoepfe { display: flex; flex-wrap: wrap; gap: 8px; }
+.rsvp-hinweis { margin: 6px 0 0; font-size: 0.85rem; color: var(--grau); }
+.rsvp-knoepfe button:disabled { opacity: 0.45; cursor: not-allowed; }
+.nk-push.aus { color: var(--grau); }
+.nutz-push { margin: 0 0 8px; }
+.nutz-push small { color: var(--grau); }
 
 /* ↻ Aktualisieren (Nutzung, Videos) */
 .aktual-leiste { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; flex-wrap: wrap; }
@@ -1684,3 +1695,58 @@ button.sekundaer {
 .kasse-betrag.minus { color: var(--warn); }
 .kasse-betrag.forderung { color: var(--ocker-text); }
 .kasse-zeile.storniert .kasse-text b, .kasse-zeile.storniert .kasse-betrag { text-decoration: line-through; opacity: .55; }
+
+/* ---- Spielzug-Ansicht (Playbook): Halbfeld, Schritte, Abwehr-Verzweigung, Video ---- */
+.sz { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; margin-bottom: 14px; }
+@media (min-width: 760px) { .sz { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); align-items: start; } }
+.sz-feld { width: 100%; height: auto; display: block; background: var(--court-bg); border: 1px solid var(--court-linie); border-radius: 12px; }
+.sz-torraum { fill: var(--ocker-bg); stroke: none; }
+.sz-linie { fill: none; stroke: var(--grau); stroke-width: 1.5; }
+.sz-tor { fill: var(--karte); stroke: var(--grau); stroke-width: 2; }
+.sz-6m { fill: none; stroke: var(--grau); stroke-width: 2; }
+.sz-9m { fill: none; stroke: var(--grau); stroke-width: 1.5; stroke-dasharray: 8 6; }
+.sz-7m { stroke: var(--grau); stroke-width: 2; }
+.sz-sp { transition: transform .7s ease; }
+.sz-sp .sz-kreis { stroke-width: 1.5; }
+.sz-sp .sz-treffer { fill: transparent; stroke: none; }
+.sz-sp text { font-size: 11px; font-weight: 600; pointer-events: none; user-select: none; }
+.sz-sp.angriff .sz-kreis { fill: var(--tint); stroke: var(--tvg); }
+.sz-sp.angriff text { fill: var(--tvg-900); }
+.sz-sp.abwehr .sz-kreis { fill: var(--warn-bg); stroke: var(--warn); }
+.sz-sp.abwehr text { fill: var(--warn-text); }
+.sz-sp.sz-ziehbar { cursor: grab; touch-action: none; }
+.sz-sp.sz-ziehbar:hover .sz-kreis { stroke-width: 2.5; }
+.sz-sp.ziehen { transition: none; cursor: grabbing; }
+.sz-sp.ziehen .sz-kreis { stroke-width: 3; }
+.sz-ball { fill: #EF9F27; stroke: #854F0B; stroke-width: 1.5; transition: transform .7s ease; }
+.sz-steuerung { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.sz-steuerung > button { min-width: 44px; min-height: 44px; font-size: 1.3rem; }
+.sz-punkte { flex: 1; display: flex; justify-content: center; align-items: center; gap: 4px; flex-wrap: wrap; }
+.sz-punkt { width: 24px; height: 24px; padding: 0; border: 0; background: transparent; position: relative; }
+.sz-punkt::after { content: ""; position: absolute; inset: 7px; border-radius: 50%; background: var(--linie-2); }
+.sz-punkt.aktiv::after { background: var(--tvg); }
+.sz-offen { color: var(--grau); }
+.sz-karte { background: var(--karte); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; }
+.sz-kopf { font-size: 0.78rem; color: var(--grau); }
+.sz-frage { margin-top: 12px; }
+.sz-text { margin-top: 4px; line-height: 1.5; }
+.sz-option { display: block; width: 100%; text-align: left; margin-top: 6px; min-height: 44px; background: var(--flaeche); }
+.sz-hatvideo { color: var(--tvg); font-size: 0.8rem; }
+.sz-karte video { width: 100%; border-radius: 8px; margin-top: 8px; background: #000; }
+@media (prefers-reduced-motion: reduce) { .sz-sp, .sz-ball { transition: none; } }
+
+/* ---- Spielzug-Editor (Trainer) ---- */
+.sz-leiste { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.sz-leiste .sz-option { width: auto; margin-top: 0; }
+.sz-speichern { margin: 0 0 10px; }
+.sz-speichern button { flex: 1; min-height: 44px; }
+.sz-edit .sz-karte input[type="text"], .sz-edit .sz-karte textarea, .sz-edit .sz-karte select { width: 100%; box-sizing: border-box; margin-top: 6px; font: inherit; }
+.sz-edit .sz-karte textarea { resize: vertical; }
+.sz-zeile { display: flex; align-items: center; gap: 8px; margin-top: 10px; white-space: nowrap; }
+.sz-zeile select { flex: 1; width: auto; margin-top: 0; }
+.sz-hilfe { margin-top: 10px; }
+.sz-gl { display: block; width: 100%; text-align: left; min-height: 40px; margin-top: 4px; padding-right: 10px; background: transparent; border: 1px solid transparent; border-radius: 8px; font-size: 0.9rem; }
+.sz-gl.aktiv { background: var(--tint); border-color: var(--tvg); }
+.sz-clip.aktiv { outline: 2px solid var(--tvg); }
+.sz-gefahr { color: var(--warn); }
+.sz-edit .sz-steuerung .sz-punkte { font-size: 0.9rem; color: var(--grau); }

@@ -22,6 +22,135 @@ Zahl, Fehlerbehebungen und Design-Feinschliff die letzte.
 
 ---
 
+## v0.77.1 — 2026-11-09
+
+**Beschreibung über der Spielzug-Grafik.** Der Text einer Playbook-Seite („Worum geht es? Was wollen wir erreichen?“)
+steht jetzt **über** dem Halbfeld statt darunter. Er wird wie bisher mit „✏️ Bearbeiten“ bzw. „✏️ Inhalt hinzufügen“
+unten auf der Seite geschrieben. Wer zum ersten Mal Text zu einem Spielzug schreibt, bekommt die zwei Leitfragen als
+Überschriften vorbelegt (gespeichert wird erst per Knopf, vorbelegt ist kein Inhalt). Hat ein Spielzug noch keinen
+Text, sehen Spielerinnen keinen leeren Kasten mehr, Trainer einen Hinweis.
+
+## v0.77.0 — 2026-11-09
+
+**Spielzüge selbst eintragen: der Editor für die Spielzug-Ansicht.** Trainer sehen im Playbook bei jedem Spielzug
+„✏️ Ansicht bearbeiten“ (oder „＋ Spielzug-Ansicht anlegen“, wenn es noch keine gibt).
+
+- **Aufstellung ziehen:** Spielerinnen und Abwehr mit dem Finger oder der Maus verschieben. Niemand lässt sich aus dem
+  Feld oder in den Torraum ziehen. Was man in einem Schritt nicht verschiebt, bleibt wie im Schritt davor; „Positionen
+  dieses Schritts zurücksetzen“ nimmt ein versehentliches Ziehen zurück. Der Ball wird über „Ball bei“ gesetzt.
+- **Schritte und Abwehr-Reaktionen:** „＋ Schritt danach“ hängt den nächsten Schritt an, „＋ Weitere Abwehr-Reaktion“
+  legt einen weiteren Ast an. Ab dem zweiten Ast braucht jeder Ast eine Beschriftung („D3 tritt raus“, „Mitte zu“ …).
+  Höchstens 6 Äste je Verzweigung und 12 Schritte hintereinander. Die Gliederung zeigt den ganzen Baum, ein Tipp
+  springt zum Schritt; ▶ markiert Lösungen mit Video.
+- **Video je Lösung:** Am Ende eines Wegs „Video aus der Spielanalyse wählen“. Die Liste zeigt Gegner, Datum,
+  Spielzug und Ampel; „Video entfernen“ löst die Verknüpfung wieder.
+- **Speichern/Abbrechen:** Es wird erst beim Speichern etwas verändert, „Abbrechen“ verwirft alles (mit Rückfrage,
+  wenn etwas geändert wurde). „Ansicht löschen“ entfernt die ganze Ansicht, der Text der Seite bleibt. Bearbeiten
+  geht nur online. Fehler (z. B. eine fehlende Beschriftung) erscheinen als verständliche Meldung.
+- Technisch: neue Dateien `static/features/spielzug-editor.js` und `spielzug-feld.js`; die Änderungen am Baum sind
+  reine Funktionen in `spielzug-logik.js` (getestet in `tests/spielzug.test.mjs`), der Server prüft wie bisher alles.
+
+## v0.76.1 — 2026-11-09
+
+**Das Feld in der Spielzug-Ansicht sieht aus wie ein echtes Handballfeld.** Bisher waren Torraum und Freiwurflinie
+einfache Halbkreise. Jetzt hat der Torraum die richtige Form: Viertelkreise um die Pfosten und 3 m gerade in der Mitte,
+getönt wie auf dem Hallenboden. Die 9-m-Linie ist gestrichelt und am Seitenaus abgeschnitten. Dazu kommen Tor hinter
+der Torlinie, Siebenmetermarke, Torwartlinie und Seitenlinien. Die Grundaufstellung wurde passend gesetzt: Die Abwehr
+steht knapp vor der 6-m-Linie (rund 6,8 m vom Tor), der Rückraum außerhalb der 9-m-Linie, niemand steht im Torraum
+und niemand überdeckt jemanden. Die Maße sind getestet (`tests/spielzug.test.mjs`).
+
+## v0.76.0 — 2026-11-09
+
+**Spielzüge zum Durchklicken: Halbfeld mit Angriff und Abwehr, Verzweigung je nach Abwehrreaktion, Video je Lösung.**
+Im Playbook zeigt ein Spielzug jetzt (wenn für ihn eine Ansicht gespeichert ist) ein Halbfeld. Blau ist der Angriff,
+rot die Abwehr. Mit ‹ › oder den Punkten geht man Schritt für Schritt durch. An einer Verzweigung steht „Was macht die
+Abwehr?“, und je nach Antwort („D3 tritt raus“, „Mitte zu“ …) läuft der Spielzug in die passende Lösung. An jeder Lösung
+kann ein Video aus der Spielanalyse hängen (Zeichen ▶ an der Antwort). Am Handy liegt alles untereinander, am PC
+nebeneinander.
+
+- **Noch nicht drin:** das Eintragen einer Ansicht in der App (Spielerinnen und Abwehr per Finger ziehen, Video
+  auswählen). Bis dahin lässt sich eine Ansicht nur über die Schnittstelle speichern. Seiten ohne Ansicht sehen aus wie
+  bisher.
+- Die Ansicht wird immer als Ganzes gespeichert (ersetzt die alte). Ungültige Angaben werden mit einer verständlichen
+  Meldung abgelehnt, die alte Ansicht bleibt dann unverändert. Archiviert man einen Spielzug, verschwindet auch seine
+  Ansicht samt Videoverknüpfung; der Name bleibt wie bisher.
+- Technisch: neue Tabelle `spielzug_schritt`, `GET/POST /api/seiten/{id}/ansicht`, `GET /api/spielzug-clips`,
+  `GET /api/spielzug-schritte/{id}/video`. Vorbereitung für mehrere Teams: Migration 003 gibt Seiten und Spielanalysen
+  eine `team_id` (alles Bisherige gehört zu Team 1), und die neuen Funktionen filtern danach. Tests:
+  `tests/spielzug_test.py`, `tests/spielzug.test.mjs`.
+
+## v0.75.0 — 2026-11-06
+
+**Trainingszeiten ändern, ohne den Termin neu anzulegen.** Bisher gab es keinen Weg, Uhrzeit oder Ort eines Termins
+nachträglich zu ändern. Das ist Voraussetzung für die Umstellung weg von SpielerPlus.
+
+- **Ein Termin:** Bei jedem Termin gibt es „✏️ Zeit ändern“ (Trainer und Amt „Balu-Trainings-App“): Beginn, Ort, bei
+  Spielen auch Gegner und Abfahrt. Es ist weiter derselbe Termin, alle Zu- und Absagen, Plan und Ämter bleiben. Wer
+  nicht abgesagt hat, bekommt eine Mitteilung „Termin geändert“ mit neuer und alter Zeit.
+- **Alle folgenden Trainings eines Wochentags:** „Alle Donnerstag-Trainings ab <Datum>“ ändert dieses und alle
+  späteren Trainings dieses Wochentags und das **Wochenmuster**, nach dem künftige Trainings angelegt werden.
+  Beispiel: Donnerstag von 18:45 auf 18:30, ohne dass jemand neu antworten muss. Es geht eine einzige Mitteilung an
+  alle, nicht eine je Termin. Frühere Termine bleiben unberührt; eine einzeln abweichende Zeit ab dem Datum wird
+  mitüberschrieben.
+- **Wochenmuster in der Datenbank** (`trainings_regel`) statt fest im Code. Startwerte wie bisher: Montag 20:00
+  Gerhausen, Donnerstag 20:15 Blaubeuren. Ändern geht jederzeit in der App, ohne Eingriff am Server.
+- Technisch: `POST /api/trainings/{id}/aendern`, `POST /api/training-serie`, `GET /api/training-regeln`, Funktionen
+  `db.termin_aendern`, `db.serie_aendern`, `db.trainings_regeln`. Test: `tests/termin_aendern_test.py`.
+
+## v0.74.0 — 2026-11-06
+
+**Umstellung: Die App ersetzt SpielerPlus bei den Zusagen.** Gilt für Trainings ab **Montag, 09.11.2026**
+(`AUTO_ZUSAGE_AB` in `daten/termine.py`); alles davor läuft wie bisher.
+
+- **Automatisch dabei:** Bei normalen Trainings (Montag und Donnerstag) sind alle aus dem Kader von Anfang an
+  zugesagt. Wer nicht kommen kann, sagt ab. Nicht betroffen: das freiwillige Training am Freitag und alle Spiele,
+  dort antwortet weiter jede selbst.
+- **Absagen nur bis 24 Stunden vorher.** Danach sind „Absagen“ und „Unsicher“ in der App gesperrt, mit dem Hinweis,
+  sich telefonisch oder per Nachricht bei Luca zu melden. Der Server prüft das ebenfalls. **Zusagen geht immer.**
+  Der Trainer kann weiter jederzeit Absagen eintragen. Vor der Frist steht beim Antworten, bis wann man absagen kann.
+- **Keine Erinnerung mehr bei Trainings mit automatischer Zusage:** Es gibt nichts zu beantworten, und eine
+  Extra-Nachricht wäre nur mehr Push. Für Freitag und Spiele bleibt „bitte zu-/absagen“. Die Frist steht beim
+  Antworten in der App.
+- **SpielerPlus wird nicht mehr geholt.** Der Cronjob `sp_import.py` wird abgeschaltet. Solange er noch läuft, ersetzt
+  eine echte Antwort aus SpielerPlus die automatische Zusage; Antworten aus der App oder vom Trainer bleiben immer.
+- Technisch: neue Zeilen in `training_teilnahme` mit `quelle = 'auto'`, angelegt in dem Moment, in dem ein Training
+  entsteht oder eine Spielerin neu bzw. wieder aktiv wird (`db.auto_zusagen`, kein Cronjob). `auto_zusagen.py`
+  gleicht von Hand ab (`--trocken` zählt nur), nötig einmal beim Umschalten für schon bestehende Trainings. Neu in `/api/trainings` und im Termin-Detail: `absage_frist`.
+  `offene_spieler_benutzer` zählt `auto` als Antwort (nichts ist „offen“). Hinweis für die Auswertung: „Zusagen“ heißt
+  jetzt auch „nicht abgesagt“; die Warnung „zu wenige Zusagen“ löst deshalb nur noch bei vielen Absagen aus.
+- Tests: neu `tests/auto_zusage_test.py`; die Tests für Push, Ämter, Einteilung und Helferin laufen mit
+  `AUTO_ZUSAGE_AB` in ferner Zukunft und prüfen weiter das alte Verhalten.
+
+## v0.73.1 — 2026-11-06
+
+- **Wer für einen Termin abgesagt hat, lässt sich dafür nicht mehr einteilen.** Das gilt für Getränke, Leibchen,
+  Trikots und die Fahrten-Liste (auch beim Selbst-Eintragen). In der Auswahl steht sie ausgegraut mit dem Zusatz
+  „hat abgesagt“, damit die Inhaberin der Liste sieht, warum sie fehlt. Der Server lehnt es ebenfalls ab. Vorher
+  bekam jemand „Du bist dran: Getränke“ für einen Termin, an dem sie gar nicht da ist. Wer erst nach dem Einteilen
+  absagt, wird weiterhin über „Du hast abgesagt – wer übernimmt?“ benachrichtigt. Zurücknehmen einer Einteilung
+  geht immer; sagt sie wieder zu, ist sie wieder wählbar.
+- Neu in `/api/aemter/{id}/liste`: `abgesagt` je Termin. Tests in `tests/amt_uebergabe_test.py` erweitert.
+
+## v0.73.0 — 2026-11-06
+
+- **„Du hast abgesagt – wer übernimmt?“** Sagt jemand für einen Termin ab, obwohl sie dafür noch etwas übernommen
+  hat (Tape, Harz und Öl, Duschgel, Eiskoffer, Musik, Getränke, Leibchen, Trikots oder eine Fahrt mit dem eigenen
+  Auto), bekommt sie sofort eine Mitteilung und wird gebeten, es weiterzugeben. Bisher bekam eine Absagende nach dem
+  Absagen gar nichts mehr, und am Ende fehlte das Tape. Die Mitteilung geht auch, wenn der Trainer die Absage einträgt.
+- Sie kommt je Termin und Person **einmal** (auch bei erneutem Absagen oder Hin- und Herschalten), nicht für
+  vergangene Termine und nicht, wenn sie dafür nichts übernommen hat. Sie gehört zur Art „Ämter“ und lässt sich
+  im Profil unter Mitteilungen abschalten.
+- Neu: `benachrichtigung.amt_uebergabe`, Test `tests/amt_uebergabe_test.py`.
+
+## v0.72.0 — 2026-11-06
+
+- **Nutzung zeigt, wer Push-Mitteilungen aktiviert hat.** Jede Spielerin hat in Team → Nutzung eine Zeile
+  „🔔 Push an · 2 Geräte“ oder „🔕 Push aus“. Hat sie einzelne Arten abgeschaltet (Termine, Ämter, Videos,
+  Rückmeldungen), stehen die dabei: „ohne Videos“. Oben steht die Zusammenfassung „x von y Spielerinnen haben
+  Push an“ mit den Namen derer, die noch keinen haben. „An“ heißt: mindestens ein Gerät hat Mitteilungen erlaubt;
+  ob eine Nachricht dort ankommt, sieht der Server nicht. Neu in `/api/nutzung`: `push` je Konto.
+- Tests: `tests/nutzung_test.py` und `tests/nutzung_ui.test.mjs` um den Push-Stand erweitert.
+
 ## v0.71.1 — 2026-11-06
 
 - **Strafenkatalog für alle:** In der Kasse gibt es den aufklappbaren Abschnitt „Strafenkatalog“ mit allen Posten und

@@ -26,6 +26,8 @@ def spieler_anlegen(
         (name, anytype_id, spielerplus_id, position, start_elo),
     )
     conn.commit()
+    from .termine import auto_zusagen          # neue Spielerin ist bei kommenden Trainings gleich dabei
+    auto_zusagen(conn)
     return int(cur.lastrowid)
 
 
@@ -144,6 +146,9 @@ def spieler_aktualisieren(
     werte.append(spieler_id)
     conn.execute(f"UPDATE spieler SET {', '.join(felder)} WHERE id = ?", werte)
     conn.commit()
+    if aktiv:                                   # wieder im Kader: bei kommenden Trainings gleich dabei
+        from .termine import auto_zusagen
+        auto_zusagen(conn)
 
 
 def import_kader(conn: sqlite3.Connection, kader: list[dict]) -> dict:

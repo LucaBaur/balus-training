@@ -120,10 +120,21 @@ def m002_kassenwart_text(conn: sqlite3.Connection) -> None:
                  (KASSENWART_TEXT_NEU, KASSENWART_TEXT_ALT))
 
 
+def m003_team_id_seiten_analysen(conn: sqlite3.Connection) -> None:
+    """Erster Schritt Richtung Mehrmandanten-Betrieb (SaaS): Seiten und Spielanalysen gehoeren einem
+    Team. Alles Bestehende ist Team 1 (DEFAULT 1). Neuer Code filtert danach; aeltere Abfragen noch
+    nicht - die ziehen nach, sobald es ein zweites Team wirklich gibt."""
+    _spalte_ergaenzen(conn, "seiten", "team_id", "INTEGER NOT NULL DEFAULT 1")
+    _spalte_ergaenzen(conn, "spiel_analyse", "team_id", "INTEGER NOT NULL DEFAULT 1")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_seiten_team ON seiten(team_id, kategorie)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_spiel_analyse_team ON spiel_analyse(team_id)")
+
+
 # (Nummer, Name, Funktion) - Nummern fortlaufend ab 1, neue Eintraege nur ans Ende.
 MIGRATIONEN: list[tuple[int, str, Callable[[sqlite3.Connection], None]]] = [
     (1, "bestand", m001_bestand),
     (2, "kassenwart_text", m002_kassenwart_text),
+    (3, "team_id_seiten_analysen", m003_team_id_seiten_analysen),
 ]
 
 

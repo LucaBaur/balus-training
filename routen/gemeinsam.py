@@ -71,6 +71,16 @@ def require_echter_trainer(benutzer=Depends(echter_benutzer)) -> dict:
     return benutzer
 
 
+STANDARD_TEAM = 1
+
+
+def team_von(benutzer: dict) -> int:
+    """Das Team (Mandant) des Benutzers - die EINE Stelle, an der es bestimmt wird. Heute gibt es nur
+    Team 1; kommen mehrere Teams, bekommt `benutzer` eine team_id und nur diese Funktion aendert sich.
+    Das Team kommt nie aus der Anfrage, sondern immer aus der Anmeldung."""
+    return int(benutzer.get("team_id") or STANDARD_TEAM)
+
+
 def _rechte(conn, benutzer: dict) -> set[str]:
     """Alle Rechte des Benutzers: der Trainer hat jedes, eine Spielerin die ihrer Ämter
     (aemter.AMT_RECHTE). Im "Ansicht als"-Modus ist `benutzer` die angesehene Spielerin."""

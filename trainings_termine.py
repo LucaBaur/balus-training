@@ -26,11 +26,9 @@ from datetime import date, datetime, timedelta
 
 import db
 
-# Wochentag (Mo=0 … So=6) -> (Uhrzeit, Ort)
-REGELN = {
-    0: ("20:00", "Gerhausen"),
-    3: ("20:15", "Blaubeuren"),
-}
+# Wochentag (Mo=0 … So=6) -> (Uhrzeit, Ort). Das gültige Muster steht in der Tabelle `trainings_regel` und ist in der
+# App änderbar (db.serie_aendern); das hier sind nur die Startwerte (db.REGELN_START).
+REGELN = db.REGELN_START
 
 WOCHENTAGE = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
 
@@ -46,9 +44,10 @@ def anlegen(conn, ab: date, bis: date, trocken: bool = False) -> list[dict]:
     Commit macht der Aufrufer.
     """
     ergebnis = []
+    regeln = db.trainings_regeln(conn)
     d = ab
     while d <= bis:
-        regel = REGELN.get(d.weekday())
+        regel = regeln.get(d.weekday())
         if regel:
             uhr, ort = regel
             iso = d.isoformat()
@@ -78,6 +77,8 @@ def anlegen(conn, ab: date, bis: date, trocken: bool = False) -> list[dict]:
                 aktion = "neu"
             ergebnis.append({"datum": iso, "aktion": aktion, "uhrzeit": uhr, "ort": ort})
         d += timedelta(days=1)
+    if not trocken and ergebnis:
+        db.auto_zusagen(conn)                # neue Trainings: alle aus dem Kader sind gleich dabei
     return ergebnis
 
 

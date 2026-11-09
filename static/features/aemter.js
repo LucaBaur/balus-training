@@ -139,6 +139,7 @@ function listenTermin(a, d, t) {
   const darf = d.darf_pflegen;
   const fahrten = a.typ === "fahrten";
   const hat = new Set(t.zugeteilt.map((z) => z.spieler_id));
+  const abgesagt = new Set(t.abgesagt || []);       // wer abgesagt hat, ist grau und nicht wählbar
   const x = (id) => `<button type="button" class="chip-x" data-lt-weg="${id}" aria-label="Entfernen">×</button>`;
   const namen = t.zugeteilt.map((z) => {
     const ich = z.spieler_id === sid ? " ich" : "";
@@ -155,7 +156,9 @@ function listenTermin(a, d, t) {
   const frage = fahrten ? "Wer fährt selbst?" : "Wer ist dran?";
   const wahl = !darf ? "" : `<div class="lt-wahl">
       <select aria-label="${frage}"><option value="">${frage}</option>${
-        d.zaehler.filter((z) => !hat.has(z.spieler_id)).map((z) => `<option value="${z.spieler_id}">${escape(z.name)} (${z.anzahl}×)</option>`).join("")}</select>
+        d.zaehler.filter((z) => !hat.has(z.spieler_id)).map((z) => abgesagt.has(z.spieler_id)
+          ? `<option value="" disabled>${escape(z.name)} – hat abgesagt</option>`
+          : `<option value="${z.spieler_id}">${escape(z.name)} (${z.anzahl}×)</option>`).join("")}</select>
       <button type="button" class="todo-knopf primaer" data-lt-zuteilen>${fahrten ? "Eintragen" : "Einteilen"}</button>
     </div>`;
   const wo = t.heim === 0 && t.abfahrt ? ` · Abfahrt ${escape(t.abfahrt)}` : "";

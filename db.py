@@ -23,6 +23,7 @@ from daten.push import *          # noqa: F401,F403
 from daten.schema import *        # noqa: F401,F403
 from daten.spiele import *        # noqa: F401,F403
 from daten.spieler import *       # noqa: F401,F403
+from daten.spielzug import *      # noqa: F401,F403
 from daten.termine import *       # noqa: F401,F403
 from daten.todos import *         # noqa: F401,F403
 from daten.wiki import *          # noqa: F401,F403

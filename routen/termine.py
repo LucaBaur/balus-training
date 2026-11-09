@@ -199,6 +199,57 @@ def api_training_anlegen(t: TrainingNeu, conn=Depends(hole_conn),
     return {"id": tid, "neu": neu}
 
 
+class TerminAenderung(BaseModel):
+    uhrzeit: str | None = None     # 'HH:MM'; nicht angegebene Felder bleiben
+    ort: str | None = None
+    titel: str | None = None
+    gegner: str | None = None      # nur Spiele
+    abfahrt: str | None = None     # nur Auswaertsspiele
+
+
+@router.post("/api/trainings/{tid}/aendern")
+def api_termin_aendern(tid: int, a: TerminAenderung, hintergrund: BackgroundTasks, conn=Depends(hole_conn),
+                       _t=Depends(require_recht("termine"))):
+    """Uhrzeit, Ort usw. EINES Termins ändern. Der Termin bleibt dasselbe Objekt: Zu-/Absagen, Plan und Ämter
+    bleiben. Wer nicht abgesagt hat, bekommt eine Mitteilung. Trainer oder Amt "Balu-Trainings-App"."""
+    try:
+        r = db.termin_aendern(conn, tid, a.uhrzeit, a.ort, a.titel, a.gegner, a.abfahrt)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    if r is None:
+        raise HTTPException(404, "Termin nicht gefunden")
+    hintergrund.add_task(_push_hintergrund, benachrichtigung.termin_zeit_geaendert, tid, r["vorher"], r["nachher"])
+    return {"ok": True, **r}
+
+
+class SerieAenderung(BaseModel):
+    wochentag: int                 # Montag = 0
+    ab: str                        # 'JJJJ-MM-TT', einschließlich
+    uhrzeit: str | None = None
+    ort: str | None = None
+
+
+@router.get("/api/training-regeln")
+def api_training_regeln(conn=Depends(hole_conn), _t=Depends(require_recht("termine"))):
+    """Das Wochenmuster, nach dem neue Trainings angelegt werden."""
+    return [{"wochentag": wt, "name": db.WOCHENTAGE_NAMEN[wt], "uhrzeit": uhr, "ort": ort}
+            for wt, (uhr, ort) in db.trainings_regeln(conn).items()]
+
+
+@router.post("/api/training-serie")
+def api_training_serie(a: SerieAenderung, hintergrund: BackgroundTasks, conn=Depends(hole_conn),
+                       _t=Depends(require_recht("termine"))):
+    """Neue Zeit/neuer Ort für ALLE Trainings dieses Wochentags ab einem Datum und für das Wochenmuster. Die Termine
+    bleiben dieselben Objekte, niemand muss neu antworten. Eine einzige Mitteilung an alle aus dem Kader."""
+    try:
+        r = db.serie_aendern(conn, a.wochentag, a.ab, a.uhrzeit, a.ort)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    hintergrund.add_task(_push_hintergrund, benachrichtigung.serie_geaendert, a.wochentag, a.ab,
+                         tuple(r["vorher"]), tuple(r["nachher"]))
+    return {"ok": True, "anzahl": len(r["termine"]), "vorher": r["vorher"], "nachher": r["nachher"]}
+
+
 @router.post("/api/trainings/{tid}/loeschen")
 def api_training_loeschen(tid: int, hintergrund: BackgroundTasks, conn=Depends(hole_conn),
                           _t=Depends(require_recht("termine"))):
@@ -267,11 +318,19 @@ def api_teilnahme(tid: int, a: TeilnahmeAnfrage, hintergrund: BackgroundTasks,
     grund = (a.grund or "").strip() or None
     if a.status == "abgesagt" and not grund:
         raise HTTPException(400, "Bei einer Absage bitte einen Grund angeben.")
-    if conn.execute("SELECT 1 FROM trainings WHERE id = ?", (tid,)).fetchone() is None:
+    t = conn.execute("SELECT datum, uhrzeit, art FROM trainings WHERE id = ?", (tid,)).fetchone()
+    if t is None:
         raise HTTPException(404, "Training nicht gefunden")
+    # 24-Stunden-Frist (nur normale Trainings, siehe db.auto_zusage_gilt): danach darf man nur noch
+    # zusagen. Absagen und "unsicher" gehen dann nur über den Trainer, der sie einträgt.
+    if a.status != "anwesend" and db.absage_gesperrt(t["datum"], t["uhrzeit"], t["art"]):
+        raise HTTPException(403, "Absagen geht in der App nur bis 24 Stunden vor dem Training. "
+                                 "Bitte melde dich telefonisch oder per Nachricht bei Luca.")
     vorher = db.zusagen_anzahl(conn, tid)
     db.teilnahme_setzen(conn, tid, sid, a.status, grund, quelle="app")
     hintergrund.add_task(_push_hintergrund, benachrichtigung.zusagen_pruefen, tid, vorher)
+    if a.status == "abgesagt":
+        hintergrund.add_task(_push_hintergrund, benachrichtigung.amt_uebergabe, tid, sid)
     return {"ok": True, "status": a.status, "grund": grund}
 
 
@@ -311,6 +370,8 @@ def api_teilnahme_fremd(tid: int, spieler_id: int, a: TeilnahmeFremdAnfrage,
     grund = (a.grund or "").strip() or None
     db.teilnahme_setzen(conn, tid, spieler_id, a.status, grund, quelle="trainer")
     hintergrund.add_task(_push_hintergrund, benachrichtigung.zusagen_pruefen, tid, vorher)
+    if a.status == "abgesagt":
+        hintergrund.add_task(_push_hintergrund, benachrichtigung.amt_uebergabe, tid, spieler_id)
     return {"ok": True, "status": a.status, "grund": grund}
 
 

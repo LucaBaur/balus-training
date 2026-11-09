@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 import auth
 import db
 from routen import (analysen, anytype, coach, einteilung, fotos, kasse, kommentare, konto, mannschaft,
-                    mitteilungen, nutzung, pfade, spieler, spielerplus, system, tabelle,
+                    mitteilungen, nutzung, pfade, spieler, spielerplus, spielzug, system, tabelle,
                     termine, todos, videos, wiki)
 
 app = FastAPI(title="Balu's Training")
@@ -62,8 +62,8 @@ _c.close()
 # ueberlappen koennten (feste Pfade vor solchen mit {Platzhalter}); die Routen
 # stehen jeweils in ihrem eigenen Modul in der richtigen Reihenfolge.
 for modul in (konto, nutzung, kommentare, todos, tabelle, spieler, fotos, anytype, termine,
-              mannschaft, kasse, mitteilungen, spielerplus, wiki, einteilung, coach, videos,
-              analysen, system):
+              mannschaft, kasse, mitteilungen, spielerplus, wiki, spielzug, einteilung, coach,
+              videos, analysen, system):
     app.include_router(modul.router)
 
 # Statische Dateien zuletzt: sie fangen alles ab, was keine Route war.

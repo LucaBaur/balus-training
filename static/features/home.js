@@ -53,7 +53,7 @@ async function renderHomeHero() {
   if (sid) {
     // Kurz-Objekt: rsvpSenden mutiert es, cacht es aber bewusst NICHT (siehe renderHomeOffen).
     rsvpFuellen(el.querySelector(".hero-rsvp"),
-      { id: t.id, teilnahme: t.meine_status ? [{ id: sid, status: t.meine_status, grund: null }] : [] });
+      { id: t.id, absage_frist: t.absage_frist, teilnahme: t.meine_status ? [{ id: sid, status: t.meine_status, grund: null }] : [] });
   }
   el.querySelector(".hk-link").addEventListener("click", () => {
     gehe("training", "trainings");
@@ -277,7 +277,7 @@ export async function renderHomeOffen() {
     const box = document.createElement("div");
     box.className = "td-rsvp";
     // Kurz-Objekt: rsvpSenden mutiert es, cacht es aber bewusst NICHT.
-    rsvpFuellen(box, { id: t.id, teilnahme: [] });
+    rsvpFuellen(box, { id: t.id, absage_frist: t.absage_frist, teilnahme: [] });
     karte.appendChild(box);
     el.appendChild(karte);
   }

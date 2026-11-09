@@ -261,6 +261,11 @@ def liste(conn: sqlite3.Connection, amt_id: int, heute: date | None = None) -> d
             {"spieler_id": r["spieler_id"], "name": namen.get(r["spieler_id"], "?"),
              "erledigt": bool(r["erledigt"])})
     status = {r["training_id"]: r["status"] for r in conn.execute("SELECT training_id, status FROM bussle_status")}
+    abgesagt: dict[int, list[int]] = {}             # wer für den Termin abgesagt hat: nicht einteilbar
+    for r in conn.execute(
+            "SELECT p.training_id, p.spieler_id FROM training_teilnahme p JOIN trainings t ON t.id = p.training_id "
+            "WHERE p.status = 'abgesagt' AND t.datum BETWEEN ? AND ?", (von, bis)):
+        abgesagt.setdefault(r["training_id"], []).append(r["spieler_id"])
 
     termine = []
     for t in conn.execute(
@@ -271,7 +276,8 @@ def liste(conn: sqlite3.Connection, amt_id: int, heute: date | None = None) -> d
         eintrag = {"training_id": t["id"], "datum": t["datum"], "titel": t["titel"],
                    "uhrzeit": t["uhrzeit"], "art": t["art"], "gegner": t["gegner"],
                    "heim": t["heim"], "abfahrt": t["abfahrt"],
-                   "zugeteilt": sorted(zuteilungen.get(t["id"], []), key=lambda x: x["name"])}
+                   "zugeteilt": sorted(zuteilungen.get(t["id"], []), key=lambda x: x["name"]),
+                   "abgesagt": abgesagt.get(t["id"], [])}
         if amt["typ"] == "fahrten":
             eintrag["status"] = status.get(t["id"])
         termine.append(eintrag)
@@ -365,6 +371,10 @@ def zuteilung_setzen(conn: sqlite3.Connection, amt_id: int, training_id: int,
     if conn.execute("SELECT 1 FROM spieler WHERE id = ?", (spieler_id,)).fetchone() is None:
         raise LookupError("Spielerin nicht gefunden")
     if da:
+        if conn.execute("SELECT 1 FROM training_teilnahme WHERE training_id = ? AND spieler_id = ? "
+                        "AND status = 'abgesagt'", (training_id, spieler_id)).fetchone():
+            name = conn.execute("SELECT name FROM spieler WHERE id = ?", (spieler_id,)).fetchone()["name"]
+            raise ValueError(f"{name} hat für diesen Termin abgesagt und kann nicht eingeteilt werden.")
         neu = conn.execute("INSERT OR IGNORE INTO amt_zuteilung (amt_id, training_id, spieler_id) "
                            "VALUES (?,?,?)", (amt_id, training_id, spieler_id)).rowcount == 1
     else:

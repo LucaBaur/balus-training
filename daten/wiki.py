@@ -77,6 +77,7 @@ def seite_loeschen(conn: sqlite3.Connection, sid: int) -> bool:
         return True
     conn.execute("UPDATE seiten SET parent_id = NULL WHERE parent_id = ?", (sid,))
     if r["kategorie"] == "playbook":
+        conn.execute("DELETE FROM spielzug_schritt WHERE seite_id = ?", (sid,))     # Ansicht samt Videoverknuepfung
         conn.execute("UPDATE seiten SET kategorie = ?, markdown = NULL, tags = NULL, parent_id = NULL, "
                      "aktualisiert = datetime('now') WHERE id = ?", (SEITEN_ARCHIV, sid))
     else:

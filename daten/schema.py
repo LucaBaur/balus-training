@@ -183,6 +183,14 @@ CREATE TABLE IF NOT EXISTS push_gesendet (
     zeit         TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Wochenmuster der Trainings (Montag = 0): Uhrzeit und Ort, mit denen trainings_termine.py neue Trainings anlegt.
+-- Aenderbar in der App ("ab diesem Termin fuer alle ..."). Fehlende Zeilen fuellt db.trainings_regeln aus REGELN_START.
+CREATE TABLE IF NOT EXISTS trainings_regel (
+    wochentag    INTEGER PRIMARY KEY,
+    uhrzeit      TEXT NOT NULL,
+    ort          TEXT NOT NULL
+);
+
 -- Szenen-Videos: einzelne Spielszenen, geschnitten und beschriftet am PC
 -- (Projekt "Balu-Videoschnitt"), hier nur als fertige MP4 abgelegt. Die Datei
 -- liegt unter media/clips/ (nicht im Repo, wie die Portraits); 'datei' ist der
@@ -396,4 +404,22 @@ CREATE TABLE IF NOT EXISTS kasse_buchung (
     storniert_von TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_kasse_spieler ON kasse_buchung(spieler_id);
+
+-- Spielzug-Ansicht: ein Entscheidungsbaum je Playbook-Seite. Gemeinsame Schritte, dann eine
+-- Verzweigung "Was macht die Abwehr?" (jeder Ast traegt seine Beschriftung in 'reaktion').
+-- 'stellung' ist JSON {angriff:{LA:[x,y]..}, abwehr:{D1:[x,y]..}, ball:"RM"}; nur Aenderungen
+-- gegenueber dem Vorgaengerschritt muessen drinstehen. Das Video einer Loesung ist ein Clip der
+-- Spielanalyse; faellt der Clip weg, bleibt die Loesung (SET NULL). team_id: Mandant (SaaS).
+CREATE TABLE IF NOT EXISTS spielzug_schritt (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    team_id       INTEGER NOT NULL DEFAULT 1,
+    seite_id      INTEGER NOT NULL REFERENCES seiten(id) ON DELETE CASCADE,
+    parent_id     INTEGER REFERENCES spielzug_schritt(id) ON DELETE CASCADE,
+    sortierung    INTEGER NOT NULL DEFAULT 0,
+    reaktion      TEXT,
+    text          TEXT    NOT NULL,
+    stellung      TEXT    NOT NULL DEFAULT '{}',
+    video_clip_id INTEGER REFERENCES spiel_szene_clip(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_spielzug_schritt_seite ON spielzug_schritt(team_id, seite_id);
 """

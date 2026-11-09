@@ -338,6 +338,14 @@ function terminAktionen(t) {
   });
   if (trainer) akt.appendChild(erinnern);
 
+  // Zeit und Ort ändern, ohne den Termin neu anzulegen: Zu-/Absagen, Plan und Ämter bleiben.
+  const aendern = document.createElement("button");
+  aendern.textContent = "✏️ Zeit ändern";
+  const form = zeitAendernFormular(t);
+  aendern.addEventListener("click", () => form.classList.toggle("hidden"));
+  akt.appendChild(aendern);
+  akt.appendChild(form);
+
   // Zweistufig statt Rueckfrage-Dialog: erst scharf machen, dann loeschen.
   const weg = document.createElement("button");
   weg.className = "loeschen";
@@ -358,6 +366,57 @@ function terminAktionen(t) {
   });
   akt.appendChild(weg);
   return akt;
+}
+// Formular „Zeit ändern": nur dieser Termin, oder (bei Trainings mit Wochenmuster) alle folgenden Trainings des
+// Wochentags ab diesem Datum samt Wochenmuster für künftig angelegte. Der Server schickt die Mitteilung.
+function zeitAendernFormular(t) {
+  const form = document.createElement("div");
+  form.className = "t-aendern hidden";
+  const spiel = istSpiel(t);
+  const wochentag = (new Date(t.datum + "T12:00:00").getDay() + 6) % 7;          // Montag = 0
+  const WT = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
+  form.innerHTML =
+    `<label>Beginn <input type="time" class="ta-uhr" value="${escape(t.uhrzeit || "")}" /></label>` +
+    `<label>Ort <input type="text" class="ta-ort" maxlength="80" value="${escape(t.ort || "")}" /></label>` +
+    (spiel ? `<label>Gegner <input type="text" class="ta-gegner" maxlength="80" value="${escape(t.gegner || "")}" /></label>` : "") +
+    (spiel && t.heim === 0 ? `<label>Abfahrt <input type="time" class="ta-abfahrt" value="${escape(t.abfahrt || "")}" /></label>` : "") +
+    `<div class="ta-knoepfe"><button type="button" class="primaer ta-einzeln">Nur diesen Termin</button>` +
+    (spiel ? "" : `<button type="button" class="ta-serie hidden">Alle ${WT[wochentag]}-Trainings ab ${escape(t.datum)}</button>`) +
+    `</div><p class="hinweis">Wer zugesagt hat, bekommt eine Mitteilung. Absagen bleiben bestehen.</p>`;
+  const wert = (k) => (form.querySelector(k) ? form.querySelector(k).value.trim() : "");
+  const fertig = async () => {
+    terminDetails.delete(t.id);
+    await Sync.frischHolen("/api/trainings").catch(() => {});
+    await Sync.frischHolen("/api/trainings/" + t.id).catch(() => {});
+    Sync.frischHolen("/api/naechstes-training").catch(() => {});
+    if (!$("#view-training-detail").classList.contains("hidden") && aktTraining && aktTraining.id === t.id) oeffneTraining(t.id);
+    ladeTrainingsListe();
+  };
+  form.querySelector(".ta-einzeln").addEventListener("click", async () => {
+    try {
+      await api("/api/trainings/" + t.id + "/aendern", "POST",
+        { uhrzeit: wert(".ta-uhr") || null, ort: wert(".ta-ort") || null,
+          gegner: wert(".ta-gegner") || null, abfahrt: wert(".ta-abfahrt") || null });
+      toast("Geändert ✓");
+      await fertig();
+    } catch (e) { toast(navigator.onLine ? ("Fehler: " + e.message) : "Kein Netz – Ändern braucht eine Verbindung."); }
+  });
+  const serie = form.querySelector(".ta-serie");
+  if (serie) {
+    // Nur anbieten, wenn es für diesen Wochentag ein Wochenmuster gibt (Montag, Donnerstag).
+    api("/api/training-regeln").then((regeln) => {
+      if (regeln.some((r) => r.wochentag === wochentag) && !t.freiwillig) serie.classList.remove("hidden");
+    }).catch(() => {});
+    serie.addEventListener("click", async () => {
+      try {
+        const r = await api("/api/training-serie", "POST",
+          { wochentag, ab: t.datum, uhrzeit: wert(".ta-uhr") || null, ort: wert(".ta-ort") || null });
+        toast(`${r.anzahl} Training(s) geändert ✓ – künftige entstehen mit der neuen Zeit.`);
+        await fertig();
+      } catch (e) { toast(navigator.onLine ? ("Fehler: " + e.message) : "Kein Netz – Ändern braucht eine Verbindung."); }
+    });
+  }
+  return form;
 }
 async function terminLoeschen(t) {
   const d = datumTeile(t.datum);
@@ -509,15 +568,24 @@ export function rsvpFuellen(el, d) {
   const status = meine ? meine.status : null;
   const lab = { anwesend: "Zugesagt ✓", abgesagt: "Abgesagt", unsicher: "Unsicher" };
   const grund = (meine && meine.grund) || "";
+  // Normale Trainings: alle sind automatisch dabei, Absagen geht nur bis 24 Stunden vorher (`absage_frist`, vom
+  // Server). Danach sind "Unsicher" und "Absagen" gesperrt; der Server lehnt sie ebenfalls ab.
+  const frist = d.absage_frist ? Date.parse(d.absage_frist) : null;
+  const gesperrt = frist !== null && Date.now() > frist;
+  const bis = frist !== null ? new Date(frist).toLocaleString("de-DE", { weekday: "short", hour: "2-digit", minute: "2-digit" }) : "";
+  const hinweis = gesperrt
+    ? `<p class="rsvp-hinweis">Die Frist zum Absagen (24 Stunden vorher) ist vorbei. Bitte melde dich telefonisch oder per Nachricht bei Luca.</p>`
+    : frist !== null ? `<p class="rsvp-hinweis">Du bist automatisch dabei. Absagen geht hier bis ${escape(bis)} Uhr, danach nur noch bei Luca.</p>` : "";
 
   el.innerHTML =
     `<div class="rsvp-kopf">Deine Antwort: <b>${status ? lab[status] : "noch offen"}</b>` +
     `${status === "abgesagt" && grund ? ` – ${escape(grund)}` : ""}</div>
      <div class="rsvp-knoepfe">
        <button class="rsvp-ja${status === "anwesend" ? " aktiv" : ""}" data-s="anwesend">Zusagen</button>
-       <button class="rsvp-un${status === "unsicher" ? " aktiv" : ""}" data-s="unsicher">Unsicher</button>
-       <button class="rsvp-nein${status === "abgesagt" ? " aktiv" : ""}" data-s="abgesagt">Absagen</button>
+       <button class="rsvp-un${status === "unsicher" ? " aktiv" : ""}" data-s="unsicher"${gesperrt ? " disabled" : ""}>Unsicher</button>
+       <button class="rsvp-nein${status === "abgesagt" ? " aktiv" : ""}" data-s="abgesagt"${gesperrt ? " disabled" : ""}>Absagen</button>
      </div>
+     ${hinweis}
      <div class="rsvp-grund-box hidden">
        <div class="grund-chips">${ABSAGE_GRUENDE.map((g) =>
          `<button class="gchip${g === grund ? " aktiv" : ""}">${g}</button>`).join("")}</div>

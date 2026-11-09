@@ -37,8 +37,9 @@ ARTEN = [
      "text": "Abfahrt und Anwurf, abgesagte Termine, Erinnerung zum Antworten",
      "rollen": ("spieler", "trainer")},
     {"key": "aemter", "label": "Ämter",
-     "text": "Wenn du für Trikots, Leibchen, Getränke oder eine Fahrt eingeteilt wirst, und eine Stunde vor "
-             "dem Termin, was du mitbringen sollst", "rollen": ("spieler", "trainer")},
+     "text": "Wenn du für Trikots, Leibchen, Getränke oder eine Fahrt eingeteilt wirst, eine Stunde vor "
+             "dem Termin, was du mitbringen sollst, und wenn du absagst, obwohl du etwas übernommen hast",
+     "rollen": ("spieler", "trainer")},
     {"key": "videos", "label": "Videos",
      "text": "Neue Clips und Videoanalysen für dich", "rollen": ("spieler",)},
     {"key": "rueckmeldungen", "label": "Rückmeldungen",

@@ -37,13 +37,15 @@ def erinnere(conn, tage: int, trocken: bool) -> dict:
     trainings = [t for t in db.trainings_liste(conn) if t.get("datum") == ziel and not t.get("freiwillig")]
     offen_gesamt = gesendet = 0
     for t in trainings:
+        label = t.get("titel") or "Training"
+        ort = f" in {t['ort']}" if t.get("ort") else ""
+        wann = _datum_de(ziel) + (f" {t['uhrzeit']}" if t.get("uhrzeit") else "")
+        if t.get("absage_frist"):
+            continue        # automatische Zusage: alle sind dabei, es gibt nichts zu beantworten (und keine Extra-Push)
         offen = db.offene_spieler_benutzer(conn, t["id"])
         if not offen:
             continue
         offen_gesamt += len(offen)
-        label = t.get("titel") or "Training"
-        ort = f" in {t['ort']}" if t.get("ort") else ""
-        wann = _datum_de(ziel) + (f" {t['uhrzeit']}" if t.get("uhrzeit") else "")
         text = f"{label}{ort} am {wann}: Bitte in der App zu- oder absagen."
         if not trocken:
             res = push.sende(conn, offen, "Training – bitte zu-/absagen", text, url="/", art="termine")
