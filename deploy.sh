@@ -70,7 +70,7 @@ schritt "2/5 Vergleich mit dem Server"
 "${SSH[@]}" true 2>/dev/null || abbruch "Server $DEPLOY_HOST nicht erreichbar (Heimnetz? SSH-Schluessel?)"
 
 shopt -s nullglob
-DATEIEN=(*.py daten/*.py routen/*.py requirements.txt CHANGELOG.md README.md
+DATEIEN=(*.py daten/*.py routen/*.py requirements.txt CHANGELOG.md README.md ROADMAP-naechste-schritte.md
          static/*.js static/core/*.js static/features/*.js static/*.css static/*.html static/*.webmanifest static/*.png static/*.svg static/portraits/*)
 shopt -u nullglob
 

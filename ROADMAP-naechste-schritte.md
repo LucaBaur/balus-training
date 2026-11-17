@@ -42,11 +42,17 @@ Push gibt es schon (Erinnerung, Kommentare, To-Do-Feedback). Es fehlen:
 
 Das Playbook ist heute nur Text (Markdown). Ein Spielzug ist visuell.
 
-- [ ] Spielfeld mit Positionen und Laufwegen in Schritten, Spielerin tippt
-      „weiter“; Daten je Schritt als JSON an der Playbook-Seite
-- [ ] Editor für den Trainer (Spieler ziehen, Pfeile setzen), zuerst nur
-      Betrachter-Ansicht, Bearbeiten später
-- [ ] Verknüpfung mit Szenen-Clips: unter dem Diagramm „So sah es im Spiel aus“
+- [x] Spielfeld mit Positionen und Laufwegen in Schritten, Spielerin tippt
+      „weiter“; Daten je Schritt als JSON an der Playbook-Seite — v0.76.0,
+      als Baum mit Abwehr-Reaktionen (`spielzug_schritt`)
+- [x] Editor für den Trainer (Spieler ziehen, Pfeile setzen), zuerst nur
+      Betrachter-Ansicht, Bearbeiten später — v0.77.0 (Pfeile fehlen noch,
+      Undo und Schritt duplizieren auch)
+- [x] Verknüpfung mit Szenen-Clips: unter dem Diagramm „So sah es im Spiel aus“
+      — v0.76.0, ein Clip je Lösung
+- [ ] Editor-Feinschliff: Undo, Schritt duplizieren, Ansicht für Spielerinnen
+      offline vorab laden
+- [ ] Abwehrformationen 5:1 und 3:2:1 (bisher nur 6:0)
 - [ ] „Verstanden“-Haken oder Kurzquiz je Spielzug, Trainer sieht, wer ihn kann
 - [ ] Mögliche Quelle der Laufwege: Projekt Handball-Vision
 
