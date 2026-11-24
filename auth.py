@@ -82,11 +82,13 @@ def _b64d(s: str) -> bytes:
     return base64.urlsafe_b64decode(s + "=" * (-len(s) % 4))
 
 
-def session_erstellen(benutzer_id: int, als: int | None = None) -> str:
+def session_erstellen(benutzer_id: int, als: int | None = None, version: int = 0) -> str:
     """Session-Cookie fuer 'benutzer_id'. Mit 'als' (nur vom Server fuer einen
     Trainer gesetzt) sieht dieser die App aus Sicht von Benutzer 'als' -
-    "Ansicht als"."""
-    inhalt = {"uid": benutzer_id, "iat": int(time.time())}
+    "Ansicht als". 'version' ist die Sitzungs-Version des ECHTEN Kontos (benutzer.sitzung_version):
+    zaehlt der Server sie hoch, ist jedes Cookie mit dem alten Wert ungueltig (siehe
+    routen/gemeinsam.py, `_echter_benutzer`)."""
+    inhalt = {"uid": benutzer_id, "iat": int(time.time()), "sv": int(version)}
     if als is not None:
         inhalt["als"] = int(als)
     payload = _b64e(json.dumps(inhalt).encode())
@@ -111,6 +113,14 @@ def session_daten(token: str | None) -> dict | None:
         return daten
     except (ValueError, KeyError, TypeError):
         return None
+
+
+def session_version(daten: dict) -> int:
+    """Sitzungs-Version aus dem Cookie. Cookies von vor dieser Funktion haben keine ('sv' fehlt) = 0."""
+    try:
+        return int(daten.get("sv", 0))
+    except (TypeError, ValueError):
+        return -1                                  # unlesbar: passt zu keiner echten Version
 
 
 def session_pruefen(token: str | None) -> int | None:

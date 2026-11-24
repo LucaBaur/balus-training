@@ -22,6 +22,76 @@ Zahl, Fehlerbehebungen und Design-Feinschliff die letzte.
 
 ---
 
+## v0.79.0 — 2026-11-24
+
+**Trainingstag dauerhaft verlegen, z. B. Montag auf Dienstag.**
+
+- Im geöffneten Training unter „✏️ Zeit ändern“ gibt es jetzt **„Trainingstag dauerhaft verlegen auf …“**. Trainer und die Inhaberin des Amts „Balu-Trainings-App“ dürfen das.
+- Wer „Alle Montag-Trainings ab 07.12. auf Dienstag verlegen“ wählt, löscht damit alle künftigen Montagstrainings ab diesem Datum. Für jede betroffene Woche entsteht ein Training am neuen Tag. Neue Uhrzeit und neuer Ort lassen sich gleich mit eintragen.
+- **Die neuen Trainings sind nicht vorbelegt:** niemand ist automatisch zugesagt, alle müssen neu zu- oder absagen. Die gelöschten Trainings verlieren dabei ihre Zu- und Absagen und ihren Plan. Deshalb fragt die App vorher noch einmal nach.
+- Das Wochenmuster wird sofort umgestellt: Künftig legt die App Trainings am Dienstag statt am Montag an. Spiele am Montag und ein Dienstagstraining, das es schon gibt, bleiben unberührt.
+- Die Mannschaft bekommt **eine** Mitteilung („Montagstraining verschoben … Bitte neu zu- oder absagen“), keine je gelöschtem Termin.
+
+---
+
+## v0.78.0 — 2026-11-18
+
+**„Auf allen Geräten abmelden“: verlorene Handys und fremde Geräte lassen sich sperren.**
+
+- Bisher blieb ein Handy nach dem Anmelden bis zu 60 Tage angemeldet, und der Server konnte das nicht beenden.
+  Jetzt gibt es im Profil-Menü (Kreis oben rechts) ganz unten **„Auf allen Geräten abmelden“**. Danach ist
+  jedes Gerät, auf dem du angemeldet warst, sofort abgemeldet, auch das, was du gerade in der Hand hast. Du meldest
+  dich überall neu mit deiner PIN an. Das geht nur mit Verbindung (sonst würde sich nur dieses eine Gerät abmelden).
+- **Neue PIN = alle alten Sitzungen beendet:** Setzt der Trainer eine neue PIN, sind alle Geräte, die mit der alten
+  PIN angemeldet waren, automatisch abgemeldet. Hat jemand die PIN verloren oder verraten, hilft also schon „neue PIN“.
+- Niemand wird beim Einspielen dieser Version abgemeldet; die Sperre wirkt erst, wenn sie ausgelöst wird.
+- Im „Ansehen als“-Modus des Trainers ist der Knopf gesperrt, damit nie das falsche Konto abgemeldet wird.
+- Die beiden Abmelden-Knöpfe haben im Dunkelmodus eine besser lesbare Schriftfarbe.
+- Neuer automatischer Test `tests/sitzung_test.py` (31 Prüfungen), Änderung am Datenbank-Schema als Migration 004.
+
+---
+
+## v0.77.3 — 2026-11-18
+
+**Sicherheit: Wartezeit statt dauerhafter PIN-Sperre, und ein tägliches Backup der Datenbank.**
+
+- **Anmeldung:** Früher wurde die PIN nach 3 falschen Versuchen **für immer** gelöscht. Weil die App im Internet
+  erreichbar ist, hätte jede Person, die nur einen Namen kennt, ein Konto (auch das des Trainers) sperren können.
+  Jetzt gibt es nach zu vielen *falschen* Versuchen nur eine **Pause von 15 Minuten**; die PIN bleibt immer erhalten.
+  Wer sich nur vertippt, merkt davon nichts: erst der 5. falsche Versuch hintereinander löst die Pause aus, und mit
+  richtiger PIN kommt man vorher immer hinein. Die App zeigt, wie viele Versuche noch frei sind und wie lange
+  die Pause dauert. Zusätzlich wird pro Name (20 Fehlversuche je Stunde) und pro Adresse (15 je 15 Minuten) gedrosselt,
+  damit sich das Raten auch über viele Handys oder Namen nicht lohnt.
+  Wer durch die *alte* Sperre noch ohne PIN dasteht, braucht weiterhin eine neue PIN vom Trainer.
+- **Backup:** Jede Nacht um 03:10 Uhr wird die Datenbank gesichert und auf Fehler geprüft. Aufbewahrt werden die
+  letzten 14 Tage und dahinter je Woche ein Stand bis etwa 8 Wochen zurück. Videos (`media/`) sind nicht dabei.
+- Neue automatische Tests: `tests/login_sperre_test.py` (40 Prüfungen) und `tests/backup_test.py` (13 Prüfungen).
+
+---
+
+## v0.77.2 — 2026-11-18
+
+**Dunkelmodus: Aufstellungsfeld, Ampelfarben und Balken geprüft und korrigiert.** Alle Farbpaare wurden
+nachgerechnet (Text mindestens 4,5:1, Linien/Punkte/Balken mindestens 3:1). Das hat sich geändert:
+
+- **Überschriften und Zahlen waren im Dunkelmodus unsichtbar:** Kassenstand, Ämter-Überschriften, Listennamen,
+  To-Do-Titel und die Beschriftung der Angriffsspielerinnen im Spielzug-Feld. Sie sind jetzt hell auf dunklem Grund.
+- **Ampel:** Die Zahlen in den Ampel-Chips waren auf Grün und Orange schwer zu lesen (auch im Hellmodus). Die Farben
+  sind jetzt je Modus abgestimmt (hell: tiefe Töne mit weißer Schrift, dunkel: helle Töne mit dunkler Schrift).
+  Neu: Die Ampel ist **nicht mehr nur an der Farbe** zu erkennen. Die Punkte haben eine Form (Kreis = gut,
+  Dreieck = Achtung, Raute = Fehler), die Chips ein Zeichen (✓ / ! / ✕). Das hilft bei Rot-Grün-Schwäche.
+- **Aufstellungsfeld:** Das Feld hat in Hell und Dunkel dieselben, etwas kräftigeren Farben, damit die weißen
+  Linien (besonders im Torraum) gut sichtbar bleiben. Die Rollenkürzel (TW, RA, …) stehen auf einem kleinen
+  Hintergrund-Chip. Der Auswahlring um eine Spielerin auf der Bank ist deutlicher. Die Initialen im blauen Wappen
+  sind besser lesbar.
+- **Balken:** Die Team-Balken in der Einteilung haben einen feinen Rand, damit das weiße und das grüne Team im
+  Hellmodus nicht verschwinden. Der Teilnahme-Balken („zugesagt“) ist im Dunkelmodus besser zu sehen, „knapp“
+  im Hellmodus ebenfalls.
+- Neuer automatischer Test `tests/kontrast.test.mjs` (70 Prüfungen): rechnet diese Kontraste bei jedem Deploy
+  nach, damit neue Farben nicht wieder unlesbar werden.
+
+---
+
 ## v0.77.1 — 2026-11-09
 
 **Beschreibung über der Spielzug-Grafik.** Der Text einer Playbook-Seite („Worum geht es? Was wollen wir erreichen?“)

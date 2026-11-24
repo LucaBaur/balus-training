@@ -130,11 +130,27 @@ def m003_team_id_seiten_analysen(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_spiel_analyse_team ON spiel_analyse(team_id)")
 
 
+def m004_sitzung_version(conn: sqlite3.Connection) -> None:
+    """Widerrufbare Sitzungen: Jedes Konto hat eine Sitzungs-Version, die im Anmelde-Cookie steht. Wird sie
+    hochgezaehlt (neue PIN, 'Auf allen Geraeten abmelden'), sind alle bisherigen Cookies wertlos. Bestehende
+    Konten und alte Cookies (ohne Version) stehen auf 0 und bleiben gueltig."""
+    _spalte_ergaenzen(conn, "benutzer", "sitzung_version", "INTEGER NOT NULL DEFAULT 0")
+
+
+def m005_training_auto_zusage(conn: sqlite3.Connection) -> None:
+    """Trainings, die durch das Verschieben des Trainingstags neu entstehen (Montag -> Dienstag), sollen KEINE
+    automatische Zusage bekommen: niemand weiss, wer an dem neuen Tag Zeit hat, alle antworten selbst. Das
+    Kennzeichen sitzt am Training; 1 = wie bisher (alle aus dem Kader sind zugesagt), 0 = nicht vorbelegen."""
+    _spalte_ergaenzen(conn, "trainings", "auto_zusage", "INTEGER NOT NULL DEFAULT 1")
+
+
 # (Nummer, Name, Funktion) - Nummern fortlaufend ab 1, neue Eintraege nur ans Ende.
 MIGRATIONEN: list[tuple[int, str, Callable[[sqlite3.Connection], None]]] = [
     (1, "bestand", m001_bestand),
     (2, "kassenwart_text", m002_kassenwart_text),
     (3, "team_id_seiten_analysen", m003_team_id_seiten_analysen),
+    (4, "sitzung_version", m004_sitzung_version),
+    (5, "training_auto_zusage", m005_training_auto_zusage),
 ]
 
 

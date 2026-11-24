@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+import time
+
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 
 import aemter
 import auth
 import db
 
-from .gemeinsam import _rechte, hole_conn, require_echter_trainer, require_user
+from .gemeinsam import STANDARD_TEAM, _rechte, echter_benutzer, hole_conn, require_echter_trainer, require_user
 
 
 router = APIRouter()
@@ -28,40 +30,58 @@ def _cookie_setzen(resp: Response, token: str) -> None:
                     httponly=True, samesite="lax", path="/")
 
 
-# Brute-Force-Schutz: nach 3 falschen Versuchen je Name wird die PIN GESPERRT
-# (pin_hash -> NULL). Danach kein Login mehr moeglich, bis der Trainer eine neue
-# PIN setzt. Macht Raten sinnlos (nur 3 Versuche pro Konto, dann Schluss).
-_LOGIN_MAX_FEHLER = 3
+# Schutz vor Raten: zu viele FEHLversuche bedeuten eine Wartezeit, nie eine dauerhafte Sperre
+# (Regeln und Begruendung in daten/login.py). Die PIN bleibt immer erhalten, sonst koennte jeder,
+# der nur einen Namen kennt, das Konto aussperren.
+_jetzt = time.time        # Uhr; Tests tauschen sie aus
+
+
+def _minuten(sekunden: int) -> int:
+    return max(1, -(-sekunden // 60))
 
 
 @router.post("/api/login")
-def api_login(anfrage: LoginAnfrage, resp: Response, conn=Depends(hole_conn)):
+def api_login(anfrage: LoginAnfrage, request: Request, resp: Response, conn=Depends(hole_conn)):
     name = anfrage.name.strip()
+    ip = db.client_ip(request.client.host if request.client else None, request.headers.get("x-forwarded-for"))
+    jetzt = _jetzt()
+    # Zuerst die Wartezeit: gesperrte Anfragen kosten fast nichts (kein PIN-Hash) und zaehlen nicht mit,
+    # Dauerhaemmern verlaengert die Pause also nicht.
+    warte = db.login_wartezeit(conn, STANDARD_TEAM, ip, name, jetzt)
+    if warte > 0:
+        m = _minuten(warte)
+        raise HTTPException(429, f"Zu viele Versuche. Bitte in {m} Minute{'n' if m != 1 else ''} noch einmal probieren.",
+                            headers={"Retry-After": str(warte)})
     b = db.benutzer_nach_name(conn, name)
-    if b is None:
-        # Unbekannter Name: gleiche Meldung wie falsche PIN (nichts verraten).
-        raise HTTPException(401, "Name oder PIN falsch")
-    if not b.get("pin_hash"):
+    if b is not None and not b.get("pin_hash"):
         raise HTTPException(403, "PIN gesperrt – bitte beim Trainer eine neue holen.")
-    if auth.pruefe_pin(anfrage.pin, b["pin_hash"]):
-        db.benutzer_login_ok(conn, b["id"])          # Zaehler zuruecksetzen
-        _cookie_setzen(resp, auth.session_erstellen(b["id"]))
+    if b is not None and auth.pruefe_pin(anfrage.pin, b["pin_hash"]):
+        _cookie_setzen(resp, auth.session_erstellen(b["id"], version=b.get("sitzung_version") or 0))
         # Dieselben Felder wie /api/me - sonst fehlt nach dem Login die
         # spieler_id und damit der "Ich"-Reiter, bis die App neu geladen wird.
         return _me(b, conn)
-    # Falsche PIN -> zaehlen; beim 3. Mal sperren.
-    anzahl = db.benutzer_fehlversuch(conn, b["id"])
-    if anzahl >= _LOGIN_MAX_FEHLER:
-        db.benutzer_pin_sperren(conn, b["id"])
-        raise HTTPException(403, "3 Fehlversuche – PIN gesperrt. Bitte beim Trainer "
-                                 "eine neue PIN holen.")
-    uebrig = _LOGIN_MAX_FEHLER - anzahl
-    raise HTTPException(401, f"Name oder PIN falsch – noch {uebrig} Versuch(e), "
-                            f"dann wird die PIN gesperrt.")
+    # Falscher Name oder falsche PIN: dieselbe Antwort (nichts verraten) und derselbe Zaehler.
+    db.login_fehlschlag(conn, STANDARD_TEAM, ip, name, jetzt)
+    uebrig = db.login_versuche_uebrig(conn, STANDARD_TEAM, ip, name, jetzt)
+    if uebrig == 0:
+        raise HTTPException(401, "Name oder PIN falsch – bitte 15 Minuten warten, dann geht es weiter.")
+    raise HTTPException(401, f"Name oder PIN falsch – noch {uebrig} Versuch(e), danach 15 Minuten Pause.")
 
 
 @router.post("/api/logout")
 def api_logout(resp: Response):
+    resp.delete_cookie(auth.COOKIE_NAME, path="/")
+    return {"ok": True}
+
+
+@router.post("/api/logout-alle")
+def api_logout_alle(resp: Response, conn=Depends(hole_conn), benutzer=Depends(echter_benutzer)):
+    """Auf ALLEN Geraeten abmelden (verlorenes Handy, fremdes Geraet): zaehlt die Sitzungs-Version des Kontos
+    hoch, dadurch ist jedes bisherige Cookie wertlos. Im "Ansicht als"-Modus sperrt die Nur-Lesen-Middleware
+    diesen Aufruf, es trifft also nie das falsche Konto."""
+    if not benutzer:
+        raise HTTPException(401, "Nicht angemeldet")
+    db.benutzer_sitzungen_beenden(conn, benutzer["id"])
     resp.delete_cookie(auth.COOKIE_NAME, path="/")
     return {"ok": True}
 
@@ -102,7 +122,7 @@ def api_ansicht_konten(conn=Depends(hole_conn), _t=Depends(require_echter_traine
 
 @router.post("/api/ansicht/stop")
 def api_ansicht_stop(resp: Response, conn=Depends(hole_conn), trainer=Depends(require_echter_trainer)):
-    _cookie_setzen(resp, auth.session_erstellen(trainer["id"]))
+    _cookie_setzen(resp, auth.session_erstellen(trainer["id"], version=trainer.get("sitzung_version") or 0))
     return _me(trainer, conn)
 
 
@@ -112,5 +132,6 @@ def api_ansicht_setzen(benutzer_id: int, resp: Response, conn=Depends(hole_conn)
     ziel = db.benutzer_nach_id(conn, benutzer_id)
     if ziel is None or ziel["rolle"] != "spieler":
         raise HTTPException(404, "Kein Spielerinnen-Konto mit dieser ID")
-    _cookie_setzen(resp, auth.session_erstellen(trainer["id"], als=benutzer_id))
+    _cookie_setzen(resp, auth.session_erstellen(trainer["id"], als=benutzer_id,
+                                                version=trainer.get("sitzung_version") or 0))
     return _me({**ziel, "_ansicht_als": True, "_echter_name": trainer["name"]}, conn)

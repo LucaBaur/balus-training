@@ -42,7 +42,7 @@ def _cli() -> None:
     conn = db.verbinde(args.db) if args.db else db.verbinde()
     db.init_db(conn)
 
-    # Einzelnen Benutzer entsperren + neue PIN (z. B. nach 3 Fehlversuchen).
+    # Einzelnen Benutzer: neue PIN setzen (z. B. bei vergessener PIN oder einem alten, noch gesperrten Konto).
     if args.reset_name:
         b = db.benutzer_nach_name(conn, args.reset_name)
         if not b:

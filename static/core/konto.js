@@ -221,6 +221,23 @@ async function logout() {
   await cachesLeeren();
   location.reload();
 }
+// Auf ALLEN Geräten abmelden (verlorenes Handy): der Server macht jedes bisherige Cookie ungültig.
+// Nur online möglich - sonst würde dieses Gerät sich abmelden, die anderen aber nicht.
+async function logoutAlle() {
+  if (!confirm("Auf allen Geräten abmelden? Du musst dich danach überall neu mit deiner PIN anmelden.")) return;
+  try {
+    const res = await fetch("/api/logout-alle", { method: "POST" });
+    if (!res.ok) {
+      let msg = "Abmelden hat nicht geklappt.";
+      try { const j = await res.json(); if (j && j.detail) msg = j.detail; } catch (_) {}
+      toast(msg);
+      return;
+    }
+  } catch (_) { toast("Dafür brauchst du eine Verbindung – gleich noch mal versuchen."); return; }
+  try { localStorage.removeItem("benutzer"); localStorage.removeItem("nutzung_q"); } catch (_) {}
+  await cachesLeeren();
+  location.reload();
+}
 // Gespiegelte Server-Daten (IndexedDB) verwerfen, damit ein anderes Konto auf demselben
 // Geraet nie kurz den Zwischenspeicher des vorherigen sieht (siehe LocalDB.leereCaches).
 async function cachesLeeren() {
@@ -229,4 +246,5 @@ async function cachesLeeren() {
 $("#login-btn").addEventListener("click", login);
 $("#login-pin").addEventListener("keydown", (e) => { if (e.key === "Enter") login(); });
 $("#logout-btn").addEventListener("click", logout);
+$("#logout-alle-btn").addEventListener("click", logoutAlle);
 $("#ansicht-select").addEventListener("change", (e) => ansichtWechseln(e.target.value));

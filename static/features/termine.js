@@ -382,7 +382,15 @@ function zeitAendernFormular(t) {
     (spiel && t.heim === 0 ? `<label>Abfahrt <input type="time" class="ta-abfahrt" value="${escape(t.abfahrt || "")}" /></label>` : "") +
     `<div class="ta-knoepfe"><button type="button" class="primaer ta-einzeln">Nur diesen Termin</button>` +
     (spiel ? "" : `<button type="button" class="ta-serie hidden">Alle ${WT[wochentag]}-Trainings ab ${escape(t.datum)}</button>`) +
-    `</div><p class="hinweis">Wer zugesagt hat, bekommt eine Mitteilung. Absagen bleiben bestehen.</p>`;
+    `</div>` +
+    (spiel ? "" : `<div class="ta-verlegen hidden"><label>Trainingstag dauerhaft verlegen auf ` +
+      `<select class="ta-wt"><option value="">(nicht verlegen)</option>` +
+      WT.map((n, i) => (i === wochentag ? "" : `<option value="${i}">${n}</option>`)).join("") +
+      `</select></label>` +
+      `<button type="button" class="ta-verlegen-los hidden"></button>` +
+      `<p class="hinweis">Alle künftigen ${WT[wochentag]}-Trainings ab ${escape(t.datum)} werden gelöscht, am neuen Tag entstehen neue. ` +
+      `Zu- und Absagen und der Plan der gelöschten gehen verloren, die Mannschaft bekommt eine Mitteilung und sagt neu zu oder ab.</p></div>`) +
+    `<p class="hinweis">Wer zugesagt hat, bekommt eine Mitteilung. Absagen bleiben bestehen.</p>`;
   const wert = (k) => (form.querySelector(k) ? form.querySelector(k).value.trim() : "");
   const fertig = async () => {
     terminDetails.delete(t.id);
@@ -405,8 +413,43 @@ function zeitAendernFormular(t) {
   if (serie) {
     // Nur anbieten, wenn es für diesen Wochentag ein Wochenmuster gibt (Montag, Donnerstag).
     api("/api/training-regeln").then((regeln) => {
-      if (regeln.some((r) => r.wochentag === wochentag) && !t.freiwillig) serie.classList.remove("hidden");
+      if (regeln.some((r) => r.wochentag === wochentag) && !t.freiwillig) {
+        serie.classList.remove("hidden");
+        form.querySelector(".ta-verlegen").classList.remove("hidden");
+      }
+      // Wochentage mit eigenem Wochenmuster sind als Ziel gesperrt (der Server lehnt sie ab).
+      form.querySelectorAll(".ta-wt option").forEach((o) => {
+        if (o.value !== "" && regeln.some((r) => r.wochentag === Number(o.value))) o.remove();
+      });
     }).catch(() => {});
+    // Trainingstag verlegen: zweistufig, weil die alten Trainings samt Antworten gelöscht werden.
+    const wt = form.querySelector(".ta-wt");
+    const los = form.querySelector(".ta-verlegen-los");
+    let scharfVerlegen = false;
+    const losText = () => `Alle ${WT[wochentag]}-Trainings ab ${t.datum} auf ${WT[Number(wt.value)]} verlegen`;
+    wt.addEventListener("change", () => {
+      scharfVerlegen = false; los.classList.remove("scharf");
+      if (wt.value === "") { los.classList.add("hidden"); return; }
+      los.textContent = losText();
+      los.classList.remove("hidden");
+    });
+    los.addEventListener("click", async () => {
+      if (!scharfVerlegen) {
+        scharfVerlegen = true; los.classList.add("scharf"); los.textContent = "Wirklich? Antworten der alten Trainings gehen verloren";
+        setTimeout(() => { if (scharfVerlegen) { scharfVerlegen = false; los.classList.remove("scharf"); los.textContent = losText(); } }, 5000);
+        return;
+      }
+      scharfVerlegen = false;
+      try {
+        const r = await api("/api/training-serie", "POST",
+          { wochentag, ab: t.datum, neuer_wochentag: Number(wt.value), uhrzeit: wert(".ta-uhr") || null, ort: wert(".ta-ort") || null });
+        toast(`${r.geloescht} gelöscht, ${r.angelegt} neu am ${WT[Number(wt.value)]} ✓ – alle sagen neu zu oder ab.`);
+        await Sync.frischHolen("/api/trainings").catch(() => {});
+        Sync.frischHolen("/api/naechstes-training").catch(() => {});
+        terminDetails.delete(t.id); offeneTermine.delete(t.id);
+        ladeTrainingsListe();
+      } catch (e) { toast(navigator.onLine ? ("Fehler: " + e.message) : "Kein Netz – Ändern braucht eine Verbindung."); }
+    });
     serie.addEventListener("click", async () => {
       try {
         const r = await api("/api/training-serie", "POST",

@@ -23,16 +23,28 @@ def hole_conn():
 #  Rollen werden SERVER-SEITIG erzwungen (nicht im UI). 'require_user' verlangt
 #  ein gueltiges Session-Cookie, 'require_trainer' zusaetzlich die Trainer-Rolle.
 
-def aktueller_benutzer(request: Request, conn=Depends(hole_conn)) -> dict | None:
-    """Der effektive Benutzer. Sieht ein Trainer die App "als" eine Spielerin
-    (Feld 'als' im signierten Cookie), wird die Spielerin zurueckgegeben - alle
-    Rollen-Pruefungen wirken dann wie fuer sie."""
+def _sitzung(request: Request, conn) -> tuple[dict, dict] | None:
+    """(Cookie-Daten, echtes Konto), wenn das Cookie gueltig ist - die EINE Stelle, an der Anmeldungen
+    geprueft werden. Gueltig heisst: Signatur und Alter stimmen, das Konto ist aktiv UND die Sitzungs-Version
+    im Cookie ist die aktuelle des Kontos (sonst wurde die Sitzung widerrufen: neue PIN, 'Auf allen Geraeten
+    abmelden'). Cookies von vor der Einfuehrung haben keine Version und zaehlen als 0."""
     d = auth.session_daten(request.cookies.get(auth.COOKIE_NAME))
     if d is None:
         return None
     real = db.benutzer_nach_id(conn, int(d["uid"]))
-    if real is None:
+    if real is None or auth.session_version(d) != int(real.get("sitzung_version") or 0):
         return None
+    return d, real
+
+
+def aktueller_benutzer(request: Request, conn=Depends(hole_conn)) -> dict | None:
+    """Der effektive Benutzer. Sieht ein Trainer die App "als" eine Spielerin
+    (Feld 'als' im signierten Cookie), wird die Spielerin zurueckgegeben - alle
+    Rollen-Pruefungen wirken dann wie fuer sie."""
+    s = _sitzung(request, conn)
+    if s is None:
+        return None
+    d, real = s
     als = d.get("als")
     if als is not None and real["rolle"] == "trainer":
         eff = db.benutzer_nach_id(conn, int(als))
@@ -45,10 +57,8 @@ def aktueller_benutzer(request: Request, conn=Depends(hole_conn)) -> dict | None
 def echter_benutzer(request: Request, conn=Depends(hole_conn)) -> dict | None:
     """Der wirklich angemeldete Benutzer - ignoriert 'als'. Fuer die
     Umschalt-Endpunkte, damit nur ein echter Trainer schalten kann."""
-    d = auth.session_daten(request.cookies.get(auth.COOKIE_NAME))
-    if d is None:
-        return None
-    return db.benutzer_nach_id(conn, int(d["uid"]))
+    s = _sitzung(request, conn)
+    return s[1] if s else None
 
 
 def require_user(benutzer=Depends(aktueller_benutzer)) -> dict:

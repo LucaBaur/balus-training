@@ -227,6 +227,7 @@ class SerieAenderung(BaseModel):
     ab: str                        # 'JJJJ-MM-TT', einschließlich
     uhrzeit: str | None = None
     ort: str | None = None
+    neuer_wochentag: int | None = None   # gesetzt: den Trainingstag dauerhaft verlegen (Montag = 0)
 
 
 @router.get("/api/training-regeln")
@@ -241,6 +242,16 @@ def api_training_serie(a: SerieAenderung, hintergrund: BackgroundTasks, conn=Dep
                        _t=Depends(require_recht("termine"))):
     """Neue Zeit/neuer Ort für ALLE Trainings dieses Wochentags ab einem Datum und für das Wochenmuster. Die Termine
     bleiben dieselben Objekte, niemand muss neu antworten. Eine einzige Mitteilung an alle aus dem Kader."""
+    if a.neuer_wochentag is not None and a.neuer_wochentag != a.wochentag:
+        # Trainingstag verlegen: alte Trainings weg, neue ohne automatische Zusage, Muster neu. Eine Mitteilung.
+        try:
+            r = db.serie_verschieben(conn, a.wochentag, a.neuer_wochentag, a.ab, a.uhrzeit, a.ort)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        hintergrund.add_task(_push_hintergrund, benachrichtigung.serie_verschoben, a.wochentag, a.neuer_wochentag,
+                             a.ab, tuple(r["nachher"]))
+        return {"ok": True, "verschoben": True, **{k: r[k] for k in ("geloescht", "angelegt", "vorhanden")},
+                "vorher": r["vorher"], "nachher": r["nachher"]}
     try:
         r = db.serie_aendern(conn, a.wochentag, a.ab, a.uhrzeit, a.ort)
     except ValueError as e:

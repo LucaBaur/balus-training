@@ -57,9 +57,9 @@ export const initialen = (name) =>
 function feldSVG() {
   return `<svg class="feld" viewBox="0 0 300 268" aria-label="Handballfeld, Angriffshälfte">
     <defs><clipPath id="feld-cut"><rect x="0" y="0" width="300" height="268"/></clipPath></defs>
-    <rect width="300" height="268" fill="var(--court)"/>
+    <rect width="300" height="268" fill="var(--feld-court)"/>
     <g clip-path="url(#feld-cut)">
-      <path d="M37.5 250 A90 90 0 0 1 127.5 160 L172.5 160 A90 90 0 0 1 262.5 250 Z" fill="var(--ocker)"/>
+      <path d="M37.5 250 A90 90 0 0 1 127.5 160 L172.5 160 A90 90 0 0 1 262.5 250 Z" fill="var(--feld-ocker)"/>
       <path d="M37.5 250 A90 90 0 0 1 127.5 160 L172.5 160 A90 90 0 0 1 262.5 250" fill="none" stroke="#fff" stroke-width="3"/>
       <path d="M-7.5 250 A135 135 0 0 1 127.5 115 L172.5 115 A135 135 0 0 1 307.5 250" fill="none" stroke="#fff" stroke-width="3" stroke-dasharray="13 11"/>
       <line x1="142" y1="145" x2="158" y2="145" stroke="#fff" stroke-width="3"/>

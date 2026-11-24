@@ -138,6 +138,17 @@ def serie_geaendert(conn, wochentag: int, ab_datum: str, vorher: tuple, nachher:
                       f"Ab {_datum_de(ab_datum)}: " + ", ".join(teile) + ".", art="termine")
 
 
+def serie_verschoben(conn, wochentag: int, neuer_wochentag: int, ab_datum: str, nachher: tuple) -> dict:
+    """Der Trainingstag wurde dauerhaft verlegt: eine einzige Nachricht an alle aus dem Kader mit der Bitte,
+    für die neuen Termine zu- oder abzusagen (sie sind nicht vorbelegt)."""
+    an = benutzer_von(conn, [s["id"] for s in db.aktive_spieler(conn)])
+    if not an:
+        return {"gesendet": 0}
+    return push.sende(conn, an, f"{db.WOCHENTAGE_NAMEN[wochentag]}straining verschoben",
+                      f"Ab {_datum_de(ab_datum)} ist Training am {db.WOCHENTAGE_NAMEN[neuer_wochentag]} um {nachher[0]} "
+                      f"({nachher[1]}). Bitte neu zu- oder absagen.", art="termine")
+
+
 def termin_abgesagt(conn, termin: dict) -> dict:
     """`termin` ist der Stand VOR dem Loeschen (training_detail). Wer zugesagt oder
     'unsicher' gesagt hat, erfaehrt es; vergangene Termine werden still aufgeraeumt."""

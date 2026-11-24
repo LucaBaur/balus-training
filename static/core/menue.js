@@ -61,6 +61,7 @@ $("#profil-menue").addEventListener("click", (e) => { if (e.target.closest("[dat
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") profilMenueSchliessen(); });
 $("#pm-sync").addEventListener("click", () => { profilMenueSchliessen(); document.getElementById("server-punkt").click(); });
 $("#logout-btn").addEventListener("click", profilMenueSchliessen);
+$("#logout-alle-btn").addEventListener("click", profilMenueSchliessen);
 // ---- Darstellung: Auto / Hell / Dunkel (theme.js) ----
 const _systemDunkel = window.matchMedia ? matchMedia("(prefers-color-scheme: dark)") : { matches: false };
 const _speicher = () => { try { return window.localStorage; } catch (_) { return null; } };

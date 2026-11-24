@@ -35,7 +35,9 @@ Push gibt es schon (Erinnerung, Kommentare, To-Do-Feedback). Es fehlen:
 
 - [x] Farben in CSS-Variablen bündeln (`:root`), dann `prefers-color-scheme: dark`
       ergänzen, optional Umschalter im Profil
-- [ ] Aufstellungsfeld, Ampelfarben und Diagramme separat prüfen
+- [x] Aufstellungsfeld, Ampelfarben und Diagramme separat prüfen — v0.77.2,
+      Kontrasttest `tests/kontrast.test.mjs`; Wappen-Rand im Dunkelmodus und
+      Siegchance-Balken (Court/Ocker) bewusst offen gelassen
 - [x] `theme-color` im Manifest und in `index.html` mitziehen
 
 ## 4. Spielzüge sichtbar machen
@@ -75,10 +77,19 @@ Das Playbook ist heute nur Text (Markdown). Ein Spielzug ist visuell.
 Eigene Liste, weil sie vor neuen Funktionen kommt. Details und Entscheidungen
 stehen in der Sitzung, hier nur die Aufgaben:
 
-- [ ] Login-Sperre zeitlich begrenzen (statt dauerhaft) und pro IP drosseln,
-      damit niemand Konten gezielt aussperren kann
+- [x] Login-Sperre zeitlich begrenzen (statt dauerhaft) und pro IP drosseln,
+      damit niemand Konten gezielt aussperren kann — v0.77.3 (`daten/login.py`),
+      deployt am 2026-11-18. Der Funnel setzt `X-Forwarded-For` (geprüft: die echte
+      Adresse landet in `login_versuche.ip`).
+      Offen dazu: Zeitunterschied „Name unbekannt“ (schnell) gegen „PIN falsch“
+      (PBKDF2) verrät noch, ob es den Namen gibt
 - [ ] Security-Header ergänzen (CSP, `X-Frame-Options`, `Referrer-Policy`)
 - [ ] `.session_secret` auf Rechte 600 setzen (liegt am Server mit 644)
 - [ ] Dienst nur auf `127.0.0.1` lauschen lassen, wenn Funnel davorsitzt
-- [ ] Tägliches Backup der `elo.db` (`sqlite3 .backup`), mit mehreren Ständen
-- [ ] Sitzungen widerrufbar machen (z. B. Zähler am Benutzer im Cookie)
+- [x] Tägliches Backup der `elo.db` (`sqlite3 .backup`), mit mehreren Ständen —
+      v0.77.3 (`backup.py`), Cron 03:10 Berlin seit 2026-11-18, Ablage `~/backups/elo`,
+      Status im HA-Dashboard „Scripte“ (`balu_backup`). Offen: Kopie auf den PC (der Server bleibt sonst die
+      einzige Stelle), `media/` (3,9 GB Videos) und Portrait-Uploads sind nicht dabei
+- [x] Sitzungen widerrufbar machen (z. B. Zähler am Benutzer im Cookie) — v0.78.0,
+      deployt am 2026-11-18 (`benutzer.sitzung_version`, Knopf „Auf allen Geräten
+      abmelden“, neue PIN beendet alte Sitzungen)

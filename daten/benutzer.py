@@ -34,29 +34,24 @@ def benutzer_anlegen(conn: sqlite3.Connection, name: str, rolle: str = "spieler"
 
 
 def benutzer_pin_setzen(conn: sqlite3.Connection, bid: int, pin_hash: str) -> None:
-    # Neue PIN setzen entsperrt zugleich (Fehlversuche zuruecksetzen).
-    conn.execute("UPDATE benutzer SET pin_hash = ?, fehlversuche = 0 WHERE id = ?",
-                 (pin_hash, bid))
+    # Neue PIN beendet zugleich alle bisherigen Sitzungen: wer die alte PIN kannte (oder ein Handy
+    # verloren hat), kommt mit dem alten Cookie nicht mehr hinein.
+    conn.execute("UPDATE benutzer SET pin_hash = ?, fehlversuche = 0, sitzung_version = sitzung_version + 1 "
+                 "WHERE id = ?", (pin_hash, bid))
     conn.commit()
 
 
-def benutzer_fehlversuch(conn: sqlite3.Connection, bid: int) -> int:
-    """Fehlversuch zaehlen, neuen Stand liefern."""
-    conn.execute("UPDATE benutzer SET fehlversuche = fehlversuche + 1 WHERE id = ?", (bid,))
+def benutzer_sitzungen_beenden(conn: sqlite3.Connection, bid: int) -> int:
+    """Alle Anmelde-Cookies dieses Kontos ungueltig machen ("Auf allen Geraeten abmelden").
+    Gibt die neue Sitzungs-Version zurueck."""
+    conn.execute("UPDATE benutzer SET sitzung_version = sitzung_version + 1 WHERE id = ?", (bid,))
     conn.commit()
-    r = conn.execute("SELECT fehlversuche FROM benutzer WHERE id = ?", (bid,)).fetchone()
-    return int(r["fehlversuche"]) if r else 0
+    r = conn.execute("SELECT sitzung_version FROM benutzer WHERE id = ?", (bid,)).fetchone()
+    return int(r["sitzung_version"]) if r else 0
 
 
-def benutzer_login_ok(conn: sqlite3.Connection, bid: int) -> None:
-    conn.execute("UPDATE benutzer SET fehlversuche = 0 WHERE id = ?", (bid,))
-    conn.commit()
-
-
-def benutzer_pin_sperren(conn: sqlite3.Connection, bid: int) -> None:
-    """PIN ungueltig machen (nach zu vielen Fehlversuchen). Trainer muss neu setzen."""
-    conn.execute("UPDATE benutzer SET pin_hash = NULL, fehlversuche = 0 WHERE id = ?", (bid,))
-    conn.commit()
+# Fehlversuche werden seit v0.77.3 nicht mehr am Konto gezaehlt und die PIN nie mehr geloescht:
+# siehe daten/login.py (Wartezeit statt Sperre). Die Spalte benutzer.fehlversuche bleibt ungenutzt stehen.
 
 
 def benutzer_liste(conn: sqlite3.Connection) -> list[dict]:

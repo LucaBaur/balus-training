@@ -39,6 +39,19 @@
   --ok-bg: #EAF4EC; --ok-linie: #CFE4D6;
   --bar-bg2: rgba(255,255,255,.75);
 
+  /* Farben nach Aufgabe statt nach Aussehen. --tvg-900 ist ein HINTERGRUND (Kopf) und
+     wird im Dunkelmodus noch dunkler - als Textfarbe taugt es dort nicht, dafuer --tvg-text. */
+  --tvg-text: #122F5E;     /* Ueberschriften und Zahlen auf Karten */
+  /* Ampel: Fuellung + Schrift darauf. Hell tiefe Toene mit weisser Schrift, dunkel helle Toene
+     mit dunkler Schrift (tests/kontrast.test.mjs rechnet beides nach). */
+  --ampel-gruen: #167A43; --ampel-orange: #A85A00; --ampel-rot: #C4362E; --ampel-schrift: #FFFFFF;
+  /* Spielfeld ist ein BILD des Hallenbodens: gleiche Farben in Hell und Dunkel, damit die
+     weissen Linien ihren Kontrast behalten. */
+  --feld-court: #2A78A0; --feld-ocker: #A06A28; --feld-chip: rgba(10,25,48,.5);
+  --ocker-kraeftig: #A06A28;   /* Ocker als Balkenfarbe auf hellem Grund */
+  --bar-spur: var(--tint);     /* Schiene der Teilnahme-Balken */
+  --bar-rand: rgba(14,28,51,.6); /* Rand der Team-Balken: haelt helle Farben (Weiss) sichtbar */
+
   /* Schriftrollen. Heute Systemschriften; sobald die woff2-Dateien im
      static/ liegen, hier auf "Archivo Expanded" bzw. "IBM Plex Sans/Mono"
      umstellen - der Rest der Datei zieht ueber die Variablen mit. */
@@ -62,6 +75,10 @@
   --court-bg: #0F2A40; --court-linie: #1F4A6B; --court-text: #7FC3E3;
   --ok-bg: #14301F; --ok-linie: #245437;
   --bar-bg2: rgba(255,255,255,.12);
+  --tvg-text: #BCD3F7;
+  --ampel-gruen: #3DBE7A; --ampel-orange: #E8A33D; --ampel-rot: #EC6A60; --ampel-schrift: #0A1424;
+  --ocker-kraeftig: #D49A5E;
+  --bar-spur: #162B50; --bar-rand: transparent;
 }
 
 * { box-sizing: border-box; }
@@ -191,7 +208,7 @@ button:active { transform: scale(.98); }
 .st-zeile { display: flex; align-items: center; gap: 9px; font-size: 0.75rem; color: var(--grau); }
 .st-k { width: 62px; font-weight: 800; flex: none; }
 .st-bar { flex: 1; height: 8px; border-radius: 999px; background: var(--linie); overflow: hidden; }
-.st-bar i { display: block; height: 100%; transition: width .4s cubic-bezier(.2,.8,.2,1); }
+.st-bar i { display: block; height: 100%; transition: width .4s cubic-bezier(.2,.8,.2,1); box-shadow: inset 0 0 0 1px var(--bar-rand); }
 .st-w { font-family: var(--f-num); font-weight: 700; }
 
 /* Ergebnis: je Team ein Knopf, mit den Namen darunter */
@@ -639,11 +656,11 @@ button.sekundaer {
 .t-mitte b { display: block; font-size: 0.92rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .t-mitte small { color: var(--grau); font-size: 0.74rem; }
 .t-mitte small .nw { white-space: nowrap; }
-.t-bar { height: 5px; border-radius: 999px; background: var(--tint); overflow: hidden; margin-top: 7px; display: flex; }
+.t-bar { height: 5px; border-radius: 999px; background: var(--bar-spur); overflow: hidden; margin-top: 7px; display: flex; }
 .t-bar i { display: block; height: 100%; }
 .t-bar .zu { background: var(--tvg); }
 .t-bar .ab { background: var(--warn-linie); }
-.termin.knapp .t-bar .zu { background: var(--ocker); }
+.termin.knapp .t-bar .zu { background: var(--ocker-kraeftig); }
 .termin.kritisch .t-bar .zu { background: var(--warn); }
 .t-zahl { flex: none; text-align: right; min-width: 46px; }
 .t-zahl b { display: block; font-size: 1.35rem; font-weight: 800; line-height: 1; font-family: var(--f-num); }
@@ -894,7 +911,7 @@ button.sekundaer {
 
 .feld-box {
   position: relative; border-radius: 16px; overflow: hidden;
-  border: 1px solid var(--linie); background: var(--court); margin: 12px 0;
+  border: 1px solid var(--linie); background: var(--feld-court); margin: 12px 0;
 }
 .feld-box svg.feld { display: block; width: 100%; height: auto; }
 
@@ -908,7 +925,10 @@ button.sekundaer {
   padding: 2px 6px; border-radius: 999px; white-space: nowrap;
   max-width: 82px; overflow: hidden; text-overflow: ellipsis;
 }
-.platz .rolle { font-size: 0.55rem; font-weight: 800; letter-spacing: .1em; color: rgba(255,255,255,.85); }
+.platz .rolle {
+  font-size: 0.55rem; font-weight: 800; letter-spacing: .1em; color: #fff;
+  background: var(--feld-chip); border-radius: 999px; padding: 1px 6px;   /* Chip: Lesbarkeit unabhaengig vom Feldgrund */
+}
 .platz.frei .name { background: rgba(10,25,48,.35); color: rgba(255,255,255,.7); }
 .platz.ziel { animation: platz-puls 1s ease-in-out infinite; }
 @keyframes platz-puls {
@@ -949,7 +969,7 @@ button.sekundaer {
   width: 58px; flex: none; padding: 0; background: none;
 }
 .bank-p .bn { font-size: 0.62rem; font-weight: 600; text-align: center; color: var(--grau); }
-.bank-p.gewaehlt .wappen { box-shadow: 0 0 0 3px var(--ocker); }
+.bank-p.gewaehlt .wappen { box-shadow: 0 0 0 3px var(--ocker-text); }
 
 /* Umschalter Training / Spiel */
 .modus-leiste { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; }
@@ -1181,8 +1201,8 @@ button.sekundaer {
   margin-top: 12px; padding: 12px 14px; background: var(--karte); border-radius: 12px;
   border-left: 5px solid var(--unent); box-shadow: 0 1px 2px rgba(0,0,0,.05);
 }
-.vd-notiz.gruen { border-left-color: #1f9d55; } .vd-notiz.orange { border-left-color: #d9890b; }
-.vd-notiz.rot { border-left-color: var(--warn); }
+.vd-notiz.gruen { border-left-color: var(--ampel-gruen); } .vd-notiz.orange { border-left-color: var(--ampel-orange); }
+.vd-notiz.rot { border-left-color: var(--ampel-rot); }
 .vd-notiz .vn-titel { font-weight: 700; }
 .vd-notiz .vn-meta { color: var(--grau); font-size: 0.82rem; margin-top: 2px; }
 .vd-notiz .vn-voll { margin-top: 12px; }
@@ -1223,8 +1243,10 @@ button.sekundaer {
 }
 .an-kachel b { color: var(--text); font-size: 1.05rem; }
 .an-ampel { font-size: 0.82rem; color: var(--grau); display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
-.an-p { min-width: 24px; text-align: center; border-radius: 999px; padding: 1px 8px; font-weight: 700; color: #fff; }
-.an-p.gruen { background: #1f9d55; } .an-p.orange { background: #d9890b; } .an-p.rot { background: var(--warn); }
+.an-p { min-width: 24px; text-align: center; border-radius: 999px; padding: 1px 8px; font-weight: 700; color: var(--ampel-schrift); }
+.an-p.gruen { background: var(--ampel-gruen); } .an-p.orange { background: var(--ampel-orange); } .an-p.rot { background: var(--ampel-rot); }
+/* Zeichen vor der Zahl: Gruen/Orange/Rot sind nicht nur ueber die Farbe zu unterscheiden (Rot-Gruen-Schwaeche) */
+.an-p.gruen::before { content: "✓ "; } .an-p.orange::before { content: "! "; } .an-p.rot::before { content: "✕ "; }
 .an-szenen { display: grid; gap: 4px; margin-top: 6px; }
 .an-szene {
   display: grid; grid-template-columns: 14px 1fr auto; gap: 10px; align-items: start; text-align: left;
@@ -1234,8 +1256,11 @@ button.sekundaer {
 .an-szene:active { background: var(--linie); }
 .an-text small { display: block; color: var(--grau); font-size: 0.78rem; margin-top: 2px; }
 .an-zeit { color: var(--grau); font-variant-numeric: tabular-nums; font-size: 0.82rem; }
-.an-punkt { width: 11px; height: 11px; border-radius: 50%; margin-top: 4px; background: var(--unent); }
-.an-punkt.gruen { background: #1f9d55; } .an-punkt.orange { background: #d9890b; } .an-punkt.rot { background: var(--warn); }
+.an-punkt { width: 12px; height: 12px; border-radius: 50%; margin-top: 4px; background: var(--unent); }
+/* Form statt nur Farbe: gruen = Kreis, orange = Dreieck, rot = Raute */
+.an-punkt.gruen { background: var(--ampel-gruen); }
+.an-punkt.orange { background: var(--ampel-orange); border-radius: 0; clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+.an-punkt.rot { background: var(--ampel-rot); border-radius: 0; clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
 
 /* Statistik Spiele (Saison) */
 .stat-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
@@ -1275,7 +1300,9 @@ button.sekundaer {
 .nk-offen { color: var(--warn); }
 .t-aendern { display: grid; gap: 8px; width: 100%; padding: 8px 0; }
 .t-aendern label { display: grid; gap: 2px; font-size: 0.85rem; color: var(--grau); }
-.t-aendern input { font: inherit; padding: 6px 8px; }
+.t-aendern input, .t-aendern select { font: inherit; padding: 6px 8px; }
+.t-aendern .ta-verlegen { display: grid; gap: 8px; border-top: 1px solid var(--linie); padding-top: 8px; }
+.t-aendern .ta-verlegen-los.scharf { background: var(--warn); color: #fff; }
 .t-aendern .ta-knoepfe { display: flex; flex-wrap: wrap; gap: 8px; }
 .rsvp-hinweis { margin: 6px 0 0; font-size: 0.85rem; color: var(--grau); }
 .rsvp-knoepfe button:disabled { opacity: 0.45; cursor: not-allowed; }
@@ -1332,9 +1359,9 @@ button.sekundaer {
 .liga-tab tr.eigen td { background: var(--tint); font-weight: 700; }
 .ls-fuss { font-size: 0.76rem; color: var(--grau); margin: 6px 0 0; }
 .liga-spiel { background: var(--karte); border-radius: 12px; padding: 9px 12px; margin-bottom: 8px; border-left: 4px solid var(--linie); box-shadow: 0 1px 3px rgba(14,28,51,.06); }
-.liga-spiel.S { border-left-color: #1f9d55; }
-.liga-spiel.N { border-left-color: var(--warn); }
-.liga-spiel.U { border-left-color: #d9890b; }
+.liga-spiel.S { border-left-color: var(--ampel-gruen); }
+.liga-spiel.N { border-left-color: var(--ampel-rot); }
+.liga-spiel.U { border-left-color: var(--ampel-orange); }
 .ls-kopf { display: flex; gap: 8px; align-items: baseline; font-size: 0.78rem; color: var(--grau); }
 .ls-ort { margin-left: auto; text-transform: uppercase; letter-spacing: .06em; font-size: 0.68rem; font-weight: 700; }
 .ls-live { background: var(--warn); color: #fff; border-radius: 999px; padding: 0 7px; font-size: 0.68rem; font-weight: 800; }
@@ -1372,7 +1399,7 @@ button.sekundaer {
 .km-privatwahl { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; }
 
 /* Wochen-To-Dos (Ich -> To Do, Team -> To-Dos) */
-.todo-titel { font-size: 0.95rem; margin: 18px 0 6px; color: var(--tvg-900); }
+.todo-titel { font-size: 0.95rem; margin: 18px 0 6px; color: var(--tvg-text); }
 .todo-zeile {
   display: flex; align-items: flex-start; gap: 10px; background: var(--karte);
   border-radius: 10px; padding: 12px; margin-bottom: 6px;
@@ -1587,12 +1614,13 @@ button.sekundaer {
 .pm-konto #ansicht-select { width: 100%; max-width: none; margin: 0; }
 .pm-konto:has(#ansicht-select.hidden) { display: none; }
 .pm-knopf #version { margin-left: auto; font-size: .72rem; color: var(--grau); opacity: 1; }
-.pm-karte #logout-btn { background: none; font-size: 1rem; padding: 12px 2px; color: var(--warn); font-weight: 600; }
+.pm-karte #logout-btn, .pm-karte #logout-alle-btn { background: none; font-size: 1rem; padding: 12px 2px; color: var(--warn-text); font-weight: 600; }
+.pm-karte #logout-alle-btn { font-size: .88rem; font-weight: 500; padding-top: 2px; }
 
 /* Mitteilungen (Seite) */
 .mt-karte { background: var(--karte); border: 1px solid var(--linie); border-radius: 14px; padding: 14px; margin-bottom: 14px; }
 .mt-status { display: flex; align-items: center; gap: 8px; font-weight: 600; }
-.mt-status.an { color: #1f9d55; }
+.mt-status.an { color: var(--ampel-gruen); }
 .mt-status.aus { color: var(--grau); }
 .mt-karte .hinweis { margin: 8px 0 0; }
 .mt-knoepfe { display: flex; gap: 8px; margin-top: 12px; }
@@ -1622,7 +1650,7 @@ button.sekundaer {
 .amt-karte { background: var(--karte); border-radius: 12px; padding: 12px 14px; margin-bottom: 8px; border: 1px solid var(--linie); }
 .amt-karte.meine { border-left: 4px solid var(--tvg); }
 .amt-kopf { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.amt-kopf h3 { margin: 0; font-size: 1rem; color: var(--tvg-900); }
+.amt-kopf h3 { margin: 0; font-size: 1rem; color: var(--tvg-text); }
 .amt-edit, .amt-link { background: none; color: var(--tvg); font-weight: 600; padding: 6px 0; }
 .amt-edit { padding: 6px 10px; border-radius: 8px; background: var(--flaeche); }
 .amt-text { margin: 4px 0 8px; color: var(--text); overflow-wrap: anywhere; }
@@ -1652,10 +1680,10 @@ button.sekundaer {
 
 .liste-karte { background: var(--karte); border: 1px solid var(--linie); border-radius: 12px; padding: 4px 14px; margin-bottom: 8px; }
 .liste-karte > summary { cursor: pointer; padding: 10px 0; display: flex; flex-wrap: wrap; gap: 2px 10px; align-items: baseline; }
-.liste-karte .lk-name { font-weight: 700; color: var(--tvg-900); }
+.liste-karte .lk-name { font-weight: 700; color: var(--tvg-text); }
 .liste-karte summary small { color: var(--grau); }
 .liste-karte[open] { padding-bottom: 12px; }
-.lk-titel { margin: 14px 0 6px; font-size: .85rem; color: var(--tvg-900); }
+.lk-titel { margin: 14px 0 6px; font-size: .85rem; color: var(--tvg-text); }
 .lk-vorbei { margin-top: 8px; }
 .lk-vorbei > summary { cursor: pointer; color: var(--grau); font-size: .85rem; padding: 6px 0; }
 .liste-termin { background: var(--tint-0); border: 1px solid var(--linie); border-radius: 10px; padding: 8px 10px; margin-bottom: 6px; display: grid; gap: 6px; }
@@ -1672,7 +1700,7 @@ button.sekundaer {
 /* ---- Kasse (Mannschaft -> Kasse) ---- */
 .kasse-stand { display: grid; gap: 2px; }
 .kasse-label { font-size: .78rem; color: var(--grau); text-transform: uppercase; letter-spacing: .04em; }
-.kasse-zahl { font-size: 1.9rem; color: var(--tvg-900); font-variant-numeric: tabular-nums; }
+.kasse-zahl { font-size: 1.9rem; color: var(--tvg-text); font-variant-numeric: tabular-nums; }
 .kasse-zahl.minus { color: var(--warn); }
 .kasse-klein { color: var(--grau); }
 .kasse-mein { margin: 8px 0 0; padding: 6px 10px; border-radius: 8px; background: var(--ok-bg); border: 1px solid var(--ok-linie); }
@@ -1711,7 +1739,7 @@ button.sekundaer {
 .sz-sp .sz-treffer { fill: transparent; stroke: none; }
 .sz-sp text { font-size: 11px; font-weight: 600; pointer-events: none; user-select: none; }
 .sz-sp.angriff .sz-kreis { fill: var(--tint); stroke: var(--tvg); }
-.sz-sp.angriff text { fill: var(--tvg-900); }
+.sz-sp.angriff text { fill: var(--tvg-text); }
 .sz-sp.abwehr .sz-kreis { fill: var(--warn-bg); stroke: var(--warn); }
 .sz-sp.abwehr text { fill: var(--warn-text); }
 .sz-sp.sz-ziehbar { cursor: grab; touch-action: none; }

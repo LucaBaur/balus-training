@@ -632,6 +632,25 @@ stehen in `deploy.env` (nicht im Repo, Vorlage `deploy.env.example`). Nicht vom 
 neue Pakete bei geänderter `requirements.txt` und neue Cronjobs. Der Medienordner entsteht beim
 Start von selbst; falls nicht, einmalig `mkdir -p ~/elo/media/clips` auf dem Server.
 
+### Backup und Anmelde-Schutz
+
+- **Tägliches Backup:** `backup.py` (Cron, 03:10 Berlin) kopiert `elo.db` per SQLite-Backup-API nach
+  `~/backups/elo/elo-<Datum>-<Uhrzeit>.db`, prüft die Kopie mit `integrity_check` und behält die letzten
+  14 Tage komplett, dahinter je Woche den neuesten Stand bis etwa 8 Wochen zurück. Der Status geht als Job
+  `balu_backup` an Home Assistant. **Nicht gesichert:** `media/` (Videos, mehrere GB). Wiederherstellen:
+  Dienst stoppen, gewünschte Datei als `~/elo/elo.db` kopieren, Dienst starten. Test: `py tests/backup_test.py`.
+- **Falsche Anmeldungen:** Es gibt keine dauerhafte PIN-Sperre mehr (sie ließ sich von außen für jedes Konto
+  auslösen). Stattdessen Wartezeit nach zu vielen *Fehl*versuchen: 5 je Name und Adresse in 15 Minuten,
+  20 je Name in einer Stunde, 15 je Adresse in 15 Minuten; die PIN bleibt immer erhalten. Die Adresse kommt
+  hinter dem Funnel aus `X-Forwarded-For` (nur geglaubt, wenn die Verbindung von `127.0.0.1` kommt).
+  Details in `daten/login.py`, Test `py tests/login_sperre_test.py`. Konten mit *gelöschter* PIN aus der
+  alten Sperre brauchen weiter eine neue PIN (`py benutzer_setup.py --reset-name Name`).
+- **Sitzungen widerrufen:** Das Cookie enthält die Sitzungs-Version des Kontos (`sv`, Spalte
+  `benutzer.sitzung_version`). Stimmt sie nicht mit der Datenbank überein, ist es wertlos. Hochgezählt wird bei
+  einer neuen PIN und über `POST /api/logout-alle` (Knopf im Profil-Menü). Cookies ohne `sv` zählen als 0.
+  Geprüft wird an *einer* Stelle (`_sitzung` in `routen/gemeinsam.py`). Test: `py tests/sitzung_test.py`.
+  Notausgang für alle auf einmal bleibt ein neuer `APP_SECRET` bzw. `.session_secret`.
+
 ## Zugriff in der Halle (Tailscale)
 
 Der Server ist im Heimnetz unter `http://homeserver:8200` erreichbar. Für

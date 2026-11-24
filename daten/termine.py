@@ -43,10 +43,12 @@ WOCHENTAGE_NAMEN = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "
 
 
 def trainings_regeln(conn: sqlite3.Connection) -> dict[int, tuple[str, str]]:
-    """Wochenmuster {Wochentag: (Uhrzeit, Ort)}; fehlende Zeilen werden aus REGELN_START ergänzt."""
-    for wt, (uhr, ort) in REGELN_START.items():
-        conn.execute("INSERT OR IGNORE INTO trainings_regel (wochentag, uhrzeit, ort) VALUES (?,?,?)", (wt, uhr, ort))
-    conn.commit()
+    """Wochenmuster {Wochentag: (Uhrzeit, Ort)}. Nur eine LEERE Tabelle wird aus REGELN_START gefüllt: sonst käme
+    ein verschobener Tag (Montag -> Dienstag) beim nächsten Aufruf zurück."""
+    if conn.execute("SELECT COUNT(*) FROM trainings_regel").fetchone()[0] == 0:
+        for wt, (uhr, ort) in REGELN_START.items():
+            conn.execute("INSERT OR IGNORE INTO trainings_regel (wochentag, uhrzeit, ort) VALUES (?,?,?)", (wt, uhr, ort))
+        conn.commit()
     return {r["wochentag"]: (r["uhrzeit"], r["ort"])
             for r in conn.execute("SELECT wochentag, uhrzeit, ort FROM trainings_regel ORDER BY wochentag")}
 
@@ -121,6 +123,71 @@ def serie_aendern(conn: sqlite3.Connection, wochentag: int, ab_datum: str, uhrze
     return {"termine": ids, "vorher": (alt_uhr, alt_ort), "nachher": (neu_uhr, neu_ort)}
 
 
+def serie_verschieben(conn: sqlite3.Connection, wochentag: int, neuer_wochentag: int, ab_datum: str,
+                      uhrzeit: str | None = None, ort: str | None = None, heute: date | None = None) -> dict:
+    """Verlegt den Trainingstag dauerhaft (z. B. Montag -> Dienstag) AB `ab_datum`.
+
+    Alle Trainings (keine Spiele) dieses Wochentags ab dem Datum werden gelöscht. Für jedes gelöschte entsteht in
+    derselben Woche (Montag bis Sonntag) ein Training am neuen Wochentag, sofern es nicht vor dem Datum läge und dort
+    nicht schon eins steht (das bleibt unberührt). Die neuen bekommen KEINE automatische Zusage, alle antworten neu.
+    Das Wochenmuster wird sofort umgeschrieben. Wo es Montage nie gab (entfallen, Ferien), entsteht auch kein Dienstag.
+    Die ganze Änderung läuft in einer Transaktion: bei einem Fehler bleibt alles beim Alten.
+    Liefert {'geloescht', 'angelegt', 'vorhanden', 'vorher', 'nachher'} (vorher/nachher = (Uhrzeit, Ort))."""
+    heute = heute or date.today()
+    regeln = trainings_regeln(conn)
+    if wochentag not in regeln:
+        raise ValueError("Für diesen Wochentag gibt es kein Wochenmuster.")
+    if not 0 <= neuer_wochentag <= 6:
+        raise ValueError("Den neuen Wochentag gibt es nicht.")
+    if neuer_wochentag == wochentag:
+        raise ValueError("Der neue Wochentag ist derselbe wie der alte.")
+    if neuer_wochentag in regeln:
+        raise ValueError(f"Am {WOCHENTAGE_NAMEN[neuer_wochentag]} ist schon ein Training im Wochenmuster.")
+    try:
+        ab = date.fromisoformat(ab_datum)
+    except (TypeError, ValueError):
+        raise ValueError("Das Datum fehlt oder ist ungültig.")
+    if ab <= heute:
+        # Heute und früher ist Geschichte (Anwesenheit, Statistik): bleibt unangetastet, auch wenn es vielleicht
+        # noch nicht stattgefunden hat. Ein heutiges Training löscht man bei Bedarf einzeln.
+        raise ValueError("Das Datum muss nach heute liegen. Heutige und vergangene Trainings bleiben unverändert.")
+    uhrzeit = _uhrzeit_pruefen(uhrzeit)
+    ort = (ort or "").strip()[:80] or None
+    alt_uhr, alt_ort = regeln[wochentag]
+    neu_uhr, neu_ort = uhrzeit or alt_uhr, ort or alt_ort
+
+    zu_loeschen = [t for t in conn.execute(
+        "SELECT id, datum FROM trainings WHERE art = 'training' AND datum >= ? ORDER BY datum", (ab.isoformat(),)
+    ).fetchall() if date.fromisoformat(t["datum"]).weekday() == wochentag]
+    angelegt = vorhanden = 0
+    try:
+        for t in zu_loeschen:
+            neu_datum = date.fromisoformat(t["datum"]) + timedelta(days=neuer_wochentag - wochentag)
+            conn.execute("DELETE FROM training_teilnahme WHERE training_id = ?", (t["id"],))
+            conn.execute("DELETE FROM training_block WHERE training_id = ?", (t["id"],))
+            conn.execute("DELETE FROM training_uebung WHERE training_id = ?", (t["id"],))
+            conn.execute("DELETE FROM trainings WHERE id = ?", (t["id"],))
+            if neu_datum < ab:
+                continue                                  # der neue Tag läge noch vor der Umstellung
+            if conn.execute("SELECT 1 FROM trainings WHERE datum = ? AND art = 'training'",
+                            (neu_datum.isoformat(),)).fetchone():
+                vorhanden += 1
+                continue
+            conn.execute("INSERT INTO trainings (datum, titel, uhrzeit, ort, art, auto_zusage) "
+                         "VALUES (?,?,?,?, 'training', 0)",
+                         (neu_datum.isoformat(), f"Training {neu_ort}", neu_uhr, neu_ort))
+            angelegt += 1
+        conn.execute("DELETE FROM trainings_regel WHERE wochentag = ?", (wochentag,))
+        conn.execute("INSERT INTO trainings_regel (wochentag, uhrzeit, ort) VALUES (?,?,?)",
+                     (neuer_wochentag, neu_uhr, neu_ort))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    return {"geloescht": len(zu_loeschen), "angelegt": angelegt, "vorhanden": vorhanden,
+            "vorher": (alt_uhr, alt_ort), "nachher": (neu_uhr, neu_ort)}
+
+
 # Opt-out statt Opt-in: Bei normalen Trainings (Mo/Do, nicht freiwillig, keine Spiele) sind alle aus dem Kader
 # automatisch zugesagt, sobald es das Training gibt (Zeile in training_teilnahme mit quelle 'auto'). Wer nicht
 # kommt, sagt bis 24 Stunden vorher in der App ab, danach nur noch beim Trainer (der trägt es ein).
@@ -165,7 +232,8 @@ def auto_zusagen(conn: sqlite3.Connection, heute: date | None = None, trocken: b
     (mit `trocken` die Zahl, die es würden, ohne etwas zu schreiben)."""
     heute = heute or date.today()
     neu = 0
-    for t in conn.execute("SELECT id, datum, art FROM trainings WHERE art = 'training' AND datum >= ?",
+    # auto_zusage = 0: Trainings nach einer Verschiebung des Trainingstags, dort antworten alle selbst.
+    for t in conn.execute("SELECT id, datum, art FROM trainings WHERE art = 'training' AND auto_zusage = 1 AND datum >= ?",
                           (heute.isoformat(),)).fetchall():
         if not auto_zusage_gilt(t["datum"], t["art"]):
             continue

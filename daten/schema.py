@@ -153,9 +153,22 @@ CREATE TABLE IF NOT EXISTS benutzer (
     pin_hash     TEXT,                                -- pbkdf2, NULL = keine/gesperrte PIN
     spieler_id   INTEGER REFERENCES spieler(id) ON DELETE SET NULL,
     aktiv        INTEGER NOT NULL DEFAULT 1,
-    fehlversuche INTEGER NOT NULL DEFAULT 0,           -- 3 falsche -> PIN wird gesperrt
+    fehlversuche INTEGER NOT NULL DEFAULT 0,           -- ungenutzt seit v0.77.3 (frueher: 3 falsche -> PIN weg)
     erstellt_am  TEXT    NOT NULL DEFAULT (datetime('now'))
 );
+
+-- Fehlgeschlagene Anmeldungen, nur zum Drosseln (daten/login.py). Es wird nichts am Konto geaendert:
+-- Wer zu oft falsch rät, muss warten, verliert aber nie die PIN. Zeilen werden nach 2 Stunden geloescht.
+CREATE TABLE IF NOT EXISTS login_versuche (
+    id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    team_id INTEGER NOT NULL DEFAULT 1,
+    ip      TEXT    NOT NULL,
+    name    TEXT    NOT NULL,                          -- kleingeschrieben, auf 60 Zeichen gekuerzt
+    zeit    REAL    NOT NULL                           -- Unix-Sekunden
+);
+CREATE INDEX IF NOT EXISTS idx_login_versuche_team ON login_versuche (team_id, zeit);
+CREATE INDEX IF NOT EXISTS idx_login_versuche_name ON login_versuche (team_id, name, zeit);
+CREATE INDEX IF NOT EXISTS idx_login_versuche_ip ON login_versuche (team_id, ip, zeit);
 
 -- Phase 4: Web-Push-Abos (ein Geraet = ein Abo; ein Benutzer kann mehrere haben).
 CREATE TABLE IF NOT EXISTS push_abo (

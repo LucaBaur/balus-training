@@ -56,7 +56,7 @@ function portraitUrl(sp) {
 // Portrait im Wappen: Foto, wenn eins da ist - sonst die Initialen.
 // Die Initialen bleiben im Markup und werden sichtbar, falls das Bild fehlt.
 export function wappen(sp, groesse) {
-  const t = [["#3467C9", "#16376F"], ["#2F62BD", "#122F5E"], ["#4A7BD4", "#1B3F7E"]][sp.id % 3];
+  const t = [["#3467C9", "#16376F"], ["#2F62BD", "#122F5E"], ["#3A6AC2", "#1B3F7E"]][sp.id % 3];
   const url = portraitUrl(sp);
   const foto = url
     ? `<img class="pf" src="${url}" alt=""` +
